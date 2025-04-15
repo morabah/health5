@@ -17,6 +17,7 @@ import { setEventInLocalStorage } from '@/lib/eventBus';
 import '@/lib/firestoreFetchAll'; // Attach getAllFirestoreData to window for DataSyncPanel
 import { VerificationButtons } from './VerificationButtons';
 import { DataSyncPanel } from './DataSyncPanel';
+import { UserProfileSchema, PatientProfileSchema, DoctorProfileSchema, DoctorAvailabilitySlotSchema, VerificationDocumentSchema, AppointmentSchema, NotificationSchema } from '@/lib/zodSchemas';
 
 /**
  * Tracks the status and details of each validation prompt.
@@ -328,6 +329,153 @@ const CmsValidationPage: React.FC = () => {
     window.logValidation = logValidation;
   }
 
+  const statusColors: Record<string, string> = {
+    valid: 'text-green-600 bg-green-100',
+    issues: 'text-yellow-700 bg-yellow-100',
+    error: 'text-red-700 bg-red-100',
+  };
+
+  const collectionSchemas = {
+    users: UserProfileSchema,
+    patients: PatientProfileSchema,
+    doctors: DoctorProfileSchema,
+    availability: DoctorAvailabilitySlotSchema,
+    verificationDocs: VerificationDocumentSchema,
+    appointments: AppointmentSchema,
+    notifications: NotificationSchema,
+  };
+
+  function getApiModeClientSafe() {
+    if (typeof window !== 'undefined') {
+      return (window as any).apiMode || process.env.NEXT_PUBLIC_API_MODE || 'mock';
+    }
+    return 'mock';
+  }
+
+  function useLiveValidationData(apiMode: string) {
+    const [loading, setLoading] = useState(true);
+    const [results, setResults] = useState<any[]>([]);
+    const [logs, setLogs] = useState<Record<string, string[]>>({});
+
+    useEffect(() => {
+      let cancelled = false;
+      async function fetchAndValidate() {
+        setLoading(true);
+        let data: Record<string, any[]> = {};
+        try {
+          if (apiMode === 'live' && typeof window !== 'undefined' && typeof (window as any).getAllFirestoreData === 'function') {
+            data = await (window as any).getAllFirestoreData();
+          } else {
+            // fallback to mock
+            const res = await fetch('/scripts/offlineMockData.json');
+            data = await res.json();
+          }
+        } catch (e) {
+          setLoading(false);
+          setResults([]);
+          return;
+        }
+        if (cancelled) return;
+        // Validate each collection
+        const newResults: any[] = [];
+        const newLogs: Record<string, string[]> = {};
+        for (const [col, schema] of Object.entries(collectionSchemas)) {
+          const docs = data[col] || [];
+          let issues = 0;
+          let fixed = 0;
+          newLogs[col] = [];
+          docs.forEach((doc: any, idx: number) => {
+            const result = (schema as any).safeParse(doc);
+            if (!result.success) {
+              issues++;
+              newLogs[col].push(`Doc ${doc.id || idx}: ${JSON.stringify(result.error.issues)}`);
+            }
+          });
+          newResults.push({
+            collection: col,
+            status: issues === 0 ? 'valid' : 'issues',
+            lastChecked: new Date().toLocaleString(),
+            issues,
+            fixed, // Only set if auto-fix is implemented
+            logs: newLogs[col],
+          });
+        }
+        setResults(newResults);
+        setLogs(newLogs);
+        setLoading(false);
+      }
+      fetchAndValidate();
+      return () => { cancelled = true; };
+    }, [apiMode]);
+    return { loading, results, logs };
+  }
+
+  function FirestoreIntegrityTableLive({ apiMode }: { apiMode: string }) {
+    const { loading, results, logs } = useLiveValidationData(apiMode);
+    return (
+      <section className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Firestore Collections Data Integrity ({apiMode})</h2>
+        {loading ? (
+          <div className="text-gray-500 dark:text-gray-400 py-4">Loading validation data...</div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Collection</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Issues</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Last Checked</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {results.map((col) => (
+                  <tr key={col.collection}>
+                    <td className="px-4 py-3 font-mono text-sm">{col.collection}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${statusColors[col.status]}`}>{col.status}</span>
+                    </td>
+                    <td className="px-4 py-3">{col.issues}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{col.lastChecked}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded transition"
+                        onClick={() => window.location.reload()}>Validate</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {/* Logs for all collections with issues */}
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-2">Validation Logs</h3>
+          {results.filter(c => c.issues > 0).length === 0 ? (
+            <div className="bg-gray-50 dark:bg-gray-800 rounded p-4 text-sm font-mono text-gray-700 dark:text-gray-200">No issues found.</div>
+          ) : (
+            results.filter(c => c.issues > 0).map((col) => (
+              <div key={col.collection} className="mb-4">
+                <div className="font-semibold mb-1">{col.collection}</div>
+                <div className="bg-gray-50 dark:bg-gray-800 rounded p-2 text-xs font-mono text-gray-700 dark:text-gray-200">
+                  {logs[col.collection]?.map((log, i) => <div key={i}>{log}</div>)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  // SSR-safe API mode: only set on client
+  const [apiModeValue, setApiModeValue] = useState<'mock' | 'live' | string>('mock');
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setApiModeValue(getApiModeClientSafe());
+    setMounted(true);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100 p-6">
       {/* Title Section */}
@@ -387,11 +535,15 @@ const CmsValidationPage: React.FC = () => {
         </div>
       </section>
 
+      {/* Firestore Data Integrity Table */}
+      {mounted ? <FirestoreIntegrityTableLive apiMode={apiModeValue} /> : null}
+
       {/* Data Structure Integrity Check Button */}
       <section className="mb-6">
         <button
           className="px-4 py-2 bg-blue-600 hover:bg-blue-800 text-white rounded shadow text-sm font-medium"
           onClick={async () => {
+            logInfo('CMS: Data structure integrity check started');
             try {
               const zodSchemas = await import('@/lib/zodSchemas');
               const schemaMap: Record<string, any> = {
@@ -410,13 +562,12 @@ const CmsValidationPage: React.FC = () => {
                   : Promise.resolve(null)
               ]);
               if (!onlineData) {
+                logWarn('CMS: Online data fetch unavailable during integrity check');
                 alert('Online data fetch is not available in this environment.');
                 return;
               }
-              // Validate both offline and online data
               const results: string[] = [];
               for (const [key, schema] of Object.entries(schemaMap)) {
-                // Validate offline
                 if (offlineRes[key]) {
                   for (const [i, doc] of offlineRes[key].entries()) {
                     const result = schema.safeParse(doc);
@@ -425,7 +576,6 @@ const CmsValidationPage: React.FC = () => {
                     }
                   }
                 }
-                // Validate online
                 if (onlineData[key]) {
                   for (const [i, doc] of onlineData[key].entries()) {
                     const result = schema.safeParse(doc);
@@ -436,11 +586,14 @@ const CmsValidationPage: React.FC = () => {
                 }
               }
               if (results.length === 0) {
+                logInfo('CMS: Data structure integrity check PASSED');
                 alert('All data structures are valid according to Zod schemas.');
               } else {
+                logWarn('CMS: Data structure integrity check FAILED', { errors: results });
                 alert(`Data structure validation errors found:\n${results.slice(0, 10).join('\n')}\n${results.length > 10 ? `...and ${results.length - 10} more` : ''}`);
               }
             } catch (e: any) {
+              logWarn('CMS: Error during data structure integrity check', { error: e.message || String(e) });
               alert('Error during data structure integrity check: ' + (e.message || String(e)));
             }
           }}
@@ -454,23 +607,25 @@ const CmsValidationPage: React.FC = () => {
         <button
           className="px-4 py-2 bg-green-600 hover:bg-green-800 text-white rounded shadow text-sm font-medium"
           onClick={async () => {
+            logInfo('CMS: User data integrity auto-fix started');
             try {
-              // Dynamically import Firebase client SDK
               const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
               const { app } = await import('@/lib/firebaseClient');
               if (!app) {
+                logWarn('CMS: Firebase app not initialized during user auto-fix');
                 alert('Firebase app is not initialized.');
                 return;
               }
               const db = getFirestore(app);
-              // Fetch all users
               const getAllFirestoreData = (window as any).getAllFirestoreData;
               if (typeof getAllFirestoreData !== 'function') {
+                logWarn('CMS: Cannot fetch Firestore data during user auto-fix');
                 alert('Cannot fetch Firestore data in this environment.');
                 return;
               }
               const data = await getAllFirestoreData();
               if (!data.users) {
+                logWarn('CMS: No users found during user auto-fix');
                 alert('No users found in Firestore.');
                 return;
               }
@@ -478,26 +633,22 @@ const CmsValidationPage: React.FC = () => {
               for (const user of data.users) {
                 const updateObj: Record<string, any> = {};
                 let needsUpdate = false;
-                // id
                 if (typeof user.id !== 'string') {
                   updateObj.id = user.id || user.__id || '';
                   needsUpdate = true;
                 }
-                // booleans
                 ['isActive', 'emailVerified', 'phoneVerified'].forEach(field => {
                   if (typeof user[field] !== 'boolean') {
                     updateObj[field] = false;
                     needsUpdate = true;
                   }
                 });
-                // strings
                 ['phone', 'firstName', 'lastName'].forEach(field => {
                   if (typeof user[field] !== 'string') {
                     updateObj[field] = '';
                     needsUpdate = true;
                   }
                 });
-                // userType casing
                 if (typeof user.userType === 'string' && !['PATIENT', 'DOCTOR', 'ADMIN'].includes(user.userType)) {
                   const upper = user.userType.toUpperCase();
                   if (['PATIENT', 'DOCTOR', 'ADMIN'].includes(upper)) {
@@ -505,14 +656,15 @@ const CmsValidationPage: React.FC = () => {
                     needsUpdate = true;
                   }
                 }
-                // Only update if needed
                 if (needsUpdate && user.id) {
                   await updateDoc(doc(db, 'users', user.id), updateObj);
                   fixedCount++;
                 }
               }
+              logInfo('CMS: User data integrity auto-fix complete', { fixedCount });
               alert(`User data integrity auto-fix complete. Fixed ${fixedCount} user(s).`);
             } catch (e: any) {
+              logWarn('CMS: Error during user data integrity fix', { error: e.message || String(e) });
               alert('Error during user data integrity fix: ' + (e.message || String(e)));
             }
           }}
@@ -526,11 +678,12 @@ const CmsValidationPage: React.FC = () => {
         <button
           className="px-4 py-2 bg-purple-600 hover:bg-purple-800 text-white rounded shadow text-sm font-medium"
           onClick={async () => {
+            logInfo('CMS: All data integrity auto-fix started');
             try {
-              // Import Firebase SDK and Zod schemas
               const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
               const { app } = await import('@/lib/firebaseClient');
               if (!app) {
+                logWarn('CMS: Firebase app not initialized during all-collection auto-fix');
                 alert('Firebase app is not initialized.');
                 return;
               }
@@ -545,9 +698,9 @@ const CmsValidationPage: React.FC = () => {
                 appointments: zodSchemas.AppointmentSchema,
                 notifications: zodSchemas.NotificationSchema,
               };
-              // Fetch all collections
               const getAllFirestoreData = (window as any).getAllFirestoreData;
               if (typeof getAllFirestoreData !== 'function') {
+                logWarn('CMS: Cannot fetch Firestore data during all-collection auto-fix');
                 alert('Cannot fetch Firestore data in this environment.');
                 return;
               }
@@ -560,38 +713,55 @@ const CmsValidationPage: React.FC = () => {
                   const updateObj: Record<string, any> = {};
                   let needsUpdate = false;
                   const docId = docObj.id || docObj.__id;
-                  // For each required field in the schema, fix missing values
                   const shape = (schema as any)._def.shape();
                   for (const [field, def] of Object.entries(shape)) {
                     const value = docObj[field];
-                    // String
-                    if (def._def.typeName === 'ZodString' && typeof value !== 'string') {
-                      updateObj[field] = '';
-                      needsUpdate = true;
-                    }
-                    // Boolean
-                    if (def._def.typeName === 'ZodBoolean' && typeof value !== 'boolean') {
-                      updateObj[field] = false;
-                      needsUpdate = true;
-                    }
-                    // Number
-                    if (def._def.typeName === 'ZodNumber' && typeof value !== 'number') {
-                      updateObj[field] = 0;
-                      needsUpdate = true;
-                    }
-                    // Enum (auto-fix casing)
-                    if (def._def.typeName === 'ZodEnum' && typeof value === 'string' && !def.options.includes(value)) {
-                      const upper = value.toUpperCase();
-                      if (def.options.includes(upper)) {
-                        updateObj[field] = upper;
+                    // String (fix if not a string, undefined, or null)
+                    if (def._def.typeName === 'ZodString') {
+                      if (typeof value !== 'string' || value === undefined || value === null) {
+                        updateObj[field] = '';
                         needsUpdate = true;
+                        logInfo(`Auto-fix: Setting string field '${field}' to '' for doc ${docId} in ${col}`);
                       }
                     }
-                  }
-                  // id field
-                  if ('id' in shape && typeof docObj.id !== 'string' && docId) {
-                    updateObj.id = docId;
-                    needsUpdate = true;
+                    // Boolean (fix if not boolean, undefined, or null)
+                    if (def._def.typeName === 'ZodBoolean') {
+                      if (typeof value !== 'boolean' || value === undefined || value === null) {
+                        updateObj[field] = false;
+                        needsUpdate = true;
+                        logInfo(`Auto-fix: Setting boolean field '${field}' to false for doc ${docId} in ${col}`);
+                      }
+                    }
+                    // Number (fix if not number, undefined, or null)
+                    if (def._def.typeName === 'ZodNumber') {
+                      if (typeof value !== 'number' || value === undefined || value === null) {
+                        updateObj[field] = 0;
+                        needsUpdate = true;
+                        logInfo(`Auto-fix: Setting number field '${field}' to 0 for doc ${docId} in ${col}`);
+                      }
+                    }
+                    // Enum (auto-fix casing and map unknowns)
+                    if (def._def.typeName === 'ZodEnum') {
+                      if (typeof value !== 'string' || value === undefined || value === null || !def.options.includes(value)) {
+                        // Map 'prefer_not_to_say' and any unknown to 'Other' if present in options
+                        if (def.options.includes('Other')) {
+                          updateObj[field] = 'Other';
+                          needsUpdate = true;
+                          logInfo(`Auto-fix: Setting enum field '${field}' to 'Other' for doc ${docId} in ${col}`);
+                        } else {
+                          // fallback: use first option
+                          updateObj[field] = def.options[0];
+                          needsUpdate = true;
+                          logInfo(`Auto-fix: Setting enum field '${field}' to '${def.options[0]}' for doc ${docId} in ${col}`);
+                        }
+                      }
+                    }
+                    // id field (prefer __id if present)
+                    if ('id' in shape && (typeof docObj.id !== 'string' || docObj.id === undefined || docObj.id === null) && docId) {
+                      updateObj.id = docId;
+                      needsUpdate = true;
+                      logInfo(`Auto-fix: Setting id field for doc ${docId} in ${col}`);
+                    }
                   }
                   if (needsUpdate && docId) {
                     await updateDoc(doc(db, col, docId), updateObj);
@@ -600,8 +770,10 @@ const CmsValidationPage: React.FC = () => {
                 }
                 summary.push(`${col}: fixed ${fixedCount}`);
               }
+              logInfo('CMS: All data integrity auto-fix complete', { summary });
               alert(`Data integrity auto-fix complete.\n${summary.join('\n')}`);
             } catch (e: any) {
+              logWarn('CMS: Error during all data integrity fix', { error: e.message || String(e) });
               alert('Error during data integrity fix: ' + (e.message || String(e)));
             }
           }}
