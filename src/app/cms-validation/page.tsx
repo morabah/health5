@@ -12,8 +12,11 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { appEventBus, LogPayload, ValidationPayload } from '@/lib/eventBus';
-import { logInfo, logError, logWarn } from '@/lib/logger';
+import { logInfo, logError, logWarn, logValidation } from '@/lib/logger';
 import { setEventInLocalStorage } from '@/lib/eventBus';
+import '@/lib/firestoreFetchAll'; // Attach getAllFirestoreData to window for DataSyncPanel
+import { VerificationButtons } from './VerificationButtons';
+import { DataSyncPanel } from './DataSyncPanel';
 
 /**
  * Tracks the status and details of each validation prompt.
@@ -54,25 +57,16 @@ const CmsValidationPage: React.FC = () => {
     // Set the event bus as connected once we've mounted
     setEventBusStatus('connected');
     
-    // Set up a timer to check for events and test the system
-    const interval = setInterval(() => {
-      // Send a "heartbeat" event every 10 seconds if no events are coming in
-      if (logsRef.current.length === 0 || 
-          Date.now() - new Date(lastEventTime !== 'None' ? lastEventTime : 0).getTime() > 10000) {
-        
-        console.log('[CMS] Testing event bus with heartbeat event');
-        
-        // Try direct event emission - this should always appear in the logs
-        appEventBus.emit('log_event', {
-          level: 'INFO',
-          message: 'CMS Heartbeat: Event bus test',
-          timestamp: new Date().toISOString(),
-          data: { type: 'heartbeat', source: 'cms_validation' }
-        });
-      }
-    }, 10000);
-    
-    return () => clearInterval(interval);
+    // Heartbeat interval (ms)
+    const HEARTBEAT_INTERVAL = 60000; // 60 seconds
+
+    const heartbeat = () => {
+      logInfo('CMS Heartbeat: Event bus test', { source: 'CMS', type: 'heartbeat', ts: new Date().toISOString() });
+    };
+    const intervalId = setInterval(heartbeat, HEARTBEAT_INTERVAL);
+    // Emit one immediately on mount
+    heartbeat();
+    return () => clearInterval(intervalId);
   }, []);
 
   // Generate test logs when requested
@@ -291,6 +285,12 @@ const CmsValidationPage: React.FC = () => {
     setEventBusStatus('connected');
   }, []);
 
+  // Expose logValidation globally for browser console use (dev/validation only)
+  if (typeof window !== 'undefined') {
+    // @ts-ignore
+    window.logValidation = logValidation;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100 p-6">
       {/* Title Section */}
@@ -349,6 +349,12 @@ const CmsValidationPage: React.FC = () => {
           </button>
         </div>
       </section>
+
+      {/* Data Verification Buttons Section */}
+      <VerificationButtons />
+
+      {/* Data Sync Panel Section */}
+      <DataSyncPanel />
 
       {/* Mode Switcher Section */}
       <section className="mb-6">

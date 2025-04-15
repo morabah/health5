@@ -70,3 +70,5 @@ export const auth: Auth | null = app ? getAuth(app) : null;
 export const db: Firestore | null = app ? getFirestore(app) : null;
 
 // Add additional exports (storage, messaging, etc.) as needed, following the same pattern.
+
+export { app };

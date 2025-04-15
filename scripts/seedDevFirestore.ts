@@ -1,10 +1,13 @@
 /**
  * Script to seed the live development Firestore with initial mock data.
  * Usage: npm run db:seed:dev
+ * 
+ * Set your actual dev Firestore URL below
  */
-import admin from 'firebase-admin';
-import serviceAccount from './serviceAccountKey.json';
-import {
+// CommonJS version for Node compatibility
+const admin = require('firebase-admin');
+const serviceAccount = require('./serviceAccountKey.json');
+const {
   mockPatientUser,
   mockDoctorUser,
   mockAdminUser,
@@ -15,13 +18,13 @@ import {
   mockVerificationDocument,
   mockAppointmentsArray,
   mockNotificationsArray,
-} from '../src/types/mockData';
+} = require('./mockDataForScripts');
 
-// TODO: Replace with your actual dev Firestore URL
-const databaseURL = 'YOUR_DEV_FIRESTORE_URL';
+// Set your actual dev Firestore URL below
+const databaseURL = 'https://YOUR_PROJECT_ID.firebaseio.com';
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+  credential: admin.credential.cert(serviceAccount),
   databaseURL,
 });
 
@@ -48,18 +51,22 @@ async function main() {
   console.log('Seeded doctor profiles');
 
   // AVAILABILITY (as subcollection)
-  await db.collection('doctors').doc(mockDoctorProfileData1.userId)
-    .collection('availability').doc(mockDoctorAvailabilitySlot.id).set(mockDoctorAvailabilitySlot);
-  console.log('Seeded doctor availability');
+  if (mockDoctorAvailabilitySlot.id !== undefined) {
+    await db.collection('doctors').doc(mockDoctorProfileData1.userId)
+      .collection('availability').doc(mockDoctorAvailabilitySlot.id).set(mockDoctorAvailabilitySlot);
+    console.log('Seeded doctor availability');
+  }
 
   // VERIFICATION DOCS (as subcollection)
-  await db.collection('doctors').doc(mockDoctorProfileData1.userId)
-    .collection('verificationDocs').doc(mockVerificationDocument.id).set(mockVerificationDocument);
-  console.log('Seeded doctor verification document');
+  if (mockVerificationDocument.id !== undefined) {
+    await db.collection('doctors').doc(mockDoctorProfileData1.userId)
+      .collection('verificationDocs').doc(mockVerificationDocument.id).set(mockVerificationDocument);
+    console.log('Seeded doctor verification document');
+  }
 
   // APPOINTMENTS
   await Promise.all(
-    mockAppointmentsArray.map(appt =>
+    mockAppointmentsArray.map((appt: any) =>
       appt.id ? db.collection('appointments').doc(appt.id).set(appt) : Promise.resolve()
     )
   );
@@ -67,7 +74,7 @@ async function main() {
 
   // NOTIFICATIONS
   await Promise.all(
-    mockNotificationsArray.map(notif =>
+    mockNotificationsArray.map((notif: any) =>
       notif.id ? db.collection('notifications').doc(notif.id).set(notif) : Promise.resolve()
     )
   );

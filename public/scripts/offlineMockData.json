@@ -1,0 +1,130 @@
+{
+  "users": [
+    {
+      "id": "user_patient_001",
+      "email": "patient1@example.com",
+      "phone": "+1234567890",
+      "firstName": "John",
+      "lastName": "Doe",
+      "userType": "PATIENT",
+      "isActive": true,
+      "emailVerified": true,
+      "phoneVerified": true,
+      "createdAt": "2025-04-15T17:00:00.000Z",
+      "updatedAt": "2025-04-15T17:00:00.000Z"
+    },
+    {
+      "id": "user_doctor_001",
+      "email": "doctor1@example.com",
+      "phone": "+1234567891",
+      "firstName": "Alice",
+      "lastName": "Smith",
+      "userType": "DOCTOR",
+      "isActive": true,
+      "emailVerified": true,
+      "phoneVerified": true,
+      "createdAt": "2025-04-15T17:00:00.000Z",
+      "updatedAt": "2025-04-15T17:00:00.000Z"
+    },
+    {
+      "id": "user_admin_001",
+      "email": "admin1@example.com",
+      "phone": "+1234567892",
+      "firstName": "Super",
+      "lastName": "Admin",
+      "userType": "ADMIN",
+      "isActive": true,
+      "emailVerified": true,
+      "phoneVerified": true,
+      "createdAt": "2025-04-15T17:00:00.000Z",
+      "updatedAt": "2025-04-15T17:00:00.000Z"
+    }
+  ],
+  "patients": [
+    {
+      "userId": "user_patient_001",
+      "dateOfBirth": "1990-01-01",
+      "gender": "Male",
+      "bloodType": "O+",
+      "medicalHistory": "None"
+    }
+  ],
+  "doctors": [
+    {
+      "userId": "user_doctor_001",
+      "specialty": "Cardiology",
+      "licenseNumber": "DOC-123456",
+      "yearsOfExperience": 10,
+      "education": "MD, Harvard Medical School",
+      "bio": "Experienced cardiologist.",
+      "verificationStatus": "VERIFIED",
+      "verificationNotes": "All documents valid.",
+      "location": "New York",
+      "languages": ["English", "Spanish"],
+      "consultationFee": 200,
+      "profilePictureUrl": null,
+      "licenseDocumentUrl": null,
+      "certificateUrl": null,
+      "availability": [
+        {
+          "id": "slot1",
+          "day": "Monday",
+          "startTime": "09:00",
+          "endTime": "12:00"
+        }
+      ],
+      "verificationDocs": [
+        {
+          "id": "doc1",
+          "type": "License",
+          "url": "https://example.com/license.pdf",
+          "uploadedAt": "2025-04-15T17:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "userId": "user_doctor_002",
+      "specialty": "Dermatology",
+      "licenseNumber": "DOC-654321",
+      "yearsOfExperience": 7,
+      "education": "MD, Stanford University",
+      "bio": "Expert in skin care.",
+      "verificationStatus": "PENDING",
+      "location": "San Francisco",
+      "languages": ["English"],
+      "consultationFee": 150,
+      "profilePictureUrl": null,
+      "licenseDocumentUrl": null,
+      "certificateUrl": null,
+      "availability": [],
+      "verificationDocs": []
+    }
+  ],
+  "appointments": [
+    {
+      "id": "appt1",
+      "patientId": "user_patient_001",
+      "doctorId": "user_doctor_001",
+      "appointmentDate": "2025-04-16",
+      "startTime": "09:00",
+      "endTime": "09:30",
+      "status": "CONFIRMED",
+      "reason": "Routine checkup",
+      "notes": "Bring previous reports.",
+      "createdAt": "2025-04-15T17:00:00.000Z",
+      "updatedAt": "2025-04-15T17:00:00.000Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "notif1",
+      "userId": "user_patient_001",
+      "title": "Appointment Confirmed",
+      "message": "Your appointment is confirmed.",
+      "isRead": false,
+      "createdAt": "2025-04-15T17:00:00.000Z",
+      "type": "APPOINTMENT",
+      "relatedId": "appt1"
+    }
+  ]
+}
