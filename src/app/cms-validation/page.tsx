@@ -1,8 +1,4 @@
-/** Development CMS & Validation Control Panel */
-import React, { useState, useEffect, useCallback } from 'react';
-import { appEventBus, LogPayload, ValidationPayload } from '../lib/eventBus';
-import { logInfo } from '../lib/logger';
-
+'use client';
 /**
  * CMS / Validation Control Panel Page
  *
@@ -14,6 +10,10 @@ import { logInfo } from '../lib/logger';
  * - logs: Stores recent log events (max 100).
  * - apiMode: Local state for current API mode (manual env change required for real effect).
  */
+import React, { useState, useEffect, useCallback } from 'react';
+import { appEventBus, LogPayload, ValidationPayload } from '../../lib/eventBus';
+import { logInfo } from '../../lib/logger';
+
 /**
  * Tracks the status and details of each validation prompt.
  * Keyed by promptId (string).
@@ -30,9 +30,7 @@ const CmsValidationPage: React.FC = () => {
    */
   const [validationSteps, setValidationSteps] = useState<ValidationStepsState>({});
   const [logs, setLogs] = useState<LogPayload[]>([]);
-  const [apiMode, setApiMode] = useState<'mock' | 'live'>(
-    (process.env.NEXT_PUBLIC_API_MODE as 'mock' | 'live') || 'mock'
-  );
+  const [apiMode, setApiMode] = useState<'mock' | 'live'>((process.env.NEXT_PUBLIC_API_MODE as 'mock' | 'live') || 'mock');
 
   // Subscribe to log and validation events
   useEffect(() => {
