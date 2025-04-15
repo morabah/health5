@@ -859,12 +859,13 @@
       },
       "allergies": [],
       "displayName": "Jane Smith",
-      "gender": "prefer_not_to_say",
+      "gender": "Other",
       "bloodType": "Unknown",
       "updatedAt": {
         "seconds": 1744630812,
         "nanoseconds": 710000000
-      }
+      },
+      "medicalHistory": "No major illnesses"
     },
     {
       "id": "mcswtzcA9zQOIRVSCHGzrdhGkFq1",
@@ -875,7 +876,7 @@
       "email": "patient1@example.com",
       "displayName": "John Doe",
       "allergies": [],
-      "gender": "not h",
+      "gender": "Other",
       "createdAt": {
         "seconds": 1744630812,
         "nanoseconds": 46000000
@@ -911,7 +912,8 @@
         "name": "Emergency Contact",
         "phoneNumber": "+11234567890"
       },
-      "userType": "patient"
+      "userType": "patient",
+      "medicalHistory": "No major illnesses"
     },
     {
       "id": "user_patient_001",
@@ -992,7 +994,10 @@
       "userId": "",
       "userType": "doctor",
       "education": "",
-      "appointmentDuration": 30
+      "appointmentDuration": 30,
+      "profilePictureUrl": "https://example.com/profile/sarah.jpg",
+      "licenseDocumentUrl": "https://example.com/docs/sarah_license.pdf",
+      "certificateUrl": "https://example.com/docs/sarah_certificate.pdf"
     },
     {
       "id": "e3YqRSAZ3kfhPKa6Ho7YqDt0ONf2",
@@ -1060,7 +1065,10 @@
       "bio": "",
       "rating": 4.8,
       "verificationStatus": "PENDING",
-      "email": "doctor1@example.com"
+      "email": "doctor1@example.com",
+      "profilePictureUrl": "https://example.com/profile/robert.jpg",
+      "licenseDocumentUrl": "https://example.com/docs/robert_license.pdf",
+      "certificateUrl": "https://example.com/docs/robert_certificate.pdf"
     },
     {
       "id": "user_doctor_001",
@@ -1072,29 +1080,29 @@
       ],
       "yearsOfExperience": 10,
       "bio": "Experienced cardiologist.",
-      "licenseDocumentUrl": null,
+      "licenseDocumentUrl": "https://example.com/docs/doctor_license.pdf",
       "verificationNotes": "All documents verified.",
       "location": "New York",
       "specialty": "Cardiology",
-      "certificateUrl": null,
+      "certificateUrl": "https://example.com/docs/doctor_certificate.pdf",
       "verificationStatus": "VERIFIED",
       "consultationFee": 200,
       "licenseNumber": "DOC12345",
-      "profilePictureUrl": null
+      "profilePictureUrl": "https://example.com/profile/doctor.jpg"
     },
     {
       "id": "user_doctor_002",
       "userId": "user_doctor_002",
-      "licenseDocumentUrl": null,
+      "licenseDocumentUrl": "https://example.com/docs/doctor_license.pdf",
       "bio": "Dermatologist with a focus on eczema.",
       "location": "San Francisco",
       "specialty": "Dermatology",
-      "profilePictureUrl": null,
+      "profilePictureUrl": "https://example.com/profile/doctor.jpg",
       "verificationStatus": "PENDING",
       "consultationFee": 170,
       "licenseNumber": "DOC67890",
       "education": "Stanford Medical School",
-      "certificateUrl": null,
+      "certificateUrl": "https://example.com/docs/doctor_certificate.pdf",
       "languages": [
         "English"
       ],
