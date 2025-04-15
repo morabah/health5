@@ -3,8 +3,8 @@ import { app } from "@/lib/firebaseClient";
 
 /**
  * Fetches all main Firestore collections and returns them in the offlineMockData.json structure.
- * Collections: users, patients, doctors, appointments, notifications
- * Note: For doctors, fetches only the main doc, not subcollections (availability, verificationDocs)
+ * Collections: users, patients, doctors, appointments, notifications, availability, verificationDocs
+ * Note: For doctors, fetches only the main doc, not subcollections 
  */
 export async function getAllFirestoreData() {
   if (!app) throw new Error("Firebase app is not initialized (API mode may be 'mock' or missing env vars)");
@@ -13,6 +13,8 @@ export async function getAllFirestoreData() {
     "users",
     "patients",
     "doctors",
+    "availability",
+    "verificationDocs",
     "appointments",
     "notifications"
   ];

@@ -34,10 +34,12 @@ const CmsValidationPage: React.FC = () => {
    */
   const [validationSteps, setValidationSteps] = useState<ValidationStepsState>({});
   const [logs, setLogs] = useState<LogPayload[]>([]);
-  const [apiMode, setApiMode] = useState<'mock' | 'live'>((process.env.NEXT_PUBLIC_API_MODE as 'mock' | 'live') || 'mock');
+  const [apiMode, setApiMode] = useState<string>(process.env.NEXT_PUBLIC_API_MODE || 'mock');
   const [isDebugMode, setIsDebugMode] = useState(true); // Start with debug mode on
   const [lastEventTime, setLastEventTime] = useState<string>('None');
   const [eventBusStatus, setEventBusStatus] = useState<'connected' | 'disconnected'>('disconnected');
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
+  const [selectedCollectionData, setSelectedCollectionData] = useState<any[] | null>(null);
   
   // Keep a ref to logs for event handlers
   const logsRef = useRef<LogPayload[]>([]);
@@ -285,6 +287,41 @@ const CmsValidationPage: React.FC = () => {
     setEventBusStatus('connected');
   }, []);
 
+  // Helper to fetch and set data for a collection (offline/online based on mode)
+  async function handleShowCollectionData(collection: string) {
+    if (apiMode === 'mock' || apiMode === 'offline') {
+      try {
+        const offlineRes = await fetch('/scripts/offlineMockData.json');
+        const offlineJson = await offlineRes.json();
+        if (offlineJson[collection]) {
+          setSelectedCollection(collection);
+          setSelectedCollectionData(offlineJson[collection]);
+          return;
+        } else {
+          setSelectedCollection(collection);
+          setSelectedCollectionData([]);
+        }
+      } catch {
+        setSelectedCollection(collection);
+        setSelectedCollectionData([]);
+      }
+    } else if (apiMode === 'live' || apiMode === 'online') {
+      if (typeof window !== 'undefined' && typeof (window as any).getAllFirestoreData === 'function') {
+        const online = await (window as any).getAllFirestoreData();
+        if (online[collection]) {
+          setSelectedCollection(collection);
+          setSelectedCollectionData(online[collection]);
+        } else {
+          setSelectedCollection(collection);
+          setSelectedCollectionData([]);
+        }
+      } else {
+        setSelectedCollection(collection);
+        setSelectedCollectionData([]);
+      }
+    }
+  }
+
   // Expose logValidation globally for browser console use (dev/validation only)
   if (typeof window !== 'undefined') {
     // @ts-ignore
@@ -350,11 +387,238 @@ const CmsValidationPage: React.FC = () => {
         </div>
       </section>
 
+      {/* Data Structure Integrity Check Button */}
+      <section className="mb-6">
+        <button
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-800 text-white rounded shadow text-sm font-medium"
+          onClick={async () => {
+            try {
+              const zodSchemas = await import('@/lib/zodSchemas');
+              const schemaMap: Record<string, any> = {
+                users: zodSchemas.UserProfileSchema,
+                patients: zodSchemas.PatientProfileSchema,
+                doctors: zodSchemas.DoctorProfileSchema,
+                availability: zodSchemas.DoctorAvailabilitySlotSchema,
+                verificationDocs: zodSchemas.VerificationDocumentSchema,
+                appointments: zodSchemas.AppointmentSchema,
+                notifications: zodSchemas.NotificationSchema,
+              };
+              const [offlineRes, onlineData] = await Promise.all([
+                fetch('/scripts/offlineMockData.json').then(res => res.json()),
+                (typeof window !== 'undefined' && typeof (window as any).getAllFirestoreData === 'function')
+                  ? (window as any).getAllFirestoreData()
+                  : Promise.resolve(null)
+              ]);
+              if (!onlineData) {
+                alert('Online data fetch is not available in this environment.');
+                return;
+              }
+              // Validate both offline and online data
+              const results: string[] = [];
+              for (const [key, schema] of Object.entries(schemaMap)) {
+                // Validate offline
+                if (offlineRes[key]) {
+                  for (const [i, doc] of offlineRes[key].entries()) {
+                    const result = schema.safeParse(doc);
+                    if (!result.success) {
+                      results.push(`[OFFLINE] ${key}[${i}]: ${JSON.stringify(result.error.issues)}`);
+                    }
+                  }
+                }
+                // Validate online
+                if (onlineData[key]) {
+                  for (const [i, doc] of onlineData[key].entries()) {
+                    const result = schema.safeParse(doc);
+                    if (!result.success) {
+                      results.push(`[ONLINE] ${key}[${i}]: ${JSON.stringify(result.error.issues)}`);
+                    }
+                  }
+                }
+              }
+              if (results.length === 0) {
+                alert('All data structures are valid according to Zod schemas.');
+              } else {
+                alert(`Data structure validation errors found:\n${results.slice(0, 10).join('\n')}\n${results.length > 10 ? `...and ${results.length - 10} more` : ''}`);
+              }
+            } catch (e: any) {
+              alert('Error during data structure integrity check: ' + (e.message || String(e)));
+            }
+          }}
+        >
+          Check Data Structure Integrity (Zod)
+        </button>
+      </section>
+
+      {/* Fix User Data Integrity Button */}
+      <section className="mb-6">
+        <button
+          className="px-4 py-2 bg-green-600 hover:bg-green-800 text-white rounded shadow text-sm font-medium"
+          onClick={async () => {
+            try {
+              // Dynamically import Firebase client SDK
+              const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
+              const { app } = await import('@/lib/firebaseClient');
+              if (!app) {
+                alert('Firebase app is not initialized.');
+                return;
+              }
+              const db = getFirestore(app);
+              // Fetch all users
+              const getAllFirestoreData = (window as any).getAllFirestoreData;
+              if (typeof getAllFirestoreData !== 'function') {
+                alert('Cannot fetch Firestore data in this environment.');
+                return;
+              }
+              const data = await getAllFirestoreData();
+              if (!data.users) {
+                alert('No users found in Firestore.');
+                return;
+              }
+              let fixedCount = 0;
+              for (const user of data.users) {
+                const updateObj: Record<string, any> = {};
+                let needsUpdate = false;
+                // id
+                if (typeof user.id !== 'string') {
+                  updateObj.id = user.id || user.__id || '';
+                  needsUpdate = true;
+                }
+                // booleans
+                ['isActive', 'emailVerified', 'phoneVerified'].forEach(field => {
+                  if (typeof user[field] !== 'boolean') {
+                    updateObj[field] = false;
+                    needsUpdate = true;
+                  }
+                });
+                // strings
+                ['phone', 'firstName', 'lastName'].forEach(field => {
+                  if (typeof user[field] !== 'string') {
+                    updateObj[field] = '';
+                    needsUpdate = true;
+                  }
+                });
+                // userType casing
+                if (typeof user.userType === 'string' && !['PATIENT', 'DOCTOR', 'ADMIN'].includes(user.userType)) {
+                  const upper = user.userType.toUpperCase();
+                  if (['PATIENT', 'DOCTOR', 'ADMIN'].includes(upper)) {
+                    updateObj.userType = upper;
+                    needsUpdate = true;
+                  }
+                }
+                // Only update if needed
+                if (needsUpdate && user.id) {
+                  await updateDoc(doc(db, 'users', user.id), updateObj);
+                  fixedCount++;
+                }
+              }
+              alert(`User data integrity auto-fix complete. Fixed ${fixedCount} user(s).`);
+            } catch (e: any) {
+              alert('Error during user data integrity fix: ' + (e.message || String(e)));
+            }
+          }}
+        >
+          Fix User Data Integrity (Auto-Fix)
+        </button>
+      </section>
+
+      {/* Fix All Data Integrity Button */}
+      <section className="mb-6">
+        <button
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-800 text-white rounded shadow text-sm font-medium"
+          onClick={async () => {
+            try {
+              // Import Firebase SDK and Zod schemas
+              const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
+              const { app } = await import('@/lib/firebaseClient');
+              if (!app) {
+                alert('Firebase app is not initialized.');
+                return;
+              }
+              const db = getFirestore(app);
+              const zodSchemas = await import('@/lib/zodSchemas');
+              const schemaMap: Record<string, any> = {
+                users: zodSchemas.UserProfileSchema,
+                patients: zodSchemas.PatientProfileSchema,
+                doctors: zodSchemas.DoctorProfileSchema,
+                availability: zodSchemas.DoctorAvailabilitySlotSchema,
+                verificationDocs: zodSchemas.VerificationDocumentSchema,
+                appointments: zodSchemas.AppointmentSchema,
+                notifications: zodSchemas.NotificationSchema,
+              };
+              // Fetch all collections
+              const getAllFirestoreData = (window as any).getAllFirestoreData;
+              if (typeof getAllFirestoreData !== 'function') {
+                alert('Cannot fetch Firestore data in this environment.');
+                return;
+              }
+              const data = await getAllFirestoreData();
+              let summary: string[] = [];
+              for (const [col, schema] of Object.entries(schemaMap)) {
+                if (!data[col]) continue;
+                let fixedCount = 0;
+                for (const docObj of data[col]) {
+                  const updateObj: Record<string, any> = {};
+                  let needsUpdate = false;
+                  const docId = docObj.id || docObj.__id;
+                  // For each required field in the schema, fix missing values
+                  const shape = (schema as any)._def.shape();
+                  for (const [field, def] of Object.entries(shape)) {
+                    const value = docObj[field];
+                    // String
+                    if (def._def.typeName === 'ZodString' && typeof value !== 'string') {
+                      updateObj[field] = '';
+                      needsUpdate = true;
+                    }
+                    // Boolean
+                    if (def._def.typeName === 'ZodBoolean' && typeof value !== 'boolean') {
+                      updateObj[field] = false;
+                      needsUpdate = true;
+                    }
+                    // Number
+                    if (def._def.typeName === 'ZodNumber' && typeof value !== 'number') {
+                      updateObj[field] = 0;
+                      needsUpdate = true;
+                    }
+                    // Enum (auto-fix casing)
+                    if (def._def.typeName === 'ZodEnum' && typeof value === 'string' && !def.options.includes(value)) {
+                      const upper = value.toUpperCase();
+                      if (def.options.includes(upper)) {
+                        updateObj[field] = upper;
+                        needsUpdate = true;
+                      }
+                    }
+                  }
+                  // id field
+                  if ('id' in shape && typeof docObj.id !== 'string' && docId) {
+                    updateObj.id = docId;
+                    needsUpdate = true;
+                  }
+                  if (needsUpdate && docId) {
+                    await updateDoc(doc(db, col, docId), updateObj);
+                    fixedCount++;
+                  }
+                }
+                summary.push(`${col}: fixed ${fixedCount}`);
+              }
+              alert(`Data integrity auto-fix complete.\n${summary.join('\n')}`);
+            } catch (e: any) {
+              alert('Error during data integrity fix: ' + (e.message || String(e)));
+            }
+          }}
+        >
+          Fix All Data Integrity (Auto-Fix)
+        </button>
+      </section>
+
       {/* Data Verification Buttons Section */}
-      <VerificationButtons />
+      <VerificationButtons onShowCollectionData={handleShowCollectionData} />
 
       {/* Data Sync Panel Section */}
-      <DataSyncPanel />
+      <DataSyncPanel
+        selectedCollection={selectedCollection}
+        selectedCollectionData={selectedCollectionData}
+        apiMode={apiMode}
+      />
 
       {/* Mode Switcher Section */}
       <section className="mb-6">
@@ -383,6 +647,8 @@ const CmsValidationPage: React.FC = () => {
       <section className="mb-6">
         <a
           href="/"
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-block px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark transition mr-3"
           onClick={() => {
             // Log that we're navigating to the home page

@@ -12,13 +12,16 @@ const DEBUG_LOGGER = true;
  */
 function setLogEventInLocalStorage(payload: LogPayload): void {
   try {
-    // Stringify the payload and add a random ID to force storage event
-    const jsonData = JSON.stringify(payload);
-    const randomId = Math.random().toString().substring(2);
-    localStorage.setItem('cms_log_event', `${jsonData}:${randomId}`);
-    
-    if (DEBUG_LOGGER) {
-      console.log('[EVENT_BUS] Set localStorage cms_log_event');
+    // Only run in browser
+    if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      // Stringify the payload and add a random ID to force storage event
+      const jsonData = JSON.stringify(payload);
+      const randomId = Math.random().toString().substring(2);
+      localStorage.setItem('cms_log_event', `${jsonData}:${randomId}`);
+
+      if (DEBUG_LOGGER) {
+        console.log('[EVENT_BUS] Set localStorage cms_log_event');
+      }
     }
   } catch (e) {
     console.error('[EVENT_BUS] Error setting localStorage:', e);

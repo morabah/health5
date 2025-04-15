@@ -4,7 +4,7 @@ import { appEventBus } from "@/lib/eventBus";
 import { logInfo, logError } from "@/lib/logger";
 
 // Utility to deeply compare two objects/arrays
-function deepDiff(a: any, b: any): { added: any[]; removed: any[]; changed: any[] } {
+export function deepDiff(a: any, b: any): { added: any[]; removed: any[]; changed: any[] } {
   // Only compares top-level collections and their array items by id
   const added: any[] = [];
   const removed: any[] = [];
@@ -70,11 +70,18 @@ function downloadJSON(data: any, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export const DataSyncPanel: React.FC = () => {
+interface DataSyncPanelProps {
+  selectedCollection?: string | null;
+  selectedCollectionData?: any[] | null;
+  apiMode?: string;
+}
+
+export const DataSyncPanel: React.FC<DataSyncPanelProps> = ({ selectedCollection, selectedCollectionData, apiMode }) => {
   const [diff, setDiff] = useState<{ added: any[]; removed: any[]; changed: any[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastCompared, setLastCompared] = useState<string | null>(null);
+  const [onlineData, setOnlineData] = useState<any | null>(null);
 
   const handleCompare = async () => {
     setLoading(true);
@@ -85,6 +92,7 @@ export const DataSyncPanel: React.FC = () => {
         fetchOfflineData(),
         fetchOnlineData(),
       ]);
+      setOnlineData(online);
       const d = deepDiff(offline, online);
       setDiff(d);
       setLastCompared(new Date().toISOString());
@@ -117,6 +125,16 @@ export const DataSyncPanel: React.FC = () => {
   return (
     <section className="mb-6 p-4 border border-yellow-300 rounded bg-yellow-50 dark:bg-yellow-900/20">
       <h2 className="text-lg font-semibold mb-2">Offline / Online Data Sync</h2>
+      <div className="mb-3">
+        <a
+          href="/scripts/offlineMockData.json"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 underline hover:text-blue-800 text-xs font-mono"
+        >
+          View offlineMockData.json
+        </a>
+      </div>
       <button
         className="px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm font-medium shadow mb-3"
         onClick={handleCompare}
@@ -126,6 +144,30 @@ export const DataSyncPanel: React.FC = () => {
       </button>
       {lastCompared && <p className="text-xs text-gray-500 mb-2">Last compared: {lastCompared}</p>}
       {error && <p className="text-xs text-red-600 mb-2">Error: {error}</p>}
+      <div className="flex flex-col md:flex-row gap-4 mt-4">
+        <div className="flex-1">
+          <h4 className="text-xs font-semibold mb-1">
+            {selectedCollection
+              ? `${selectedCollection.charAt(0).toUpperCase() + selectedCollection.slice(1)} Data (${apiMode === 'live' || apiMode === 'online' ? 'Online' : 'Offline'})`
+              : apiMode === 'live' || apiMode === 'online'
+                ? 'Online Data'
+                : 'Offline Data'}
+          </h4>
+          <textarea
+            className="w-full h-48 text-xs font-mono border rounded p-2 bg-gray-50 dark:bg-gray-800"
+            value={selectedCollectionData ? JSON.stringify(selectedCollectionData, null, 2) : ''}
+            readOnly
+          />
+        </div>
+        <div className="flex-1">
+          <h4 className="text-xs font-semibold mb-1">Online Data</h4>
+          <textarea
+            className="w-full h-48 text-xs font-mono border rounded p-2 bg-gray-50 dark:bg-gray-800"
+            value={onlineData ? JSON.stringify(onlineData, null, 2) : ''}
+            readOnly
+          />
+        </div>
+      </div>
       {diff && (
         <div className="mt-2">
           <h3 className="font-semibold mb-1">Diff Summary</h3>

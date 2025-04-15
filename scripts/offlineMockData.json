@@ -8,7 +8,7 @@
       "lastName": "Doe",
       "userType": "PATIENT",
       "isActive": true,
-      "emailVerified": true,
+      "emailVerified": false,
       "phoneVerified": true,
       "createdAt": "2025-04-15T17:00:00.000Z",
       "updatedAt": "2025-04-15T17:00:00.000Z"

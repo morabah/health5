@@ -15,6 +15,10 @@ function emitVerificationEvent(type: string) {
   });
 }
 
+interface VerificationButtonsProps {
+  onShowCollectionData?: (collection: string) => void;
+}
+
 const VERIFICATION_TYPES = [
   { key: "users", label: "Verify Users" },
   { key: "patients", label: "Verify Patients" },
@@ -26,7 +30,7 @@ const VERIFICATION_TYPES = [
   { key: "all", label: "Verify All Data" },
 ];
 
-export const VerificationButtons: React.FC = () => (
+export const VerificationButtons: React.FC<VerificationButtonsProps> = ({ onShowCollectionData }) => (
   <section className="mb-6 p-4 border border-emerald-300 rounded bg-emerald-50 dark:bg-emerald-900/20">
     <h2 className="text-lg font-semibold mb-2">Data Verification</h2>
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -34,7 +38,10 @@ export const VerificationButtons: React.FC = () => (
         <button
           key={v.key}
           className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium shadow"
-          onClick={() => emitVerificationEvent(v.key)}
+          onClick={() => {
+            emitVerificationEvent(v.key);
+            onShowCollectionData?.(v.key);
+          }}
         >
           {v.label}
         </button>
