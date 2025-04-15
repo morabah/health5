@@ -3,6 +3,14 @@ import Image from 'next/image';
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      {/* Tailwind test: primary background color, dark mode support */}
+      <div className="mb-8 bg-primary dark:bg-primary-dark transition-colors duration-300">
+        <h1 className="text-3xl font-bold text-white dark:text-primary-light">Tailwind Custom Color Test</h1>
+        <p className="mt-2 text-white dark:text-primary-light">
+          This area uses <code>bg-primary</code> and <code>dark:bg-primary-dark</code>.<br />
+          Switch your OS/browser to dark mode to verify.
+        </p>
+      </div>
       <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
         <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
           Get started by editing&nbsp;
