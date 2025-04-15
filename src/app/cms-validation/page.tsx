@@ -356,65 +356,152 @@ const CmsValidationPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [results, setResults] = useState<any[]>([]);
     const [logs, setLogs] = useState<Record<string, string[]>>({});
+    const [error, setError] = useState<string | null>(null);
+
+    async function validateAll() {
+      setLoading(true);
+      setError(null);
+      let data: Record<string, any[]> = {};
+      try {
+        if (apiMode === 'live' && typeof window !== 'undefined' && typeof (window as any).getAllFirestoreData === 'function') {
+          data = await (window as any).getAllFirestoreData();
+        } else {
+          // fallback to mock
+          const res = await fetch('/scripts/offlineMockData.json');
+          data = await res.json();
+        }
+      } catch (e: any) {
+        setLoading(false);
+        setResults([]);
+        setError('Failed to fetch data: ' + (e?.message || e));
+        return;
+      }
+      // Validate each collection
+      const newResults: any[] = [];
+      const newLogs: Record<string, string[]> = {};
+      for (const [col, schema] of Object.entries(collectionSchemas)) {
+        const docs = data[col] || [];
+        let issues = 0;
+        newLogs[col] = [];
+        docs.forEach((doc: any, idx: number) => {
+          const result = (schema as any).safeParse(doc);
+          if (!result.success) {
+            issues++;
+            newLogs[col].push(`Doc ${doc.id || idx}: ${JSON.stringify(result.error.issues)}`);
+          }
+        });
+        newResults.push({
+          collection: col,
+          status: issues === 0 ? 'valid' : 'issues',
+          lastChecked: new Date().toLocaleString(),
+          issues,
+          logs: newLogs[col],
+        });
+      }
+      setResults(newResults);
+      setLogs(newLogs);
+      setLoading(false);
+    }
 
     useEffect(() => {
-      let cancelled = false;
-      async function fetchAndValidate() {
-        setLoading(true);
-        let data: Record<string, any[]> = {};
-        try {
-          if (apiMode === 'live' && typeof window !== 'undefined' && typeof (window as any).getAllFirestoreData === 'function') {
-            data = await (window as any).getAllFirestoreData();
-          } else {
-            // fallback to mock
-            const res = await fetch('/scripts/offlineMockData.json');
-            data = await res.json();
-          }
-        } catch (e) {
-          setLoading(false);
-          setResults([]);
-          return;
-        }
-        if (cancelled) return;
-        // Validate each collection
-        const newResults: any[] = [];
-        const newLogs: Record<string, string[]> = {};
-        for (const [col, schema] of Object.entries(collectionSchemas)) {
-          const docs = data[col] || [];
-          let issues = 0;
-          let fixed = 0;
-          newLogs[col] = [];
-          docs.forEach((doc: any, idx: number) => {
-            const result = (schema as any).safeParse(doc);
-            if (!result.success) {
-              issues++;
-              newLogs[col].push(`Doc ${doc.id || idx}: ${JSON.stringify(result.error.issues)}`);
-            }
-          });
-          newResults.push({
-            collection: col,
-            status: issues === 0 ? 'valid' : 'issues',
-            lastChecked: new Date().toLocaleString(),
-            issues,
-            fixed, // Only set if auto-fix is implemented
-            logs: newLogs[col],
-          });
-        }
-        setResults(newResults);
-        setLogs(newLogs);
-        setLoading(false);
-      }
-      fetchAndValidate();
-      return () => { cancelled = true; };
+      validateAll();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [apiMode]);
-    return { loading, results, logs };
+
+    // Per-collection validation (AJAX, no reload)
+    async function validateCollection(col: string) {
+      setLoading(true);
+      setError(null);
+      let data: Record<string, any[]> = {};
+      try {
+        if (apiMode === 'live' && typeof window !== 'undefined' && typeof (window as any).getAllFirestoreData === 'function') {
+          data = await (window as any).getAllFirestoreData();
+        } else {
+          const res = await fetch('/scripts/offlineMockData.json');
+          data = await res.json();
+        }
+      } catch (e: any) {
+        setLoading(false);
+        setError('Failed to fetch data: ' + (e?.message || e));
+        return;
+      }
+      const schema = (collectionSchemas as any)[col];
+      const docs = data[col] || [];
+      let issues = 0;
+      const newLogs: string[] = [];
+      docs.forEach((doc: any, idx: number) => {
+        const result = (schema as any).safeParse(doc);
+        if (!result.success) {
+          issues++;
+          newLogs.push(`Doc ${doc.id || idx}: ${JSON.stringify(result.error.issues)}`);
+        }
+      });
+      setResults((prev: any[]) => prev.map((r) => r.collection === col ? {
+        ...r,
+        status: issues === 0 ? 'valid' : 'issues',
+        lastChecked: new Date().toLocaleString(),
+        issues,
+        logs: newLogs,
+      } : r));
+      setLogs((prev) => ({ ...prev, [col]: newLogs }));
+      setLoading(false);
+    }
+
+    return { loading, results, logs, error, validateAll, validateCollection };
   }
 
   function FirestoreIntegrityTableLive({ apiMode }: { apiMode: string }) {
-    const { loading, results, logs } = useLiveValidationData(apiMode);
+    const [filter, setFilter] = useState<'all' | 'issues' | 'valid'>('all');
+    const [sort, setSort] = useState<'name' | 'issues'>('issues');
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    const { loading, results, logs, error, validateAll, validateCollection } = useLiveValidationData(apiMode);
+
+    // Filter/sort logic
+    let displayResults = results;
+    if (filter !== 'all') {
+      displayResults = displayResults.filter((r) => r.status === filter);
+    }
+    if (sort === 'issues') {
+      displayResults = [...displayResults].sort((a, b) => b.issues - a.issues);
+    } else {
+      displayResults = [...displayResults].sort((a, b) => a.collection.localeCompare(b.collection));
+    }
+
     return (
       <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Firestore Collections Data Integrity ({apiMode})</h2>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-2">
+          <h2 className="text-xl font-semibold">Firestore Collections Data Integrity ({apiMode})</h2>
+          <div className="flex gap-2 items-center">
+            <button
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded transition shadow-sm"
+              onClick={validateAll}
+              disabled={loading}
+              title="Re-validate all collections"
+            >
+              Validate All
+            </button>
+            <select
+              className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+              value={filter}
+              onChange={e => setFilter(e.target.value as any)}
+              title="Filter collections by status"
+            >
+              <option value="all">All</option>
+              <option value="issues">Issues</option>
+              <option value="valid">Valid</option>
+            </select>
+            <select
+              className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+              value={sort}
+              onChange={e => setSort(e.target.value as any)}
+              title="Sort collections"
+            >
+              <option value="issues">Sort by Issues</option>
+              <option value="name">Sort by Name</option>
+            </select>
+          </div>
+        </div>
+        {error && <div className="mb-4 text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-200 px-4 py-2 rounded">{error}</div>}
         {loading ? (
           <div className="text-gray-500 dark:text-gray-400 py-4">Loading validation data...</div>
         ) : (
@@ -422,25 +509,55 @@ const CmsValidationPage: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Collection</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Issues</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Last Checked</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Collection
+                    <span className="ml-1 text-gray-400 cursor-help" title="Firestore collection name">?</span>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Status
+                    <span className="ml-1 text-gray-400 cursor-help" title="Validation status">?</span>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Issues
+                    <span className="ml-1 text-gray-400 cursor-help" title="Number of documents with validation errors">?</span>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Last Checked
+                    <span className="ml-1 text-gray-400 cursor-help" title="Last validation time">?</span>
+                  </th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {results.map((col) => (
+                {displayResults.map((col) => (
                   <tr key={col.collection}>
                     <td className="px-4 py-3 font-mono text-sm">{col.collection}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${statusColors[col.status]}`}>{col.status}</span>
                     </td>
                     <td className="px-4 py-3">{col.issues}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{col.lastChecked}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded transition"
-                        onClick={() => window.location.reload()}>Validate</button>
+                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400" title={col.lastChecked}>{col.lastChecked}</td>
+                    <td className="px-4 py-3 text-right flex gap-2">
+                      <button
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded transition"
+                        onClick={() => validateCollection(col.collection)}
+                        disabled={loading}
+                        title="Re-validate this collection"
+                      >
+                        Validate
+                      </button>
+                      {/* Future: Auto-Fix button here if implemented */}
+                      <button
+                        className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs px-3 py-1 rounded transition"
+                        disabled
+                        title="Auto-fix not yet implemented"
+                      >
+                        Auto-Fix
+                      </button>
+                      <button
+                        className="ml-2 text-xs text-blue-600 dark:text-blue-400 underline"
+                        onClick={() => setExpanded(e => ({ ...e, [col.collection]: !e[col.collection] }))}
+                        aria-expanded={!!expanded[col.collection]}
+                        aria-controls={`logs-${col.collection}`}
+                      >
+                        {expanded[col.collection] ? 'Hide Logs' : 'Show Logs'}
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -448,18 +565,30 @@ const CmsValidationPage: React.FC = () => {
             </table>
           </div>
         )}
-        {/* Logs for all collections with issues */}
+        {/* Collapsible Logs for collections with issues */}
         <div className="mt-6">
           <h3 className="text-lg font-semibold mb-2">Validation Logs</h3>
-          {results.filter(c => c.issues > 0).length === 0 ? (
+          {displayResults.filter(c => c.issues > 0).length === 0 ? (
             <div className="bg-gray-50 dark:bg-gray-800 rounded p-4 text-sm font-mono text-gray-700 dark:text-gray-200">No issues found.</div>
           ) : (
-            results.filter(c => c.issues > 0).map((col) => (
+            displayResults.filter(c => c.issues > 0).map((col) => (
               <div key={col.collection} className="mb-4">
-                <div className="font-semibold mb-1">{col.collection}</div>
-                <div className="bg-gray-50 dark:bg-gray-800 rounded p-2 text-xs font-mono text-gray-700 dark:text-gray-200">
-                  {logs[col.collection]?.map((log, i) => <div key={i}>{log}</div>)}
+                <div className="flex items-center mb-1">
+                  <span className="font-semibold">{col.collection}</span>
+                  <button
+                    className="ml-2 text-xs text-blue-600 dark:text-blue-400 underline"
+                    onClick={() => setExpanded(e => ({ ...e, [col.collection]: !e[col.collection] }))}
+                    aria-expanded={!!expanded[col.collection]}
+                    aria-controls={`logs-${col.collection}`}
+                  >
+                    {expanded[col.collection] ? 'Hide' : 'Show'}
+                  </button>
                 </div>
+                {expanded[col.collection] && (
+                  <div id={`logs-${col.collection}`} className="bg-gray-50 dark:bg-gray-800 rounded p-2 text-xs font-mono text-gray-700 dark:text-gray-200">
+                    {logs[col.collection]?.map((log, i) => <div key={i}>{log}</div>)}
+                  </div>
+                )}
               </div>
             ))
           )}
