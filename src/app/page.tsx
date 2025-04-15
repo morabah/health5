@@ -1,121 +1,87 @@
-import Image from 'next/image';
+'use client';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { logInfo } from '@/lib/logger';
+import { setEventInLocalStorage } from '@/lib/eventBus';
+import { appEventBus, LogPayload } from '@/lib/eventBus';
+import { useEffect } from 'react';
 
+/**
+ * Helper function: always use this to log events so cross-tab sync works.
+ */
+function logEventToCMS(message: string, data?: Record<string, any>) {
+  const payload: LogPayload = {
+    level: 'INFO',
+    message,
+    timestamp: new Date().toISOString(),
+    data,
+  };
+  // In-memory event bus (for same tab)
+  appEventBus.emit('log_event', payload);
+  // Cross-tab sync (for all tabs)
+  setEventInLocalStorage(payload);
+  // Logger fallback (for legacy support)
+  logInfo(message, data);
+}
+
+/**
+ * Home page with navigation links to all main project pages. 
+ * Demonstrates different approaches to event tracking that all log to the CMS.
+ */
 export default function Home() {
+  const router = useRouter();
+
+  // Logs navigation, then navigates
+  const handleNav = (destination: string, href: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    logEventToCMS(`Navigation: From Home to "${destination}"`, { from: 'Home', to: destination, path: href });
+    setTimeout(() => {
+      router.push(href);
+    }, 50);
+  };
+
+  // Logs all button clicks in the home page
+  const handleButtonClick = (buttonName: string) => {
+    logEventToCMS(`Button Clicked: ${buttonName}`, { buttonName, page: 'Home' });
+  };
+
+  useEffect(() => {
+    logEventToCMS('HOME PAGE LOADED', { page: 'Home', source: 'useEffect' });
+    // Send a test event after a delay to ensure it's captured
+    setTimeout(() => {
+      logEventToCMS('Delayed test event from Home page', { delayed: true });
+    }, 2000);
+  }, []);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      {/* Tailwind test: primary background color, dark mode support */}
-      <div className="mb-8 bg-primary dark:bg-primary-dark transition-colors duration-300">
-        <h1 className="text-3xl font-bold text-white dark:text-primary-light">Tailwind Custom Color Test</h1>
-        <p className="mt-2 text-white dark:text-primary-light">
-          This area uses <code>bg-primary</code> and <code>dark:bg-primary-dark</code>.<br />
-          Switch your OS/browser to dark mode to verify.
-        </p>
-      </div>
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <main className="min-h-screen bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100 p-8">
+      <h1 className="text-3xl font-bold mb-8">Welcome to the Health Appointment System</h1>
+      {/* Test Buttons */}
+      <div className="mb-8 p-4 border border-red-300 rounded bg-red-50 dark:bg-red-900/20">
+        <h2 className="text-xl font-semibold mb-4">Test Button Events</h2>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <button onClick={() => handleButtonClick('Red Button')} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-800">Red Button</button>
+          <button onClick={() => handleButtonClick('Blue Button')} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-800">Blue Button</button>
+          <button onClick={() => handleButtonClick('Green Button')} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-800">Green Button</button>
+          <button onClick={() => handleButtonClick('Purple Button')} className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-800">Purple Button</button>
         </div>
+        <p className="text-sm text-gray-500">Click these buttons and check the CMS page for logs.</p>
       </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
+      {/* Navigation Section */}
+      <nav className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Navigation Links</h2>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <li><Link href="/cms-validation" className="block p-4 rounded bg-blue-600 text-white hover:bg-blue-700" onClick={handleNav('CMS / Validation', '/cms-validation')}>CMS / Validation</Link></li>
+          <li><Link href="/about" className="block p-4 rounded bg-emerald-600 text-white hover:bg-emerald-700" onClick={handleNav('About', '/about')}>About</Link></li>
+          <li><Link href="/contact" className="block p-4 rounded bg-purple-600 text-white hover:bg-purple-700" onClick={handleNav('Contact', '/contact')}>Contact</Link></li>
+          <li><Link href="/auth" className="block p-4 rounded bg-orange-600 text-white hover:bg-orange-700" onClick={handleNav('Auth', '/auth')}>Auth</Link></li>
+          <li><Link href="/patient" className="block p-4 rounded bg-teal-600 text-white hover:bg-teal-700" onClick={handleNav('Patient', '/patient')}>Patient</Link></li>
+          <li><Link href="/doctor" className="block p-4 rounded bg-pink-600 text-white hover:bg-pink-700" onClick={handleNav('Doctor', '/doctor')}>Doctor</Link></li>
+          <li><Link href="/admin" className="block p-4 rounded bg-gray-700 text-white hover:bg-gray-900" onClick={handleNav('Admin', '/admin')}>Admin</Link></li>
+          <li><Link href="/main" className="block p-4 rounded bg-yellow-600 text-white hover:bg-yellow-700" onClick={handleNav('Main', '/main')}>Main</Link></li>
+        </ul>
+      </nav>
+      <p className="text-sm text-gray-500">Select a section to begin navigating the app or use the test buttons above to log an event.</p>
     </main>
   );
 }
