@@ -18,6 +18,8 @@ import '@/lib/firestoreFetchAll'; // Attach getAllFirestoreData to window for Da
 import { VerificationButtons } from './VerificationButtons';
 import { DataSyncPanel } from './DataSyncPanel';
 import { UserProfileSchema, PatientProfileSchema, DoctorProfileSchema, DoctorAvailabilitySlotSchema, VerificationDocumentSchema, AppointmentSchema, NotificationSchema } from '@/lib/zodSchemas';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCircleCheck, faCircleExclamation, faSearch, faDownload, faSpinner, faCodeCompare } from '@fortawesome/free-solid-svg-icons';
 
 /**
  * Tracks the status and details of each validation prompt.
@@ -334,6 +336,11 @@ const CmsValidationPage: React.FC = () => {
     issues: 'text-yellow-700 bg-yellow-100',
     error: 'text-red-700 bg-red-100',
   };
+  const statusIcons: Record<string, any> = {
+    valid: faCircleCheck,
+    issues: faCircleExclamation,
+    error: faCircleExclamation,
+  };
 
   const collectionSchemas = {
     users: UserProfileSchema,
@@ -454,12 +461,17 @@ const CmsValidationPage: React.FC = () => {
     const [filter, setFilter] = useState<'all' | 'issues' | 'valid'>('all');
     const [sort, setSort] = useState<'name' | 'issues'>('issues');
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    const [search, setSearch] = useState('');
+    const [modalDoc, setModalDoc] = useState<{ doc: any, issues: any[], collection: string } | null>(null);
     const { loading, results, logs, error, validateAll, validateCollection } = useLiveValidationData(apiMode);
 
-    // Filter/sort logic
+    // Filter/sort/search logic
     let displayResults = results;
     if (filter !== 'all') {
       displayResults = displayResults.filter((r) => r.status === filter);
+    }
+    if (search) {
+      displayResults = displayResults.filter(r => r.collection.includes(search));
     }
     if (sort === 'issues') {
       displayResults = [...displayResults].sort((a, b) => b.issues - a.issues);
@@ -467,19 +479,70 @@ const CmsValidationPage: React.FC = () => {
       displayResults = [...displayResults].sort((a, b) => a.collection.localeCompare(b.collection));
     }
 
+    // CSV export
+    function exportCSV() {
+      const header = ['Collection', 'Status', 'Issues', 'Last Checked'];
+      const rows = displayResults.map(r => [r.collection, r.status, r.issues, r.lastChecked]);
+      const csv = [header, ...rows].map(row => row.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'firestore_validation_results.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Drilldown modal
+    function DocModal({ doc, issues, collection, onClose }: { doc: any, issues: any[], collection: string, onClose: () => void }) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg max-w-lg w-full p-6 relative">
+            <button onClick={onClose} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close">&times;</button>
+            <h4 className="text-lg font-semibold mb-2">{collection} Document Details</h4>
+            <pre className="bg-gray-100 dark:bg-gray-800 rounded p-2 mb-2 text-xs overflow-x-auto max-h-48">{JSON.stringify(doc, null, 2)}</pre>
+            <div className="mb-2">
+              <span className="font-semibold">Invalid Fields:</span>
+              <ul className="list-disc ml-6 mt-1 text-xs">
+                {issues.map((iss, i) => (
+                  <li key={i} className="text-red-600 dark:text-red-300">{iss.path.join('.')} — {iss.message}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <section className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-2">
           <h2 className="text-xl font-semibold">Firestore Collections Data Integrity ({apiMode})</h2>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
             <button
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded transition shadow-sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded transition shadow-sm flex items-center gap-2"
               onClick={validateAll}
               disabled={loading}
               title="Re-validate all collections"
             >
-              Validate All
+              {loading && <FontAwesomeIcon icon={faSpinner} spin />} Validate All
             </button>
+            <button
+              className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs px-3 py-2 rounded transition flex items-center gap-2"
+              onClick={exportCSV}
+              title="Export validation results as CSV"
+            >
+              <FontAwesomeIcon icon={faDownload} /> Export CSV
+            </button>
+            <input
+              type="text"
+              className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+              placeholder="Search collections..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              aria-label="Search collections"
+              style={{ minWidth: 120 }}
+            />
             <select
               className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
               value={filter}
@@ -503,11 +566,11 @@ const CmsValidationPage: React.FC = () => {
         </div>
         {error && <div className="mb-4 text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-200 px-4 py-2 rounded">{error}</div>}
         {loading ? (
-          <div className="text-gray-500 dark:text-gray-400 py-4">Loading validation data...</div>
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 py-4"><FontAwesomeIcon icon={faSpinner} spin /> Validating...</div>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-800">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ position: 'relative' }}>
+              <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase">Collection
                     <span className="ml-1 text-gray-400 cursor-help" title="Firestore collection name">?</span>
@@ -525,42 +588,50 @@ const CmsValidationPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {displayResults.map((col) => (
-                  <tr key={col.collection}>
-                    <td className="px-4 py-3 font-mono text-sm">{col.collection}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${statusColors[col.status]}`}>{col.status}</span>
-                    </td>
-                    <td className="px-4 py-3">{col.issues}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400" title={col.lastChecked}>{col.lastChecked}</td>
-                    <td className="px-4 py-3 text-right flex gap-2">
-                      <button
-                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded transition"
-                        onClick={() => validateCollection(col.collection)}
-                        disabled={loading}
-                        title="Re-validate this collection"
-                      >
-                        Validate
-                      </button>
-                      {/* Future: Auto-Fix button here if implemented */}
-                      <button
-                        className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs px-3 py-1 rounded transition"
-                        disabled
-                        title="Auto-fix not yet implemented"
-                      >
-                        Auto-Fix
-                      </button>
-                      <button
-                        className="ml-2 text-xs text-blue-600 dark:text-blue-400 underline"
-                        onClick={() => setExpanded(e => ({ ...e, [col.collection]: !e[col.collection] }))}
-                        aria-expanded={!!expanded[col.collection]}
-                        aria-controls={`logs-${col.collection}`}
-                      >
-                        {expanded[col.collection] ? 'Hide Logs' : 'Show Logs'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {displayResults.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center text-gray-400 py-8">No collections found.</td></tr>
+                ) : (
+                  displayResults.map((col) => (
+                    <tr key={col.collection}>
+                      <td className="px-4 py-3 font-mono text-sm">{col.collection}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${statusColors[col.status]}`}
+                          title={col.status}
+                        >
+                          <FontAwesomeIcon icon={statusIcons[col.status]} /> {col.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">{col.issues}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400" title={col.lastChecked}>{col.lastChecked}</td>
+                      <td className="px-4 py-3 text-right flex gap-2">
+                        <button
+                          className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded transition"
+                          onClick={() => validateCollection(col.collection)}
+                          disabled={loading}
+                          title="Re-validate this collection"
+                        >
+                          Validate
+                        </button>
+                        {/* Future: Auto-Fix button here if implemented */}
+                        <button
+                          className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs px-3 py-1 rounded transition"
+                          disabled
+                          title="Auto-fix not yet implemented"
+                        >
+                          Auto-Fix
+                        </button>
+                        <button
+                          className="ml-2 text-xs text-blue-600 dark:text-blue-400 underline"
+                          onClick={() => setExpanded(e => ({ ...e, [col.collection]: !e[col.collection] }))}
+                          aria-expanded={!!expanded[col.collection]}
+                          aria-controls={`logs-${col.collection}`}
+                        >
+                          {expanded[col.collection] ? 'Hide Logs' : 'Show Logs'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -569,7 +640,7 @@ const CmsValidationPage: React.FC = () => {
         <div className="mt-6">
           <h3 className="text-lg font-semibold mb-2">Validation Logs</h3>
           {displayResults.filter(c => c.issues > 0).length === 0 ? (
-            <div className="bg-gray-50 dark:bg-gray-800 rounded p-4 text-sm font-mono text-gray-700 dark:text-gray-200">No issues found.</div>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded p-4 text-gray-700 dark:text-gray-200">No issues found.</div>
           ) : (
             displayResults.filter(c => c.issues > 0).map((col) => (
               <div key={col.collection} className="mb-4">
@@ -586,13 +657,45 @@ const CmsValidationPage: React.FC = () => {
                 </div>
                 {expanded[col.collection] && (
                   <div id={`logs-${col.collection}`} className="bg-gray-50 dark:bg-gray-800 rounded p-2 text-xs font-mono text-gray-700 dark:text-gray-200">
-                    {logs[col.collection]?.map((log, i) => <div key={i}>{log}</div>)}
+                    {logs[col.collection]?.map((log, i) => {
+                      // Try to extract doc id and issues for drilldown
+                      let docId = null, issues = [];
+                      try {
+                        const match = log.match(/^Doc ([^:]+): (.+)$/);
+                        if (match) {
+                          docId = match[1];
+                          issues = JSON.parse(match[2]);
+                        }
+                      } catch {}
+                      return (
+                        <div key={i} className="flex items-center gap-2 py-1">
+                          <span>{log}</span>
+                          {docId && issues.length > 0 && (
+                            <button
+                              className="text-xs text-blue-600 underline ml-2"
+                              onClick={() => {
+                                // Find the doc in results for modal
+                                const colData = results.find(r => r.collection === col.collection);
+                                const data = (colData && colData.logs && colData.logs[i]) ? colData : null;
+                                const doc = null; // Not available in logs; would require backend support
+                                setModalDoc({ doc: { id: docId }, issues, collection: col.collection });
+                              }}
+                              title="View document details"
+                            >
+                              <FontAwesomeIcon icon={faSearch} /> Details
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             ))
           )}
         </div>
+        {/* Modal for document drilldown */}
+        {modalDoc && <DocModal {...modalDoc} onClose={() => setModalDoc(null)} />}
       </section>
     );
   }
@@ -604,6 +707,238 @@ const CmsValidationPage: React.FC = () => {
     setApiModeValue(getApiModeClientSafe());
     setMounted(true);
   }, []);
+
+  // --- Deep diff utility for nested objects/arrays ---
+  function deepDiff(obj1: any, obj2: any) {
+    // Returns { added, removed, changed } per collection
+    const result: Record<string, { added: any[]; removed: any[]; changed: { id: string, diffs: any }[] }> = {};
+    for (const key of new Set([...Object.keys(obj1), ...Object.keys(obj2)])) {
+      const arr1 = obj1[key] || [];
+      const arr2 = obj2[key] || [];
+      const byId = (arr: any[]) => Object.fromEntries(arr.map((d: any) => [d.id || d.userId, d]));
+      const m1 = byId(arr1);
+      const m2 = byId(arr2);
+      const allIds = new Set([...Object.keys(m1), ...Object.keys(m2)]);
+      const added = [];
+      const removed = [];
+      const changed = [];
+      for (const id of allIds) {
+        if (!(id in m1)) added.push(m2[id]);
+        else if (!(id in m2)) removed.push(m1[id]);
+        else {
+          const diffs: any = {};
+          for (const f of new Set([...Object.keys(m1[id]), ...Object.keys(m2[id])])) {
+            if (JSON.stringify(m1[id][f]) !== JSON.stringify(m2[id][f])) {
+              diffs[f] = { offline: m1[id][f], online: m2[id][f] };
+            }
+          }
+          if (Object.keys(diffs).length > 0) changed.push({ id, diffs });
+        }
+      }
+      result[key] = { added, removed, changed };
+    }
+    return result;
+  }
+
+  function ComparePanel() {
+    const [diff, setDiff] = useState<any | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [modal, setModal] = useState<{ collection: string, id: string, diffs: any } | null>(null);
+    const [syncing, setSyncing] = useState(false);
+    const [syncMsg, setSyncMsg] = useState<string | null>(null);
+    async function handleCompare() {
+      setLoading(true);
+      setError(null);
+      try {
+        // Fetch both offline and online data
+        const [offlineRes, online] = await Promise.all([
+          fetch('/scripts/offlineMockData.json').then(r => r.json()),
+          typeof window !== 'undefined' && typeof (window as any).getAllFirestoreData === 'function'
+            ? (window as any).getAllFirestoreData()
+            : Promise.resolve({})
+        ]);
+        const d = deepDiff(offlineRes, online);
+        setDiff(d);
+      } catch (e: any) {
+        setError(e?.message || String(e));
+        setDiff(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+    function exportDiffCSV() {
+      if (!diff) return;
+      let csv = 'Collection,Type,ID,Field,Offline,Online\n';
+      for (const [col, d] of Object.entries(diff)) {
+        d.added.forEach((doc: any) => {
+          csv += `${col},Added,${doc.id || doc.userId},,,\n`;
+        });
+        d.removed.forEach((doc: any) => {
+          csv += `${col},Removed,${doc.id || doc.userId},,,\n`;
+        });
+        d.changed.forEach(({ id, diffs }: any) => {
+          for (const f in diffs) {
+            csv += `${col},Changed,${id},${f},${JSON.stringify(diffs[f].offline)},${JSON.stringify(diffs[f].online)}\n`;
+          }
+        });
+      }
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'firestore_diff.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    async function handleSyncOnlineToOffline() {
+      setSyncing(true);
+      setSyncMsg(null);
+      try {
+        if (typeof window !== 'undefined' && typeof (window as any).getAllFirestoreData === 'function') {
+          const online = await (window as any).getAllFirestoreData();
+          const blob = new Blob([JSON.stringify(online, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'offlineMockData.json';
+          a.click();
+          URL.revokeObjectURL(url);
+          setSyncMsg('Download complete! To update your offline mock, run the command below in your project root after download.');
+        } else {
+          throw new Error('window.getAllFirestoreData not available');
+        }
+      } catch (e: any) {
+        setSyncMsg('Failed to sync: ' + (e?.message || String(e)));
+      } finally {
+        setSyncing(false);
+      }
+    }
+    function handleCopyCommand() {
+      const downloadPath = '~/Downloads/offlineMockData.json';
+      const cmd = `node scripts/replaceOfflineMock.js ${downloadPath}`;
+      navigator.clipboard.writeText(cmd);
+    }
+    return (
+      <section className="mb-10">
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <button
+            className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs px-4 py-2 rounded flex items-center gap-2 shadow"
+            onClick={handleCompare}
+            disabled={loading}
+            title="Compare all collections: offline vs online"
+          >
+            <FontAwesomeIcon icon={faCodeCompare} /> Compare Offline & Online
+          </button>
+          <button
+            className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs px-3 py-2 rounded flex items-center gap-2"
+            onClick={exportDiffCSV}
+            disabled={!diff}
+            title="Export diff results as CSV"
+          >
+            <FontAwesomeIcon icon={faDownload} /> Export Diff CSV
+          </button>
+          <button
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded flex items-center gap-2 shadow"
+            onClick={handleSyncOnlineToOffline}
+            disabled={syncing}
+            title="Download latest Firestore data as offlineMockData.json"
+          >
+            <FontAwesomeIcon icon={faDownload} /> Sync Online → Offline Mock
+          </button>
+          {loading && <span className="text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1"><FontAwesomeIcon icon={faSpinner} spin /> Comparing...</span>}
+          {syncing && <span className="text-blue-700 dark:text-blue-300 flex items-center gap-1"><FontAwesomeIcon icon={faSpinner} spin /> Syncing...</span>}
+        </div>
+        {syncMsg && (
+          <div className="mb-4 text-blue-800 bg-blue-100 dark:bg-blue-900 dark:text-blue-200 px-4 py-2 rounded">
+            <div>{syncMsg}</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <code className="bg-blue-50 dark:bg-blue-950 px-2 py-1 rounded text-blue-900 dark:text-blue-200 select-all">node scripts/replaceOfflineMock.js ~/Downloads/offlineMockData.json</code>
+              <button
+                className="bg-blue-200 hover:bg-blue-300 dark:bg-blue-800 dark:hover:bg-blue-700 text-blue-900 dark:text-blue-100 px-2 py-1 rounded shadow text-xs"
+                onClick={handleCopyCommand}
+                title="Copy update command to clipboard"
+              >Copy Update Command</button>
+            </div>
+            <div className="mt-1 text-xs text-blue-700 dark:text-blue-300">This will back up your old offlineMockData.json and replace it with the downloaded file.</div>
+          </div>
+        )}
+        {error && <div className="mb-4 text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-200 px-4 py-2 rounded">{error}</div>}
+        {diff && Object.values(diff).every((d: any) => d.added.length === 0 && d.removed.length === 0 && d.changed.length === 0) && (
+          <div className="bg-green-50 dark:bg-green-900 rounded p-4 text-green-700 dark:text-green-200 font-mono">No differences found between offline and online data.</div>
+        )}
+        {diff && Object.entries(diff).map(([col, d]: any) => (
+          (d.added.length > 0 || d.removed.length > 0 || d.changed.length > 0) && (
+            <div key={col} className="mb-6">
+              <h4 className="font-semibold mb-2 text-base">{col}</h4>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs border border-gray-200 dark:border-gray-700 rounded">
+                  <thead className="bg-gray-100 dark:bg-gray-800">
+                    <tr>
+                      <th className="px-2 py-1">Type</th>
+                      <th className="px-2 py-1">ID</th>
+                      <th className="px-2 py-1">Field</th>
+                      <th className="px-2 py-1">Offline</th>
+                      <th className="px-2 py-1">Online</th>
+                      <th className="px-2 py-1"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.added.map((doc: any, i: number) => (
+                      <tr key={`a${i}`} className="bg-green-50 dark:bg-green-900">
+                        <td className="px-2 py-1">Added</td>
+                        <td className="px-2 py-1">{doc.id || doc.userId}</td>
+                        <td className="px-2 py-1" colSpan={3}>Entire document only in online data</td>
+                        <td></td>
+                      </tr>
+                    ))}
+                    {d.removed.map((doc: any, i: number) => (
+                      <tr key={`r${i}`} className="bg-red-50 dark:bg-red-900">
+                        <td className="px-2 py-1">Removed</td>
+                        <td className="px-2 py-1">{doc.id || doc.userId}</td>
+                        <td className="px-2 py-1" colSpan={3}>Entire document only in offline data</td>
+                        <td></td>
+                      </tr>
+                    ))}
+                    {d.changed.map(({ id, diffs }: any, i: number) => Object.entries(diffs).map(([f, v]: any, j) => (
+                      <tr key={`c${i}-${j}`} className="bg-yellow-50 dark:bg-yellow-900">
+                        <td className="px-2 py-1">Changed</td>
+                        <td className="px-2 py-1">{id}</td>
+                        <td className="px-2 py-1">{f}</td>
+                        <td className="px-2 py-1">{JSON.stringify(v.offline)}</td>
+                        <td className="px-2 py-1">{JSON.stringify(v.online)}</td>
+                        <td>
+                          <button className="text-xs text-blue-600 underline" onClick={() => setModal({ collection: col, id, diffs })}>Details</button>
+                        </td>
+                      </tr>
+                    )))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        ))}
+        {modal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg max-w-lg w-full p-6 relative">
+              <button onClick={() => setModal(null)} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close">&times;</button>
+              <h4 className="text-lg font-semibold mb-2">{modal.collection} / {modal.id}</h4>
+              <div className="mb-2">
+                <span className="font-semibold">Changed Fields:</span>
+                <ul className="list-disc ml-6 mt-1 text-xs">
+                  {Object.entries(modal.diffs).map(([f, v]: any, i) => (
+                    <li key={i} className="mb-1">
+                      <b>{f}</b>: <span className="text-red-600">{JSON.stringify(v.offline)}</span> → <span className="text-green-600">{JSON.stringify(v.online)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100 p-6">
@@ -663,6 +998,9 @@ const CmsValidationPage: React.FC = () => {
           </button>
         </div>
       </section>
+
+      {/* Compare Offline & Online Data Panel */}
+      {mounted ? <ComparePanel /> : null}
 
       {/* Firestore Data Integrity Table */}
       {mounted ? <FirestoreIntegrityTableLive apiMode={apiModeValue} /> : null}
