@@ -1,0 +1,13 @@
+# Ignore artifacts and dependencies for formatting
+node_modules/
+.next/
+build/
+dist/
+coverage/
+*.log
+*.local
+# Ignore environment and config files
+.env*
+serviceAccountKey.json
+# Ignore OS/system files
+.DS_Store
