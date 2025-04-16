@@ -1,4 +1,3 @@
-// About page (App Router)
 import React from 'react';
 
 export default function AboutPage() {

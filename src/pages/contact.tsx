@@ -1,8 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import Input from '@/components/ui/Input';
-import Textarea from '@/components/ui/Textarea';
-import Button from '@/components/ui/Button';
+import { Input, Textarea, Button } from '@/components/ui';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMapMarkerAlt, faPhone, faEnvelope } from '@fortawesome/free-solid-svg-icons';
 import { logInfo } from '@/lib/logger';
