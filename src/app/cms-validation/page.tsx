@@ -11,15 +11,15 @@
  * - apiMode: Local state for API mode toggle (manual env change required for real effect).
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { appEventBus, LogPayload, ValidationPayload } from '@/lib/eventBus';
-import { logInfo, logError, logWarn, logValidation } from '@/lib/logger';
-import { setEventInLocalStorage } from '@/lib/eventBus';
+import { appEventBus, LogPayload, ValidationPayload, setEventInLocalStorage, syncApiModeChange } from '@/lib/eventBus';
+import { logInfo, logError, logWarn, logValidation, logApiModeChange } from '@/lib/logger';
 import '@/lib/firestoreFetchAll'; // Attach getAllFirestoreData to window for DataSyncPanel
 import { VerificationButtons } from './VerificationButtons';
 import { DataSyncPanel } from './DataSyncPanel';
 import { UserProfileSchema, PatientProfileSchema, DoctorProfileSchema, DoctorAvailabilitySlotSchema, VerificationDocumentSchema, AppointmentSchema, NotificationSchema } from '@/lib/zodSchemas';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleCheck, faCircleExclamation, faSearch, faDownload, faSpinner, faCodeCompare } from '@fortawesome/free-solid-svg-icons';
+import { getApiMode, setApiMode } from '@/config/apiMode';
 
 /**
  * Tracks the status and details of each validation prompt.
@@ -37,7 +37,7 @@ const CmsValidationPage: React.FC = () => {
    */
   const [validationSteps, setValidationSteps] = useState<ValidationStepsState>({});
   const [logs, setLogs] = useState<LogPayload[]>([]);
-  const [apiMode, setApiMode] = useState<string>(process.env.NEXT_PUBLIC_API_MODE || 'mock');
+  const [apiMode, setApiModeState] = useState<string>(getApiMode() || 'mock');
   const [isDebugMode, setIsDebugMode] = useState(true); // Start with debug mode on
   const [lastEventTime, setLastEventTime] = useState<string>('None');
   const [eventBusStatus, setEventBusStatus] = useState<'connected' | 'disconnected'>('disconnected');
@@ -104,7 +104,7 @@ const CmsValidationPage: React.FC = () => {
         timestamp: new Date().toISOString(),
         data: { source: 'cms_test_button', method: 'localStorage', testId }
       };
-      localStorage.setItem('cms_log_event', JSON.stringify(localStoragePayload) + ':' + Math.random());
+      setEventInLocalStorage(localStoragePayload);
       console.log('[CMS] Set localStorage for test event');
     } catch (e) {
       console.error('[CMS] Error with localStorage:', e);
@@ -215,6 +215,7 @@ const CmsValidationPage: React.FC = () => {
    * Real API mode change requires editing .env.local and reloading the page.
    */
   const handleModeSwitch = useCallback((mode: 'mock' | 'live') => {
+    setApiModeState(mode);
     setApiMode(mode);
     
     // Use direct event bus emission for reliability
@@ -225,7 +226,7 @@ const CmsValidationPage: React.FC = () => {
       data: { previousMode: apiMode, newMode: mode }
     });
   }, [apiMode]);
-  
+
   // Function to manually force sync with localStorage
   const forceSyncWithLocalStorage = () => {
     console.log('[CMS] Force syncing with localStorage...');
@@ -354,7 +355,7 @@ const CmsValidationPage: React.FC = () => {
 
   function getApiModeClientSafe() {
     if (typeof window !== 'undefined') {
-      return (window as any).apiMode || process.env.NEXT_PUBLIC_API_MODE || 'mock';
+      return getApiMode() || 'mock';
     }
     return 'mock';
   }
@@ -516,7 +517,7 @@ const CmsValidationPage: React.FC = () => {
 
     // --- Drilldown modal ---
     function DocModal({ doc, issues, collection, onClose }: { doc: any, issues: any[], collection: string, onClose: () => void }) {
-      return (
+  return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg max-w-lg w-full p-6 relative">
             <button onClick={onClose} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close">&times;</button>
@@ -1406,8 +1407,130 @@ const CmsValidationPage: React.FC = () => {
     );
   }
 
+  // --- API Mode Toggle UI ---
+  useEffect(() => {
+    // On mount, check localStorage for apiMode override
+    const stored = getApiMode();
+    if (stored && stored !== apiMode) {
+      // If localStorage has a value different from current state, update state
+      console.log('[CMS] Found apiMode in localStorage:', stored);
+      setApiModeState(stored);
+    }
+  }, []);
+
+  /**
+   * Broadcasts the API mode change to all tabs through multiple channels
+   * for maximum reliability in cross-tab communication.
+   */
+  function broadcastApiModeChange(newMode: string) {
+    console.log('[CMS] Broadcasting API mode change to all tabs:', newMode);
+    
+    try {
+      // 1. Direct localStorage update (for the current tab)
+      setApiMode(newMode);
+      
+      // 2. Custom event for same-tab communication
+      window.dispatchEvent(new Event('apiModeChanged'));
+      
+      // 3. Update timestamps in different ways to trigger storage events in other tabs
+      const timestamp = Date.now().toString();
+      // localStorage.setItem('apiModeTimestamp', timestamp);
+      // localStorage.setItem('apiMode_last_change', `${newMode}_${timestamp}`);
+      
+      // 4. Add a dedicated record with the complete change info
+      // localStorage.setItem('api_mode_record', JSON.stringify({
+      //   mode: newMode,
+      //   timestamp: timestamp,
+      //   source: 'cms_validation_page'
+      // }));
+      
+      // 5. Force a global broadcast through sessionStorage as well (sometimes more reliable)
+      // sessionStorage.setItem('apiMode_broadcast', `${newMode}_${timestamp}`);
+      
+      // 6. Use the BroadcastChannel API if available
+      try {
+        const bc = new BroadcastChannel('api_mode_channel');
+        bc.postMessage({
+          type: 'apiModeChange',
+          mode: newMode,
+          timestamp: timestamp
+        });
+        // Close the channel after sending
+        setTimeout(() => bc.close(), 100);
+      } catch (e) {
+        console.log('[CMS] BroadcastChannel not supported in this browser');
+      }
+      
+      console.log('[CMS] API mode change broadcast complete');
+    } catch (error) {
+      console.error('[CMS] Error broadcasting API mode change:', error);
+    }
+  }
+
+  const handleApiModeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newMode = e.target.value;
+    const oldMode = apiMode;
+    
+    // Update component state
+    setApiModeState(newMode);
+    
+    if (typeof window !== 'undefined') {
+      console.log('[CMS] Changing API mode from', oldMode, 'to', newMode);
+      
+      try {
+        // Use the new centralized API mode sync function
+        syncApiModeChange(newMode, 'cms_validation_page');
+        
+        // Log the change using the logger for tracking
+        import('@/lib/logger').then(({ logApiModeChange }) => {
+          logApiModeChange(oldMode, newMode, 'cms_validation_page');
+        });
+        
+        // Show a success message
+        alert(`API Mode changed to ${newMode.toUpperCase()}. Home page should update automatically.`);
+        
+      } catch (error) {
+        console.error('[CMS] Error during API mode change:', error);
+        alert(`Error changing API mode: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  };
+
+  // --- Render API Mode Toggle ---
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100 p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
+      <div className="flex items-center gap-6 mb-8">
+        <h1 className="text-3xl font-bold">CMS / Validation Control Panel</h1>
+        {/* API Mode Switcher */}
+        <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded px-3 py-2 shadow">
+          <span className="font-semibold text-gray-700 dark:text-gray-200 mr-2">Data Source:</span>
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="apiMode"
+              value="mock"
+              checked={apiMode === 'mock'}
+              onChange={handleApiModeChange}
+              className="accent-blue-600"
+              aria-label="Mock Data"
+            />
+            <span className="text-sm">Mock</span>
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="apiMode"
+              value="live"
+              checked={apiMode === 'live'}
+              onChange={handleApiModeChange}
+              className="accent-green-600"
+              aria-label="Live Firestore"
+            />
+            <span className="text-sm">Live</span>
+          </label>
+        </div>
+      </div>
+      {/* ...rest of CMS page... */}
       {/* Title Section */}
       <h1 className="text-2xl font-bold mb-4">CMS / Validation Control Panel</h1>
 
@@ -1461,6 +1584,66 @@ const CmsValidationPage: React.FC = () => {
             onClick={() => setLogs([])}
           >
             Clear Logs
+          </button>
+          <button
+            className="px-3 py-1 bg-green-500 hover:bg-green-700 text-white rounded col-span-2"
+            onClick={() => {
+              // Force the API mode to refresh in all tabs
+              const currentMode = apiMode;
+              alert(`Forcing API mode refresh: ${currentMode.toUpperCase()}`);
+              
+              // Use all available mechanisms
+              try {
+                // Set the apiMode directly
+                setApiMode(currentMode);
+                
+                // Set the force update key
+                // localStorage.setItem('apiMode_force_update', Date.now().toString());
+                
+                // Set cookie
+                document.cookie = `apiMode=${currentMode};path=/;max-age=86400`;
+                
+                // Custom event
+                window.dispatchEvent(new Event('apiModeChanged'));
+                
+                // Broadcast to other tabs
+                try {
+                  const bc = new BroadcastChannel('api_mode_channel');
+                  bc.postMessage({
+                    type: 'apiModeChange',
+                    mode: currentMode,
+                    timestamp: Date.now().toString(),
+                    force: true
+                  });
+                  setTimeout(() => bc.close(), 100);
+                } catch (e) {
+                  console.error('[CMS] BroadcastChannel error:', e);
+                }
+                
+                // Insert a script element
+                const script = document.createElement('script');
+                script.innerHTML = `
+                  console.log('[CMS] Force refreshing API mode to ${currentMode}');
+                  setApiMode('${currentMode}');
+                  window.dispatchEvent(new Event('storage'));
+                  window.dispatchEvent(new Event('apiModeChanged'));
+                `;
+                document.body.appendChild(script);
+                setTimeout(() => document.body.removeChild(script), 200);
+                
+                // Log the event
+                logInfo(`CMS: Forced API mode refresh: ${currentMode}`, {
+                  source: 'cms_validation_page',
+                  action: 'force_refresh',
+                  mode: currentMode
+                });
+              } catch (error) {
+                console.error('[CMS] Error forcing API mode refresh:', error);
+                alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              }
+            }}
+          >
+            Force API Mode Refresh ({apiMode.toUpperCase()})
           </button>
         </div>
       </section>
@@ -1519,7 +1702,7 @@ const CmsValidationPage: React.FC = () => {
                 if (!data[col]) continue;
                 let issues = 0;
                 for (const doc of data[col]) {
-                  const result = (schema as any).safeParse(doc);
+                  const result = schema.safeParse(doc);
                   if (!result.success) {
                     issues++;
                     summary.push(`[OFFLINE] ${col}: ${JSON.stringify(result.error.issues)}`);

@@ -154,3 +154,44 @@ export function logValidation(promptId: string, status: 'success' | 'failure', d
   
   appEventBus.emit('validation_event', payload); // Broadcast validation event
 }
+
+/**
+ * Specialized logger for API mode changes to help with debugging cross-tab synchronization
+ */
+export function logApiModeChange(from: string, to: string, source: string) {
+  const timestamp = new Date().toISOString();
+  // Create a special payload that's easy to filter in the CMS
+  const payload: LogPayload = {
+    level: 'INFO',
+    message: `API Mode Change: ${from} → ${to}`,
+    data: { 
+      eventType: 'api_mode_change', 
+      from, 
+      to, 
+      source,
+      userId: typeof window !== 'undefined' ? localStorage.getItem('userId') : null,
+      tabId: typeof window !== 'undefined' ? 
+        window.name || 
+        `tab_${Math.random().toString(36).substring(2, 9)}` : 'server',
+    },
+    timestamp
+  };
+  
+  // Log to console
+  console.log(`[API_MODE] ${timestamp} - Changed from ${from} to ${to} (source: ${source})`);
+  
+  // Emit the event through the event bus
+  appEventBus.emit('log_event', payload);
+  
+  // Also store in localStorage to trigger cross-tab sync
+  try {
+    if (typeof window !== 'undefined') {
+      // Create a dedicated key for API mode changes to make them easier to track
+      const storageKey = `api_mode_change_${Date.now()}`;
+      localStorage.setItem(storageKey, JSON.stringify(payload));
+      localStorage.setItem('last_api_mode_change', storageKey);
+    }
+  } catch (e) {
+    console.error('[API_MODE] Error setting localStorage:', e);
+  }
+}

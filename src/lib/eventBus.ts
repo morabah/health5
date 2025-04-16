@@ -29,11 +29,22 @@ export interface ValidationPayload {
 }
 
 /**
+ * Payload for API mode change events.
+ */
+export interface ApiModePayload {
+  oldMode: string;
+  newMode: string;
+  source: string;
+  timestamp: string;
+}
+
+/**
  * Application event map for the event bus.
  */
 export type AppEvents = {
   'log_event': LogPayload;
   'validation_event': ValidationPayload;
+  'api_mode_change': ApiModePayload;
 };
 
 /**
@@ -74,6 +85,76 @@ export function setEventInLocalStorage(payload: LogPayload): void {
     }
   } catch (e) {
     console.error('[EVENT_BUS] Error setting localStorage:', e);
+  }
+}
+
+/**
+ * Helper function to specifically handle API mode changes.
+ * This ensures changes are properly synchronized across tabs and components.
+ * @param {string} newMode - The new API mode to set ('live' or 'mock')
+ * @param {string} source - Source identifier for the change
+ * @param {boolean} [preventAutoSync=false] - If true, adds a flag to prevent other tabs from auto-syncing
+ */
+export function syncApiModeChange(newMode: string, source: string, preventAutoSync: boolean = false): void {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    console.log(`[EVENT_BUS] Syncing API mode change to ${newMode} from ${source}`);
+    
+    // Get old mode first for logging
+    const oldMode = localStorage.getItem('apiMode') || 'unknown';
+    
+    // Force clear any browser cache by removing first
+    localStorage.removeItem('apiMode');
+    
+    // Set the new mode
+    localStorage.setItem('apiMode', newMode);
+    
+    // Create an API mode change record
+    const timestamp = Date.now().toString();
+    const record = {
+      oldMode,
+      newMode,
+      source,
+      timestamp,
+      preventAutoSync
+    };
+    
+    // Store API mode change data in multiple formats to ensure it's detected
+    localStorage.setItem('apiMode_force_update', timestamp);
+    localStorage.setItem('apiMode_last_change', `${newMode}_${timestamp}`);
+    localStorage.setItem('api_mode_record', JSON.stringify(record));
+    localStorage.setItem('apiMode_sync_event', `${newMode}_${timestamp}_${preventAutoSync ? '1' : '0'}`);
+    
+    // Use sessionStorage as backup
+    sessionStorage.setItem('apiMode_broadcast', `${newMode}_${timestamp}`);
+    
+    // 1. Emit event on the primary event bus (for same-tab listeners)
+    const payload: ApiModePayload = {
+      oldMode,
+      newMode,
+      source,
+      timestamp: new Date().toISOString()
+    };
+    appEventBus.emit('api_mode_change', payload);
+    
+    // 2. Try to use BroadcastChannel for modern cross-tab communication
+    try {
+      const bc = new BroadcastChannel('api_mode_channel');
+      bc.postMessage({
+        type: 'apiModeChange',
+        mode: newMode,
+        timestamp,
+        preventAutoSync
+      });
+      setTimeout(() => bc.close(), 100);
+    } catch (e) {
+      console.log('[EVENT_BUS] BroadcastChannel not supported in this browser');
+    }
+    
+    console.log(`[EVENT_BUS] API mode sync complete: ${oldMode} -> ${newMode}`);
+  } catch (e) {
+    console.error('[EVENT_BUS] Error syncing API mode:', e);
   }
 }
 
@@ -137,6 +218,45 @@ if (typeof window !== 'undefined') {
         }
       } catch (e) {
         console.error('[EVENT_BUS] Error handling storage event:', e);
+      }
+    }
+    
+    // Special handling for API mode change events via storage
+    if (event.key === 'apiMode_sync_event' && event.newValue) {
+      try {
+        const parts = event.newValue.split('_');
+        // Format: newMode_timestamp_preventAutoSync
+        const newMode = parts[0]; 
+        const timestamp = parts[1];
+        const preventAutoSync = parts[2] === '1';
+        
+        if (newMode && (newMode === 'live' || newMode === 'mock')) {
+          console.log(`[EVENT_BUS] Detected API mode sync event via storage: ${newMode} at ${timestamp}, preventAutoSync: ${preventAutoSync}`);
+          
+          // Get the current time to check if this is a recent change
+          const now = Date.now();
+          const eventTime = parseInt(timestamp, 10);
+          
+          // Only emit if the event is recent (within 5 seconds) and not prevented
+          // This prevents old storage events from triggering changes on page load
+          if (!isNaN(eventTime) && now - eventTime < 5000 && !preventAutoSync) {
+            console.log('[EVENT_BUS] API mode change is recent and auto-sync allowed, emitting event');
+            
+            // Emit an API mode change event ON THE EVENT BUS
+            const payload: ApiModePayload = {
+              oldMode: 'unknown', // We don't know the old mode in this cross-tab context
+              newMode,
+              source: 'storage_event',
+              timestamp: new Date().toISOString()
+            };
+            appEventBus.emit('api_mode_change', payload);
+          } else {
+            const reason = preventAutoSync ? 'prevented by flag' : 'too old or invalid timestamp';
+            console.log(`[EVENT_BUS] API mode change ignored: ${reason}`);
+          }
+        }
+      } catch (e) {
+        console.error('[EVENT_BUS] Error handling API mode sync event:', e);
       }
     }
   });
