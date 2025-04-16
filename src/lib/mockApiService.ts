@@ -26,7 +26,12 @@ function simulateDelay() {
  * Registers a new user (patient/doctor). Checks for email conflict, creates user/profile, adds to stores.
  * @throws Error('already-exists') if email taken.
  */
-export async function mockRegisterUser(data: Partial<UserProfile> & { userType: UserType }): Promise<{ success: boolean; userId: string }> {
+export async function mockRegisterUser(data: Partial<UserProfile> & { 
+  userType: UserType, 
+  // Additional fields not in UserProfile
+  password?: string,
+  patientData?: Partial<PatientProfile> 
+}): Promise<{ success: boolean; userId: string }> {
   logInfo("[mockApiService] mockRegisterUser", { data });
   await simulateDelay();
   const { email, userType } = data;
@@ -51,7 +56,14 @@ export async function mockRegisterUser(data: Partial<UserProfile> & { userType: 
   // Mutate usersStore
   (dataStore as any).usersStore.push(user);
   if (userType === UserType.PATIENT) {
-    (dataStore as any).patientProfilesStore.push({ userId: id, dateOfBirth: null, gender: null, bloodType: null, medicalHistory: null });
+    const patientProfile: PatientProfile = {
+      userId: id,
+      dateOfBirth: data.patientData?.dateOfBirth || null,
+      gender: data.patientData?.gender || null,
+      bloodType: data.patientData?.bloodType || null,
+      medicalHistory: data.patientData?.medicalHistory || null
+    };
+    (dataStore as any).patientProfilesStore.push(patientProfile);
   } else if (userType === UserType.DOCTOR) {
     (dataStore as any).doctorProfilesStore.push({
       userId: id,
