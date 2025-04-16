@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { AuthProvider } from '@/context/AuthContext';
+import Layout from '@/components/layout/Layout';
 // Import global Tailwind CSS styles for the entire app
 import '../styles/globals.css';
 
@@ -21,7 +23,11 @@ export default function RootLayout({
       {/* The Inter font and global styles are applied to the body */}
       <body className={inter.className}>
         <ThemeProvider>
-          {children}
+          <AuthProvider>
+            <Layout>
+              {children}
+            </Layout>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

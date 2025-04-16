@@ -5,8 +5,6 @@ import { logInfo, logApiModeChange, logValidation } from '@/lib/logger';
 import { setEventInLocalStorage } from '@/lib/eventBus';
 import { appEventBus, LogPayload, ApiModePayload, syncApiModeChange } from '@/lib/eventBus';
 import { useEffect, useState } from 'react';
-import Navbar from '@/components/layout/Navbar';
-import Footer from '@/components/layout/Footer';
 import React from 'react';
 import { DoctorProfile } from '@/types/doctor';
 import Card from '@/components/ui/Card';
@@ -311,7 +309,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
-      <Navbar />
       <main className="flex-1 w-full max-w-7xl mx-auto p-4">
         <div className="max-w-4xl mx-auto py-8 px-4">
           <div className="flex items-center mb-6">
@@ -397,7 +394,6 @@ export default function Home() {
           <p className="text-sm text-gray-500">Select a section to begin navigating the app or use the test buttons above to log an event.</p>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }
