@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
 import Layout from '@/components/layout/Layout';
 import dynamic from "next/dynamic";
+import { Toaster } from 'react-hot-toast';
 const ClientProtect = dynamic(() => import("@/components/shared/ClientProtect"), { ssr: false });
 
 // Import global Tailwind CSS styles for the entire app
@@ -22,11 +23,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      {/* The Inter font and global styles are applied to the body */}
-      <body className={inter.className}>
+    <html lang="en" className={inter.className} suppressHydrationWarning>
+      <head />
+      <body className={`min-h-screen bg-background text-foreground ${inter.className}`}>
         <ThemeProvider>
           <AuthProvider>
+            <Toaster position="top-center" />
             <Layout>
               <ClientProtect>{children}</ClientProtect>
             </Layout>

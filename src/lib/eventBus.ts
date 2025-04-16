@@ -6,7 +6,7 @@
 import mitt, { Emitter, Handler, EventType } from 'mitt';
 
 // Flag to enable/disable verbose debugging
-const DEBUG_EVENT_BUS = true;
+const DEBUG_EVENT_BUS = false;
 
 /**
  * Payload for log events.
@@ -64,7 +64,10 @@ if (DEBUG_EVENT_BUS) {
   // Track event emissions
   const originalEmit = appEventBus.emit;
   appEventBus.emit = <Key extends keyof AppEvents>(type: Key, event: AppEvents[Key]) => {
-    console.log(`[EVENT_BUS] Emitting '${type}'`, event);
+    // Only log non-session events to reduce noise
+    if (type !== 'log_event' || (type === 'log_event' && !(event as LogPayload).message.includes('Session timeout reset'))) {
+      console.log(`[EVENT_BUS] Emitting '${type}'`, event);
+    }
     return originalEmit(type, event);
   };
 }
@@ -74,6 +77,11 @@ if (DEBUG_EVENT_BUS) {
  */
 export function setEventInLocalStorage(payload: LogPayload): void {
   try {
+    // Don't log session timeout events to reduce noise
+    if (payload.message.includes('Session timeout reset')) {
+      return;
+    }
+    
     const storageKey = `cms_log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     localStorage.setItem(storageKey, JSON.stringify(payload));
     
@@ -104,11 +112,11 @@ export function syncApiModeChange(newMode: string, source: string, preventAutoSy
     
     // Only update if the mode is actually changing
     if (newMode === oldMode && source !== 'force_refresh') {
-      console.log(`[EVENT_BUS] API mode already set to ${newMode}, not updating`);
+      if (DEBUG_EVENT_BUS) console.log(`[EVENT_BUS] API mode already set to ${newMode}, not updating`);
       return;
     }
     
-    console.log(`[EVENT_BUS] Syncing API mode: ${oldMode} -> ${newMode} (source: ${source})`);
+    if (DEBUG_EVENT_BUS) console.log(`[EVENT_BUS] Syncing API mode: ${oldMode} -> ${newMode} (source: ${source})`);
     
     // Update localStorage - this will trigger a 'storage' event in other tabs
     localStorage.setItem('apiMode', newMode);
@@ -138,10 +146,10 @@ export function syncApiModeChange(newMode: string, source: string, preventAutoSy
       });
       setTimeout(() => bc.close(), 100);
     } catch (e) {
-      console.log('[EVENT_BUS] BroadcastChannel not supported in this browser');
+      if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] BroadcastChannel not supported in this browser');
     }
     
-    console.log(`[EVENT_BUS] API mode sync complete: ${oldMode} -> ${newMode}`);
+    if (DEBUG_EVENT_BUS) console.log(`[EVENT_BUS] API mode sync complete: ${oldMode} -> ${newMode}`);
   } catch (e) {
     console.error('[EVENT_BUS] Error syncing API mode:', e);
   }
@@ -161,12 +169,12 @@ function safeJsonParse(jsonString: string): any | null {
 
 // --- Cross-tab log event sync ---
 if (typeof window !== 'undefined') {
-  console.log('[EVENT_BUS] Setting up localStorage event sync');
+  if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] Setting up localStorage event sync');
   
   // Test localStorage functionality
   try {
     localStorage.setItem('event_bus_test', 'test');
-    console.log('[EVENT_BUS] localStorage test successful');
+    if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] localStorage test successful');
   } catch (e) {
     console.error('[EVENT_BUS] localStorage test failed:', e);
   }
@@ -192,7 +200,12 @@ if (typeof window !== 'undefined') {
           return;
         }
         
-        console.log('[EVENT_BUS] Parsed storage event payload:', payload);
+        if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] Parsed storage event payload:', payload);
+        
+        // Skip session timeout events
+        if (payload?.message?.includes('Session timeout reset')) {
+          return;
+        }
         
         // Emit to event bus so CMS/Validation page receives it
         if (payload && 
@@ -220,7 +233,7 @@ if (typeof window !== 'undefined') {
         const preventAutoSync = parts[2] === '1';
         
         if (newMode && (newMode === 'live' || newMode === 'mock')) {
-          console.log(`[EVENT_BUS] Detected API mode sync event via storage: ${newMode} at ${timestamp}, preventAutoSync: ${preventAutoSync}`);
+          if (DEBUG_EVENT_BUS) console.log(`[EVENT_BUS] Detected API mode sync event via storage: ${newMode} at ${timestamp}, preventAutoSync: ${preventAutoSync}`);
           
           // Get the current time to check if this is a recent change
           const now = Date.now();
@@ -229,7 +242,7 @@ if (typeof window !== 'undefined') {
           // Only emit if the event is recent (within 5 seconds) and not prevented
           // This prevents old storage events from triggering changes on page load
           if (!isNaN(eventTime) && now - eventTime < 5000 && !preventAutoSync) {
-            console.log('[EVENT_BUS] API mode change is recent and auto-sync allowed, emitting event');
+            if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] API mode change is recent and auto-sync allowed, emitting event');
             
             // Emit an API mode change event ON THE EVENT BUS
             const payload: ApiModePayload = {
@@ -239,7 +252,7 @@ if (typeof window !== 'undefined') {
               timestamp: new Date().toISOString()
             };
             appEventBus.emit('api_mode_change', payload);
-          } else {
+          } else if (DEBUG_EVENT_BUS) {
             const reason = preventAutoSync ? 'prevented by flag' : 'too old or invalid timestamp';
             console.log(`[EVENT_BUS] API mode change ignored: ${reason}`);
           }
@@ -255,7 +268,7 @@ if (typeof window !== 'undefined') {
 export function setupApiModeSyncListener() {
   if (typeof window === 'undefined') return;
   
-  console.log('[EVENT_BUS] Setting up API mode sync listener');
+  if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] Setting up API mode sync listener');
   
   window.addEventListener('storage', (event) => {
     if (event.key === 'apiMode') {
@@ -263,7 +276,7 @@ export function setupApiModeSyncListener() {
         const newMode = event.newValue;
         
         if (newMode === 'live' || newMode === 'mock') {
-          console.log(`[EVENT_BUS] Storage event detected API mode change: ${newMode}`);
+          if (DEBUG_EVENT_BUS) console.log(`[EVENT_BUS] Storage event detected API mode change: ${newMode}`);
           
           // Create payload for the event bus
           const payload: ApiModePayload = {
@@ -275,7 +288,7 @@ export function setupApiModeSyncListener() {
           
           // Emit on the event bus for local components to react
           appEventBus.emit('api_mode_change', payload);
-          console.log('[EVENT_BUS] Emitted api_mode_change event from storage event');
+          if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] Emitted api_mode_change event from storage event');
         }
       } catch (e) {
         console.error('[EVENT_BUS] Error handling API mode sync event:', e);
@@ -289,7 +302,7 @@ export function setupApiModeSyncListener() {
     bc.onmessage = (event) => {
       if (event.data?.type === 'apiModeChange' && 
           (event.data.mode === 'live' || event.data.mode === 'mock')) {
-        console.log('[EVENT_BUS] Received BroadcastChannel API mode change:', event.data.mode);
+        if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] Received BroadcastChannel API mode change:', event.data.mode);
         
         // Only update localStorage if the value is different (prevents loop)
         const currentMode = localStorage.getItem('apiMode');
@@ -309,9 +322,9 @@ export function setupApiModeSyncListener() {
       }
     };
     
-    console.log('[EVENT_BUS] BroadcastChannel listener initialized');
+    if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] BroadcastChannel listener initialized');
   } catch (e) {
-    console.log('[EVENT_BUS] BroadcastChannel not supported, skipping initialization');
+    if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] BroadcastChannel not supported, skipping initialization');
   }
 }
 

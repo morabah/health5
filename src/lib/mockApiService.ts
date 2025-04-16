@@ -222,6 +222,52 @@ export async function mockCancelAppointment({ appointmentId, reason, userId }: {
 }
 
 /**
+ * Gets an appointment by its ID.
+ * @param appointmentId The unique identifier of the appointment
+ * @returns The appointment object if found, null otherwise
+ */
+export async function mockGetAppointmentById(appointmentId: string): Promise<Appointment | null> {
+  logInfo("[mockApiService] mockGetAppointmentById", { appointmentId });
+  await simulateDelay();
+  
+  const appointments = dataStore.getAppointmentsStore();
+  const appointment = appointments.find(a => a.id === appointmentId);
+  
+  if (!appointment) {
+    logInfo("[mockApiService] Appointment not found", { appointmentId });
+    return null;
+  }
+  
+  return appointment;
+}
+
+/**
+ * Updates an existing appointment with new data.
+ * @param appointment The updated appointment object
+ * @returns Object indicating success
+ */
+export async function mockUpdateAppointment(appointment: Appointment): Promise<{ success: boolean }> {
+  logInfo("[mockApiService] mockUpdateAppointment", { appointmentId: appointment.id });
+  await simulateDelay();
+  
+  const appointments = (dataStore as any).appointmentsStore;
+  const index = appointments.findIndex((a: any) => a.id === appointment.id);
+  
+  if (index === -1) {
+    throw new Error("not-found");
+  }
+  
+  // Update the appointment in the store
+  appointments[index] = {
+    ...appointments[index],
+    ...appointment,
+    updatedAt: Timestamp.now()
+  };
+  
+  return { success: true };
+}
+
+/**
  * Sets doctor availability (slots/blockedDates) for a doctor.
  */
 export async function mockSetDoctorAvailability({ doctorId, slots, blockedDates }: { doctorId: string; slots: any[]; blockedDates: string[] }): Promise<{ success: boolean }> {

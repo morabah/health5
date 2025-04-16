@@ -46,6 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [role, setRole] = useState<'patient' | 'doctor' | 'admin' | null>(null);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLoggedRef = useRef<number>(0);
 
   // Simulate logout (must be declared before resetTimeout for closure safety)
   const logout = useCallback(() => {
@@ -67,13 +68,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Session timeout: reset timer on user activity
   const resetTimeout = useCallback(() => {
+    // Debounce the activity updates to prevent excessive logging
     if (timeoutIdRef.current) clearTimeout(timeoutIdRef.current);
+    
+    const now = Date.now();
+    
+    // Only log timeout reset at most once every 10 seconds
+    if (now - lastLoggedRef.current > 10000) {
+      lastLoggedRef.current = now;
+      logInfo("Session timeout reset");
+    }
+    
     // 30 min inactivity
     timeoutIdRef.current = setTimeout(() => {
       logInfo("Session timeout: Logging out due to inactivity");
       logout();
     }, 30 * 60 * 1000);
-    logInfo("Session timeout reset");
   }, [logout]);
 
   // Simulate async mock login
@@ -83,9 +93,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Reset and seed all mock data stores for the selected role
     await import("@/data/resetMockDataStoresForUser").then(mod => mod.resetMockDataStoresForUser(role));
     let email = '';
-    if (role === 'patient') email = mockPatientUser.email;
-    else if (role === 'doctor') email = mockDoctorUser.email;
-    else if (role === 'admin') email = mockAdminUser.email;
+    if (role === 'patient') email = mockPatientUser.email ?? '';
+    else if (role === 'doctor') email = mockDoctorUser.email ?? '';
+    else if (role === 'admin') email = mockAdminUser.email ?? '';
 
     try {
       // Use the real mockSignIn to ensure all associated data is loaded

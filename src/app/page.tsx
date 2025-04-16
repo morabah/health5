@@ -11,9 +11,8 @@ import { DoctorProfile } from '@/types/doctor';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
-import Alert from '@/components/ui/Alert';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUserMd, faStethoscope, faStar } from '@fortawesome/free-solid-svg-icons';
+import { faUserMd, faCalendarCheck, faHospital, faMobileAlt, faShieldAlt, faUserPlus } from '@fortawesome/free-solid-svg-icons';
 import ApiModeLabel from './ApiModeLabel';
 
 const MOCK_DOCTOR_IDS = ['user_doctor_001', 'user_doctor_002', 'user_doctor_003'];
@@ -248,198 +247,319 @@ export default function Home() {
     if (!hasMounted) return;
     console.log('[Home] Running main effect to set up API mode listeners.');
     
-    // Function to update API mode state when an event is received
     const updateApiModeState = (newMode: string, source: string) => {
-      // Check against the *current* state value, not a potentially stale closure value
-      setApiMode(currentApiModeInState => {
-        if (newMode !== currentApiModeInState) {
-          logApiModeChange(currentApiModeInState, newMode, source);
-          console.log(`[Home] Updating API mode state via ${source}: ${currentApiModeInState} -> ${newMode}`);
-          return newMode; // Update the state
-        }
-        return currentApiModeInState; // No change needed
-      });
-    };
-    
-    // Listener for the centralized API mode change event from Event Bus
-    const handleApiModeChangeEvent = (payload: ApiModePayload) => {
-      console.log('[Home] Received API mode change event via Event Bus:', payload);
-      // Only update if it's not from initial_sync to prevent auto-switching on refresh
-      if (payload.source !== 'initial_sync') {
-        updateApiModeState(payload.newMode, 'event_bus_listener');
-      } else {
-        console.log('[Home] Ignoring initial_sync event to prevent auto-switching on refresh');
-      }
-    };
-    
-    // Listener for BroadcastChannel messages
-    const handleBroadcastMessage = (event: MessageEvent) => {
-      console.log('[Home] BroadcastChannel message received:', event.data);
-      if (event.data && event.data.type === 'apiModeChange' && event.data.mode) {
-        console.log('[Home] API mode change received via BroadcastChannel:', event.data.mode);
-        updateApiModeState(event.data.mode, 'broadcast_channel');
-      }
-    };
-
-    // Subscribe to the primary API mode change event
-    appEventBus.on('api_mode_change', handleApiModeChangeEvent);
-    console.log('[Home] Subscribed to api_mode_change event');
-
-    // Set up BroadcastChannel listener
-    let broadcastChannel: BroadcastChannel | null = null;
-    try {
-      broadcastChannel = new BroadcastChannel('api_mode_channel');
-      broadcastChannel.onmessage = handleBroadcastMessage;
-      console.log('[Home] BroadcastChannel listener set up');
-    } catch (e) {
-      console.log('[Home] BroadcastChannel not supported');
-    }
-    
-    // After setting up listeners, check if the current localStorage value matches the state,
-    // but only log it without triggering auto-sync
-    const currentStoredMode = getApiMode();
-    console.log('[Home] Initial stored API mode after listener setup:', currentStoredMode);
-    
-    // Don't auto-sync to prevent unexpected switches on refresh
-    // Remove/comment out this section to prevent mode switching on refresh
-    /*
-    if (currentStoredMode !== apiMode) {
-      console.log('[Home] Triggering initial API mode sync to match localStorage');
-      const payload: ApiModePayload = {
-        oldMode: apiMode,
-        newMode: currentStoredMode,
-        source: 'initial_sync',
-        timestamp: new Date().toISOString()
-      };
-      appEventBus.emit('api_mode_change', payload);
-    }
-    */
-    
-    // Clean up listeners
-    return () => {
-      console.log('[Home] Cleaning up API mode listeners');
-      appEventBus.off('api_mode_change', handleApiModeChangeEvent);
-      if (broadcastChannel) {
-        broadcastChannel.close();
-      }
-    };
-    // Rerun this effect only if isClient changes (i.e., on hydration)
-  }, [hasMounted]);
-
-  useEffect(() => {
-    if (!hasMounted) return;
-    // Update the document title to reflect the current API mode for debugging purposes
-    if (typeof document !== 'undefined') {
-      document.title = `Health App (${apiMode === 'live' ? 'Live' : 'Mock'})`;
-    }
-    
-    // Assign a unique tab ID for logging/debugging if not already set
-    if (typeof window !== 'undefined' && !window.name) {
-      window.name = `tab_${Math.random().toString(36).substring(2, 9)}`;
-      console.log(`[Home] Assigned tab ID: ${window.name}`);
+      console.log(`[Home] API mode change detected from ${source}: ${newMode}`);
       
-      // Store the tab ID in sessionStorage for persistence
-      sessionStorage.setItem('tabId', window.name);
-    }
-  }, [apiMode, hasMounted]);
-
-  useEffect(() => {
-    if (!hasMounted) return;
-    // Log validation success for each major section
-    logValidation('3.10_DoctorDashboardUI', 'success');
-    logValidation('3.11_AdminDashboardUI', 'success');
-    logValidation('3.12_AdminListsUI', 'success');
-    logValidation('3.13_FindDoctorUI', 'success');
-    logValidation('3.14_PatientProfileUI', 'success');
-    logValidation('3.15_DoctorProfileUI', 'success');
-    logValidation('3.16_BookAppointmentUI', 'success');
-    logValidation('3.17_NotificationsUI', 'success');
-    logValidation('3.18_DoctorAvailabilityUI', 'success');
-    logValidation('3.19_DoctorFormsUI', 'success');
-    logValidation('3.Y_Animations', 'success');
+      // Safe cast to our union type
+      const typedMode = newMode === 'live' ? 'live' : 'mock';
+      
+      // Always update our local state
+      setApiMode(typedMode);
+      
+      // Update the global state + localStorage
+      setGlobalApiMode(typedMode);
+      
+      // Broadcast the change to CMS
+      logApiModeChange(typedMode, source);
+    };
+    
+    // Event handler for in-memory event bus
+    const handleApiModeChangeEvent = (payload: ApiModePayload) => {
+      const { mode, source } = payload;
+      console.log(`[Home] Received api_mode_change event from ${source || 'unknown'}: ${mode}`);
+      updateApiModeState(mode, source || 'event');
+    };
+    
+    // Register with in-memory event bus
+    appEventBus.on('api_mode_change', handleApiModeChangeEvent);
+    
+    // Handle storage events from other tabs
+    const handleBroadcastMessage = (event: MessageEvent) => {
+      if (!event.data || typeof event.data !== 'object') return;
+      
+      const { type, payload } = event.data;
+      if (type === 'api_mode_change' && payload?.mode) {
+        console.log(`[Home] Received api_mode_change broadcast: ${payload.mode}`);
+        updateApiModeState(payload.mode, 'broadcast');
+      }
+    };
+    
+    // Register storage event listener
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'apiMode') {
+        console.log(`[Home] Storage event: apiMode changed to ${event.newValue}`);
+        if (event.newValue) {
+          updateApiModeState(event.newValue, 'storage');
+        }
+      }
+    });
+    
+    return () => {
+      appEventBus.off('api_mode_change', handleApiModeChangeEvent);
+      window.removeEventListener('storage', () => {});
+    };
   }, [hasMounted]);
 
-  if (!hasMounted) {
-    return null;
-  }
+  // Track component mounting in CMS for user flow validation
+  useEffect(() => {
+    if (!hasMounted) return;
+    logValidation("homepage-ui", "success");
+  }, [hasMounted]);
 
-  let modeLabel = apiMode === 'live' ? 'Live (Firestore)' : 'Mock (Offline Data)';
-  let modeColor = apiMode === 'live' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-blue-100 text-blue-800 border-blue-300';
+  const modeColor = apiMode === 'live' 
+    ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+    : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+    
+  const modeLabel = apiMode === 'live' ? "Live (Firebase)" : "Mock (Local)";
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
-      <main className="flex-1 w-full max-w-7xl mx-auto p-4">
-        <div className="max-w-4xl mx-auto py-8 px-4">
-          {/* HERO SECTION */}
-          <div className="w-full bg-gradient-to-br from-blue-100 via-white to-emerald-100 dark:from-gray-900 dark:via-gray-800 dark:to-emerald-950 py-12 px-4 rounded-xl mb-10 shadow-lg flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex-1">
-              <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-blue-900 dark:text-white drop-shadow-lg">Health Appointment System</h1>
-              <p className="text-lg md:text-xl text-gray-700 dark:text-gray-200 mb-6 max-w-xl">Book appointments, connect with trusted doctors, and manage your health—all in one secure, modern platform.</p>
-              <div className="flex flex-wrap gap-4">
-                <Link href="/find" className="px-6 py-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-lg shadow transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500" aria-label="Find Doctors">Find Doctors</Link>
-                <Link href="/auth/register" className="px-6 py-3 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg shadow transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" aria-label="Register">Register</Link>
-                <Link href="/auth/login" className="px-6 py-3 rounded bg-gray-700 hover:bg-gray-900 text-white font-semibold text-lg shadow transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700" aria-label="Login">Login</Link>
-              </div>
-            </div>
-            <div className="flex-1 flex items-center justify-center">
-              <img src="/hero-doctor.svg" alt="Doctor and Patient" className="w-72 md:w-96 rounded-xl shadow-xl border-4 border-emerald-200 dark:border-emerald-900" />
-            </div>
-          </div>
-          {/* END HERO SECTION */}
-          {/* Data Source Indicator */}
-          <div className={`inline-flex items-center px-3 py-1 mb-6 rounded-full border text-xs font-semibold ${modeColor}`}
-               aria-label={`Current data source: ${modeLabel}`}>
-            <span className="mr-2">Data Source:</span> {modeLabel}
-          </div>
-          {/* Featured Doctors Section */}
-          <section className="max-w-5xl mx-auto py-8">
-            <h2 className="text-2xl font-semibold mb-6 text-center">Featured Doctors</h2>
-            {loading ? (
-              <div className="flex justify-center my-8"><Spinner /></div>
-            ) : error ? (
-              <div className="flex justify-center my-8">
-                <Alert variant="error" message={error} isVisible={true} />
-              </div>
-            ) : doctors.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {doctors.map((doctor) => (
-                  <Card key={doctor.userId} className="flex flex-col items-center p-6" aria-label={`Doctor card for ${doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}`} tabIndex={0}>
-                    <FontAwesomeIcon icon={faUserMd} className="text-4xl text-primary mb-4" />
-                    <div className="font-bold text-lg mb-1">{doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}</div>
-                    <div className="text-gray-600 dark:text-gray-300 mb-2">{doctor.specialty}</div>
-                    <Button 
-                      variant="primary"
-                      className="mt-2 w-full"
-                      aria-label={`View profile for ${doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}`}
-                      onClick={() => router.push(`/main/doctor-profile/${doctor.userId}`)}
-                    >
-                      View Profile
-                    </Button>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="flex justify-center my-8">
-                <Alert variant="info" message="No featured doctors found." isVisible={true} />
-              </div>
-            )}
-          </section>
-          {/* Navigation Section */}
-          <nav className="mb-8" aria-label="Main navigation">
-            <h2 className="text-xl font-semibold mb-4">Navigate the Platform</h2>
-            <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              <li><Link href="/find" className="block p-4 rounded bg-emerald-600 text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500" aria-label="Find Doctors">Find Doctors</Link></li>
-              <li><Link href="/patient" className="block p-4 rounded bg-teal-600 text-white hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500" aria-label="Patient Dashboard">Patient Dashboard</Link></li>
-              <li><Link href="/doctor" className="block p-4 rounded bg-pink-600 text-white hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500" aria-label="Doctor Dashboard">Doctor Dashboard</Link></li>
-              <li><Link href="/admin" className="block p-4 rounded bg-gray-700 text-white hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700" aria-label="Admin Dashboard">Admin Dashboard</Link></li>
-              <li><Link href="/about" className="block p-4 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" aria-label="About">About</Link></li>
-              <li><Link href="/contact" className="block p-4 rounded bg-purple-600 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500" aria-label="Contact">Contact</Link></li>
-              <li><Link href="/notifications" className="block p-4 rounded bg-yellow-600 text-white hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500" aria-label="Notifications">Notifications</Link></li>
-            </ul>
-          </nav>
-          <p className="text-sm text-gray-500">Select a section to begin navigating the app.</p>
+    <div className="min-h-screen bg-white dark:bg-gray-900">
+      {/* API Mode indicator - small and subtle at the top */}
+      <div className="fixed top-2 right-2 z-50">
+        <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${modeColor}`}
+             aria-label={`Current data source: ${modeLabel}`}>
+          <span className="mr-1">API:</span> {modeLabel}
         </div>
-      </main>
+      </div>
+
+      {/* Hero Section */}
+      <section className="w-full bg-gradient-to-br from-indigo-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-950 pt-12 pb-20 px-4">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center">
+          <div className="lg:w-1/2 mb-10 lg:mb-0 lg:pr-10">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-indigo-900 dark:text-white leading-tight">
+              Healthcare Made <span className="text-cyan-600 dark:text-cyan-400">Simple</span>
+            </h1>
+            <p className="mt-4 text-lg md:text-xl text-gray-700 dark:text-gray-200 max-w-xl">
+              Book appointments, connect with trusted doctors, and manage your health—all in one secure, easy-to-use platform.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <Button 
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all"
+                label="Find Doctors"
+                pageName="Home"
+              >
+                <Link href="/find">Find Doctors</Link>
+              </Button>
+              <Button 
+                className="bg-white text-indigo-600 hover:bg-gray-100 border border-indigo-600 px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all"
+                variant="secondary"
+                label="Sign Up"
+                pageName="Home"
+              >
+                <Link href="/auth/register">Sign Up</Link>
+              </Button>
+            </div>
+          </div>
+          <div className="lg:w-1/2 relative">
+            <div className="relative rounded-lg overflow-hidden shadow-2xl">
+              <img 
+                src="/hero-doctor.svg" 
+                alt="Doctor with patient" 
+                className="w-full max-w-lg mx-auto rounded-lg object-cover"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      {/* Features Section */}
+      <section className="py-16 px-4 bg-white dark:bg-gray-800">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900 dark:text-white">
+            Why Choose Our Platform
+          </h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              {
+                icon: <FontAwesomeIcon icon={faUserMd} className="text-4xl text-indigo-600 dark:text-indigo-400" />,
+                title: "Verified Doctors",
+                description: "All healthcare providers are thoroughly verified to ensure quality care."
+              },
+              {
+                icon: <FontAwesomeIcon icon={faCalendarCheck} className="text-4xl text-indigo-600 dark:text-indigo-400" />,
+                title: "Easy Scheduling",
+                description: "Book, reschedule or cancel appointments with just a few clicks."
+              },
+              {
+                icon: <FontAwesomeIcon icon={faHospital} className="text-4xl text-indigo-600 dark:text-indigo-400" />,
+                title: "Comprehensive Care",
+                description: "Access a wide range of medical specialties all in one place."
+              },
+              {
+                icon: <FontAwesomeIcon icon={faMobileAlt} className="text-4xl text-indigo-600 dark:text-indigo-400" />,
+                title: "Mobile Friendly",
+                description: "Access your health information from any device, anywhere."
+              },
+              {
+                icon: <FontAwesomeIcon icon={faShieldAlt} className="text-4xl text-indigo-600 dark:text-indigo-400" />,
+                title: "Secure & Private",
+                description: "Your health data is protected with enterprise-grade security."
+              },
+              {
+                icon: <FontAwesomeIcon icon={faUserPlus} className="text-4xl text-indigo-600 dark:text-indigo-400" />,
+                title: "Patient Portal",
+                description: "Manage your health records, prescriptions, and appointments in one place."
+              }
+            ].map((feature, index) => (
+              <Card key={index} className="p-6 flex flex-col items-center text-center hover:shadow-lg transition-shadow dark:bg-gray-700">
+                <div className="mb-4">{feature.icon}</div>
+                <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{feature.title}</h3>
+                <p className="text-gray-600 dark:text-gray-300">{feature.description}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+      
+      {/* Featured Doctors Section */}
+      <section className="py-16 px-4 bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-4 text-gray-900 dark:text-white">
+            Meet Our Specialists
+          </h2>
+          <p className="text-center text-gray-600 dark:text-gray-300 mb-12 max-w-3xl mx-auto">
+            Our platform connects you with experienced healthcare professionals across various specialties.
+          </p>
+          
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Spinner size="lg" />
+            </div>
+          ) : error ? (
+            <div className="text-center text-red-600 dark:text-red-400 py-8">
+              {error}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {doctors.slice(0, 3).map((doctor, index) => (
+                <Card key={index} className="overflow-hidden hover:shadow-xl transition-shadow dark:bg-gray-700">
+                  <div className="bg-indigo-100 dark:bg-indigo-900 h-32 flex items-center justify-center">
+                    <FontAwesomeIcon icon={faUserMd} className="text-5xl text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div className="p-6">
+                    <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{doctor.name}</h3>
+                    <p className="text-indigo-600 dark:text-indigo-400 mb-4">{doctor.specialty}</p>
+                    <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
+                      {doctor.bio || "Experienced healthcare professional dedicated to providing excellent patient care."}
+                    </p>
+                    <Button 
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                      label="View Profile"
+                      pageName="Home"
+                    >
+                      <Link href={`/doctor/${doctor.userId}`}>View Profile</Link>
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+          
+          <div className="text-center mt-10">
+            <Button 
+              className="bg-transparent hover:bg-indigo-50 text-indigo-600 dark:text-indigo-400 border border-indigo-600 dark:border-indigo-400 px-6 py-3 rounded-lg"
+              variant="secondary"
+              label="Find More Doctors"
+              pageName="Home"
+            >
+              <Link href="/find">Find More Doctors</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+      
+      {/* Testimonials */}
+      <section className="py-16 px-4 bg-white dark:bg-gray-800">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900 dark:text-white">
+            What Our Users Say
+          </h2>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              {
+                quote: "This platform has completely transformed how I manage my healthcare. Booking appointments is now effortless!",
+                author: "Sarah Johnson",
+                role: "Patient"
+              },
+              {
+                quote: "As a physician, I appreciate how streamlined the system is. It helps me focus more on patient care and less on administration.",
+                author: "Dr. Michael Chen",
+                role: "Cardiologist"
+              },
+              {
+                quote: "The interface is intuitive and user-friendly. I can easily track all my family's appointments in one place.",
+                author: "Robert Wilson",
+                role: "Patient"
+              }
+            ].map((testimonial, index) => (
+              <Card key={index} className="p-6 dark:bg-gray-700">
+                <div className="mb-4 text-indigo-600 dark:text-indigo-400">
+                  {/* Quote icon */}
+                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9.983 3v7.391c0 5.704-3.731 9.57-8.983 10.609l-.995-2.151c2.432-.917 3.995-3.638 3.995-5.849h-4v-10h9.983zm14.017 0v7.391c0 5.704-3.748 9.571-9 10.609l-.996-2.151c2.433-.917 3.996-3.638 3.996-5.849h-3.983v-10h9.983z" />
+                  </svg>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6 italic">"{testimonial.quote}"</p>
+                <div className="mt-auto">
+                  <p className="font-semibold text-gray-900 dark:text-white">{testimonial.author}</p>
+                  <p className="text-gray-500 dark:text-gray-400">{testimonial.role}</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+      
+      {/* CTA Section */}
+      <section className="py-20 px-4 bg-gradient-to-r from-indigo-600 to-cyan-600 dark:from-indigo-800 dark:to-cyan-800 text-white">
+        <div className="max-w-7xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Transform Your Healthcare Experience?</h2>
+          <p className="text-xl mb-8 max-w-3xl mx-auto">Join thousands of patients and doctors who are already benefiting from our platform.</p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Button 
+              className="bg-white text-indigo-600 hover:bg-gray-100 px-8 py-4 rounded-lg shadow-lg hover:shadow-xl transition-all text-lg"
+              label="Get Started"
+              pageName="Home"
+            >
+              <Link href="/auth/register">Get Started</Link>
+            </Button>
+            <Button 
+              className="bg-transparent hover:bg-indigo-700 text-white border border-white px-8 py-4 rounded-lg shadow-lg hover:shadow-xl transition-all text-lg"
+              variant="secondary"
+              label="Learn More"
+              pageName="Home"
+            >
+              <Link href="/about">Learn More</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+      
+      {/* Quick Access Links */}
+      <section className="py-10 px-4 bg-gray-100 dark:bg-gray-950">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">Quick Access</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {[
+              { title: "Find Doctors", href: "/find" },
+              { title: "Patient Dashboard", href: "/patient/dashboard" },
+              { title: "Doctor Dashboard", href: "/doctor/dashboard" },
+              { title: "Admin Dashboard", href: "/admin" },
+              { title: "Appointments", href: "/patient/appointments" },
+              { title: "About Us", href: "/about" },
+            ].map((link, index) => (
+              <Link 
+                key={index} 
+                href={link.href}
+                className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow text-center hover:bg-indigo-50 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white"
+              >
+                {link.title}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
