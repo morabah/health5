@@ -96,6 +96,57 @@ export const mockDoctorProfileData2: DoctorProfile = {
   certificateUrl: null,
 };
 
+export const mockDoctorProfileData3: DoctorProfile = {
+  userId: 'user_doctor_003',
+  specialty: 'Pediatrics',
+  licenseNumber: 'DOC-54321',
+  yearsOfExperience: 15,
+  education: 'MD, Johns Hopkins University',
+  bio: 'Pediatrician dedicated to children’s health and wellness.',
+  verificationStatus: VerificationStatus.VERIFIED,
+  verificationNotes: 'All documents validated.',
+  location: 'Chicago, IL',
+  languages: ['English', 'French'],
+  consultationFee: 100,
+  profilePictureUrl: 'https://example.com/profile/doctor3.jpg',
+  licenseDocumentUrl: 'https://example.com/docs/license3.pdf',
+  certificateUrl: 'https://example.com/docs/cert3.pdf',
+};
+
+export const mockDoctorProfileData4: DoctorProfile = {
+  userId: 'user_doctor_004',
+  specialty: 'Orthopedics',
+  licenseNumber: 'DOC-98765',
+  yearsOfExperience: 20,
+  education: 'MD, Mayo Clinic Alix School of Medicine',
+  bio: 'Orthopedic surgeon with a focus on sports injuries.',
+  verificationStatus: VerificationStatus.PENDING,
+  verificationNotes: '',
+  location: 'Houston, TX',
+  languages: ['English', 'Spanish'],
+  consultationFee: 200,
+  profilePictureUrl: 'https://example.com/profile/doctor4.jpg',
+  licenseDocumentUrl: null,
+  certificateUrl: null,
+};
+
+export const mockDoctorProfileData5: DoctorProfile = {
+  userId: 'user_doctor_005',
+  specialty: 'Neurology',
+  licenseNumber: 'DOC-11223',
+  yearsOfExperience: 10,
+  education: 'MD, Columbia University',
+  bio: 'Neurologist passionate about brain health and research.',
+  verificationStatus: VerificationStatus.UNVERIFIED,
+  verificationNotes: 'Pending license review.',
+  location: 'Miami, FL',
+  languages: ['English', 'Portuguese'],
+  consultationFee: 180,
+  profilePictureUrl: null,
+  licenseDocumentUrl: null,
+  certificateUrl: null,
+};
+
 // --- Doctor Availability Slot Mock ---
 export const mockDoctorAvailabilitySlot: DoctorAvailabilitySlot = {
   id: 'avail_001',

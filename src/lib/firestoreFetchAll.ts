@@ -7,7 +7,14 @@ import { app } from "@/lib/firebaseClient";
  * Note: For doctors, fetches only the main doc, not subcollections 
  */
 export async function getAllFirestoreData() {
-  if (!app) throw new Error("Firebase app is not initialized (API mode may be 'mock' or missing env vars)");
+  if (!app) {
+    // Log a warning and return an empty result for mock mode or missing env
+    if (process.env.NEXT_PUBLIC_API_MODE !== 'live') {
+      console.warn("[firestoreFetchAll] Firebase app not initialized: API mode is not 'live'. Returning empty Firestore data.");
+      return {};
+    }
+    throw new Error("Firebase app is not initialized (API mode may be 'mock' or missing env vars)");
+  }
   const db = getFirestore(app);
   const collections = [
     "users",

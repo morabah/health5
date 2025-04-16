@@ -23,7 +23,7 @@ const Textarea: React.FC<TextareaProps> = ({ label, error, id, rows = 3, classNa
     <textarea
       id={id}
       rows={rows}
-      className={`border rounded p-2 w-full focus:ring-primary focus:border-primary transition-colors duration-150 ${error ? 'border-red-500' : 'border-gray-300'} ${className}`}
+      className={`border rounded p-2 w-full focus:ring-primary focus:border-primary transition-all duration-300 ease-in-out ${error ? 'border-red-500' : 'border-gray-300'} ${className}`}
       {...rest}
     />
     {error && <p className="text-red-500 text-sm mt-1">{error}</p>}

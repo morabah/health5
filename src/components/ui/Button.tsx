@@ -54,7 +54,7 @@ export const Button = ({
 
   return (
     <button
-      className={`px-4 py-2 rounded ${variantStyles[variant]} ${className}`}
+      className={`px-4 py-2 rounded ${variantStyles[variant]} transition-all duration-300 ease-in-out ${className}`}
       onClick={handleClick}
       {...rest}
     >

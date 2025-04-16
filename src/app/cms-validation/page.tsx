@@ -19,7 +19,9 @@ import { DataSyncPanel } from './DataSyncPanel';
 import { UserProfileSchema, PatientProfileSchema, DoctorProfileSchema, DoctorAvailabilitySlotSchema, VerificationDocumentSchema, AppointmentSchema, NotificationSchema } from '@/lib/zodSchemas';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleCheck, faCircleExclamation, faSearch, faDownload, faSpinner, faCodeCompare } from '@fortawesome/free-solid-svg-icons';
-import { getApiMode, setApiMode } from '@/config/apiMode';
+import { getApiMode, setApiMode, type ApiMode } from '@/config/apiMode';
+import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import ApiModeLabel from './ApiModeLabel';
 
 /**
  * Tracks the status and details of each validation prompt.
@@ -944,7 +946,7 @@ const CmsValidationPage: React.FC = () => {
           <div className="mb-4 text-blue-800 bg-blue-100 dark:bg-blue-900/20">
             <div>{syncMsg}</div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              <code className="bg-blue-50 dark:bg-blue-950 px-2 py-1 rounded text-blue-900 dark:text-blue-200 select-all">node scripts/replaceOfflineMock.js ~/Downloads/offlineMockData.json</code>
+              <code className="bg-blue-50 dark:bg-blue-950 px-2 py-1 rounded">{`node scripts/replaceOfflineMock.js ~/Downloads/offlineMockData.json`}</code>
               <button
                 className="bg-blue-200 hover:bg-blue-300 dark:bg-blue-800 dark:hover:bg-blue-700 text-blue-900 dark:text-blue-100 px-2 py-1 rounded shadow text-xs"
                 onClick={handleCopyCommand}
@@ -1239,15 +1241,18 @@ const CmsValidationPage: React.FC = () => {
       // Validate each document in each collection
       const results: { collection: string; issues: string[] }[] = [];
       for (const [col, schema] of Object.entries(schemaMap)) {
-        const docs = data[col] || [];
-        const issues: string[] = [];
-        for (const doc of docs) {
+        if (!data[col]) continue;
+        let issues = 0;
+        for (const doc of data[col]) {
           const result = schema.safeParse(doc);
           if (!result.success) {
-            issues.push(JSON.stringify(result.error.issues));
+            issues++;
+            results.push({ collection: col, issues: [JSON.stringify(result.error.issues)] });
           }
         }
-        results.push({ collection: col, issues });
+        if (issues === 0) {
+          results.push({ collection: col, issues: [] });
+        }
       }
       setComplianceModal({ loading: false, results });
       if (results.some(r => r.issues.length > 0)) {
@@ -1306,7 +1311,7 @@ const CmsValidationPage: React.FC = () => {
 
   function ComplianceModal({ loading, results, error, onClose }: { loading: boolean; results: { collection: string; issues: string[] }[]; error?: string; onClose: () => void }) {
     const [isFixing, setIsFixing] = useState(false);
-    const totalIssues = results.reduce((sum, r) => sum + r.issues.length, 0);
+    const totalIssues = Array.isArray(results) ? results.reduce((sum, r) => sum + r.issues.length, 0) : 0;
     
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
@@ -1337,7 +1342,7 @@ const CmsValidationPage: React.FC = () => {
                 
                 {totalIssues > 0 && (
                   <button
-                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm"
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded"
                     onClick={async () => {
                       setIsFixing(true);
                       await handleFixAndCheckCompliance();
@@ -1467,38 +1472,42 @@ const CmsValidationPage: React.FC = () => {
     }
   }
 
-  const handleApiModeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newMode = e.target.value;
-    const oldMode = apiMode;
-    
-    // Update component state
-    setApiModeState(newMode);
-    
-    if (typeof window !== 'undefined') {
-      console.log('[CMS] Changing API mode from', oldMode, 'to', newMode);
-      
-      try {
-        // Use the new centralized API mode sync function
-        syncApiModeChange(newMode, 'cms_validation_page');
-        
-        // Log the change using the logger for tracking
-        import('@/lib/logger').then(({ logApiModeChange }) => {
-          logApiModeChange(oldMode, newMode, 'cms_validation_page');
-        });
-        
-        // Show a success message
-        alert(`API Mode changed to ${newMode.toUpperCase()}. Home page should update automatically.`);
-        
-      } catch (error) {
-        console.error('[CMS] Error during API mode change:', error);
-        alert(`Error changing API mode: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
+  const handleApiModeChange = (newMode: string) => {
+    if (newMode === 'live' || newMode === 'mock') {
+      setApiMode(newMode as ApiMode);
+      setApiModeState(newMode);
+    } else {
+      // fallback to mock if invalid
+      setApiMode('mock');
+      setApiModeState('mock');
     }
   };
 
   // --- Render API Mode Toggle ---
+  const showApiModeBanner = apiMode !== 'live';
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => { setHasMounted(true); }, []);
+
+  // --- Ensure Firebase is initialized in live mode ---
+  useEffect(() => {
+    // Only call with a valid ApiMode
+    if (apiMode === 'live' || apiMode === 'mock') {
+      initializeFirebaseClient(apiMode as ApiMode);
+    }
+  }, [apiMode]);
+
+  if (!hasMounted) {
+    // Prevent all API-mode-dependent UI from rendering until after mount
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
+      {showApiModeBanner && (
+        <div className="mb-4 px-4 py-3 rounded bg-yellow-100 border border-yellow-300 text-yellow-900 dark:bg-yellow-900/40 dark:border-yellow-700 dark:text-yellow-100 shadow">
+          <strong>API Mode:</strong> <span className="uppercase font-bold"><ApiModeLabel /></span> — Live Firestore data is <b>not</b> available. You are viewing mock/offline data only.
+        </div>
+      )}
       <div className="flex items-center gap-6 mb-8">
         <h1 className="text-3xl font-bold">CMS / Validation Control Panel</h1>
         {/* API Mode Switcher */}
@@ -1529,6 +1538,11 @@ const CmsValidationPage: React.FC = () => {
             <span className="text-sm">Live</span>
           </label>
         </div>
+      </div>
+      {/* Example usage of hydration-safe API mode label */}
+      <div className="mb-4">
+        <span className="font-semibold">Current API Mode: </span>
+        <ApiModeLabel />
       </div>
       {/* ...rest of CMS page... */}
       {/* Title Section */}
@@ -1620,16 +1634,10 @@ const CmsValidationPage: React.FC = () => {
                   console.error('[CMS] BroadcastChannel error:', e);
                 }
                 
-                // Insert a script element
-                const script = document.createElement('script');
-                script.innerHTML = `
-                  console.log('[CMS] Force refreshing API mode to ${currentMode}');
-                  setApiMode('${currentMode}');
-                  window.dispatchEvent(new Event('storage'));
-                  window.dispatchEvent(new Event('apiModeChanged'));
-                `;
-                document.body.appendChild(script);
-                setTimeout(() => document.body.removeChild(script), 200);
+                // Directly call setApiMode instead of injecting a script
+                setApiMode(currentMode);
+                window.dispatchEvent(new Event('storage'));
+                window.dispatchEvent(new Event('apiModeChanged'));
                 
                 // Log the event
                 logInfo(`CMS: Forced API mode refresh: ${currentMode}`, {

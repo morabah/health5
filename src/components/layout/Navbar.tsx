@@ -18,6 +18,7 @@ import { Menu, Transition } from "@headlessui/react";
 import Link from "next/link";
 import { logInfo } from "@/lib/logger";
 import { useTheme } from "../../context/ThemeContext";
+import ApiModeLabel from "./ApiModeLabel";
 
 const Navbar: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false); // Mock auth state
@@ -40,6 +41,7 @@ const Navbar: React.FC = () => {
             <Link href="/" className="hover:text-primary font-medium transition-colors">Home</Link>
             <Link href="/about" className="hover:text-primary font-medium transition-colors">About</Link>
             <Link href="/contact" className="hover:text-primary font-medium transition-colors">Contact</Link>
+            <ApiModeLabel />
             {isLoggedIn ? (
               <>
                 <Link href="/main/find-doctors" className="hover:text-primary font-medium transition-colors">

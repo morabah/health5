@@ -10,6 +10,7 @@
 // --- Types ---
 export type ApiMode = 'live' | 'mock';
 export type ThemeMode = 'light' | 'dark' | 'system';
+export type DataSource = 'mock' | 'firestore' | 'crm';
 
 export interface AppConfig {
   apiMode: ApiMode;
@@ -28,6 +29,13 @@ const DEFAULTS: AppConfig = {
   apiMode: (process.env.NEXT_PUBLIC_API_MODE as ApiMode) || 'mock',
   theme: 'system',
   featureXEnabled: false,
+};
+
+export const DATA_SOURCE: DataSource = 'mock'; // Change to 'crm' or 'firestore' as needed
+
+export const CRM_API_CONFIG = {
+  endpoint: process.env.NEXT_PUBLIC_CRM_API_ENDPOINT,
+  apiKey: process.env.NEXT_PUBLIC_CRM_API_KEY,
 };
 
 // --- API MODE ---
@@ -97,6 +105,14 @@ export function setFeatureXEnabled(enabled: boolean) {
       channel.close();
     }
   }
+}
+
+// --- Dynamic Data Source Getter ---
+export function getDoctorDataSource(): DataSource {
+  const mode = getApiMode();
+  if (mode === 'mock') return 'mock';
+  // You can add logic here for Firestore if needed
+  return 'crm';
 }
 
 // --- EXTENSIBILITY ---
