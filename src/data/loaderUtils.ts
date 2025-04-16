@@ -2,8 +2,7 @@
  * Utility for accessing the current API mode (mock/live).
  * @module loaderUtils
  */
-import { API_MODE } from '../config/appConfig';
-import { getApiMode as getApiModeConfig } from '@/config/apiMode';
+import { getApiMode as getApiModeConfig } from '@/config/apiConfig';
 
 /**
  * Returns the current API mode for data loaders.
@@ -11,8 +10,12 @@ import { getApiMode as getApiModeConfig } from '@/config/apiMode';
  */
 // Unified API mode getter for all loaders
 export function getApiMode(): 'mock' | 'live' {
-  const mode = getApiModeConfig();
-  return mode === 'mock' || mode === 'live' ? mode : 'mock';
+  try {
+    const mode = getApiModeConfig();
+    console.log('[loaderUtils] Getting API mode:', mode);
+    return mode === 'mock' || mode === 'live' ? mode : 'mock';
+  } catch (error) {
+    console.error('[loaderUtils] Error getting API mode:', error);
+    return 'mock'; // Default to mock on any error
+  }
 }
-
-export { API_MODE };

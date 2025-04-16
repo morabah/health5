@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { logInfo, logApiModeChange, logValidation } from '@/lib/logger';
 import { setEventInLocalStorage } from '@/lib/eventBus';
-import { appEventBus, LogPayload, ApiModePayload, syncApiModeChange } from '@/lib/eventBus';
+import { appEventBus, LogPayload, ApiModePayload } from '@/lib/eventBus';
+import { getApiMode, setApiMode as setGlobalApiMode, onApiModeChange } from '@/config/apiConfig';
 import { useEffect, useState } from 'react';
 import React from 'react';
 import { DoctorProfile } from '@/types/doctor';
@@ -13,7 +14,6 @@ import Spinner from '@/components/ui/Spinner';
 import Alert from '@/components/ui/Alert';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserMd, faStethoscope, faStar } from '@fortawesome/free-solid-svg-icons';
-import { getApiMode } from '@/config/apiMode';
 import ApiModeLabel from './ApiModeLabel';
 
 const MOCK_DOCTOR_IDS = ['user_doctor_001', 'user_doctor_002', 'user_doctor_003'];
@@ -65,23 +65,31 @@ async function fetchDoctors(
   setLoading: React.Dispatch<React.SetStateAction<boolean>>,
   setError: React.Dispatch<React.SetStateAction<string | null>>
 ) {
+  console.log('[Home] Starting fetchDoctors with mode:', apiMode);
   setLoading(true);
   setError(null);
-  
-  // Log the API mode being used for this fetch operation
-  console.log('[Home] Fetching doctors using API mode from state:', apiMode);
   
   // Always pre-load the mock data as a backup
   let mockDoctors: ExtendedDoctorProfile[] = [];
   try {
+    console.log('[Home] Loading mock data as fallback');
     const res = await fetch('/scripts/offlineMockData.json');
+    
+    if (!res.ok) {
+      throw new Error(`Failed to load mock data: ${res.status} ${res.statusText}`);
+    }
+    
     const data = await res.json();
+    console.log('[Home] Mock data loaded, doctor count:', data.doctors?.length || 0);
+    
     mockDoctors = (data.doctors || [])
       .filter((doc: any) => MOCK_DOCTOR_IDS.includes(doc.userId || doc.id))
       .map((doc: any) => ({
         ...doc,
         name: `Dr. ${doc.firstName || ''} ${doc.lastName || ''}`.trim() || doc.userId || doc.id
       }));
+      
+    console.log('[Home] Filtered mock doctors:', mockDoctors.length);
   } catch (mockErr) {
     console.error('[Home] Error loading mock data:', mockErr);
   }
@@ -94,6 +102,7 @@ async function fetchDoctors(
       setLoading(false);
       return;
     } else {
+      console.error('[Home] No mock doctors available');
       setError('Failed to load doctor information from mock data');
       setLoading(false);
       return;
@@ -105,12 +114,15 @@ async function fetchDoctors(
     console.log('[Home] Using live Firestore data source');
     
     // Dynamically import Firebase modules
-    const { collection, getDocs, query, where, limit } = await import('firebase/firestore');
+    const firebaseModules = await import('firebase/firestore');
+    const { collection, getDocs, query, where, limit } = firebaseModules;
+    
+    console.log('[Home] Firebase modules imported, getting Firestore DB');
     const firestoreDb = await getFirestoreDb();
     
     // Check if we got a valid Firestore instance
     if (!firestoreDb) {
-      console.log('[Home] Firestore not initialized, falling back to mock data');
+      console.warn('[Home] Firestore not initialized, falling back to mock data');
       setDoctors(mockDoctors);
       setError('Firestore not available. Using mock data instead.');
       setLoading(false);
@@ -119,27 +131,33 @@ async function fetchDoctors(
     
     // Attempt to query Firestore
     console.log('[Home] Executing Firestore query');
+    const doctorIds = MOCK_DOCTOR_IDS.length > 10 ? MOCK_DOCTOR_IDS.slice(0, 10) : MOCK_DOCTOR_IDS;
+    
     const q = query(
       collection(firestoreDb, 'doctors'),
-      where('userId', 'in', MOCK_DOCTOR_IDS),
-      limit(3)
+      where('userId', 'in', doctorIds),
+      limit(5)
     );
     
+    console.log('[Home] Executing query with IDs:', doctorIds);
     const snapshot = await getDocs(q);
     console.log('[Home] Firestore query completed, docs count:', snapshot.docs.length);
     
     if (snapshot.docs.length === 0) {
-      console.log('[Home] No doctors found in Firestore, falling back to mock data');
+      console.warn('[Home] No doctors found in Firestore, falling back to mock data');
       setDoctors(mockDoctors);
       setError('No doctors found in Firestore. Using mock data instead.');
     } else {
-      const firestoreDoctors = snapshot.docs.map(doc => ({
-        ...doc.data(),
-        userId: doc.id,
-        name: `Dr. ${doc.data().firstName || ''} ${doc.data().lastName || ''}`.trim() || doc.id
-      })) as ExtendedDoctorProfile[];
+      const firestoreDoctors = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          userId: doc.id,
+          name: `Dr. ${data.firstName || ''} ${data.lastName || ''}`.trim() || doc.id
+        };
+      }) as ExtendedDoctorProfile[];
       
-      console.log('[Home] Successfully loaded doctors from Firestore');
+      console.log('[Home] Successfully loaded doctors from Firestore:', firestoreDoctors.length);
       setDoctors(firestoreDoctors);
     }
   } catch (err) {
@@ -153,6 +171,7 @@ async function fetchDoctors(
     }
   } finally {
     setLoading(false);
+    console.log('[Home] fetchDoctors completed');
   }
 }
 
@@ -174,6 +193,20 @@ export default function Home() {
     const mode = getApiMode();
     setApiMode(mode === 'live' ? 'live' : 'mock');
   }, []);
+
+  useEffect(() => {
+    if (!hasMounted) return;
+    
+    // Set up API mode change listener
+    const unsubscribe = onApiModeChange((newMode) => {
+      console.log('[Home] API mode changed externally:', newMode);
+      setApiMode(newMode === 'live' ? 'live' : 'mock');
+    });
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [hasMounted]);
 
   useEffect(() => {
     console.log('[Home] Current API mode:', apiMode);

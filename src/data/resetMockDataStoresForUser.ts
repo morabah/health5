@@ -1,5 +1,5 @@
 import { UserType } from "@/types/enums";
-import { mockPatientUser, mockDoctorUser, mockAdminUser, mockPatientProfileData, mockDoctorProfileData1, mockDoctorProfileData2, mockDoctorProfileData3, mockDoctorProfileData4, mockDoctorProfileData5, mockAppointmentsArray } from "@/types/mockData";
+import { mockPatientUser, mockDoctorUser, mockAdminUser, mockPatientProfileData1, mockDoctorProfileData1, mockDoctorProfileData2, mockDoctorProfileData3, mockDoctorProfileData4, mockDoctorProfileData5, mockAppointmentsArray } from "@/types/mockData";
 import type { UserProfile } from "@/types/user";
 import type { DoctorProfile } from "@/types/doctor";
 import type { PatientProfile } from "@/types/patient";
@@ -30,7 +30,7 @@ export function resetMockDataStoresForUser(role: UserType | 'patient' | 'doctor'
   usersStore.splice(0, usersStore.length, mockPatientUser, mockDoctorUser, mockAdminUser);
   doctorProfilesStore.splice(0, doctorProfilesStore.length,
     mockDoctorProfileData1, mockDoctorProfileData2, mockDoctorProfileData3, mockDoctorProfileData4, mockDoctorProfileData5);
-  patientProfilesStore.splice(0, patientProfilesStore.length, mockPatientProfileData);
+  patientProfilesStore.splice(0, patientProfilesStore.length, mockPatientProfileData1);
   appointmentsStore.splice(0, appointmentsStore.length);
   notificationsStore.splice(0, notificationsStore.length);
 

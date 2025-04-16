@@ -1,4 +1,5 @@
 import React from 'react';
+import { Slot } from "@radix-ui/react-slot";
 import { trackButtonClick } from '@/lib/eventTracker';
 
 type ButtonVariant = 'primary' | 'secondary' | 'info' | 'warning' | 'danger' | 'admin' | 'main';
@@ -18,6 +19,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   variant?: ButtonVariant;
   pageName: string;
   additionalLogData?: Record<string, any>;
+  asChild?: boolean;
+  isLoading?: boolean;
 }
 
 /**
@@ -30,9 +33,11 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
  * @param className - Additional CSS classes to apply
  * @param onClick - Additional onClick handler
  * @param children - Optional children elements (falls back to label if not provided)
+ * @param asChild - When true, the component will render its child as the root element
+ * @param isLoading - Shows loading state when true
  * @param rest - All other button props
  */
-export const Button = ({
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
   label,
   variant = 'primary',
   pageName,
@@ -40,8 +45,10 @@ export const Button = ({
   className = '',
   onClick,
   children,
+  asChild = false,
+  isLoading = false,
   ...rest
-}: ButtonProps) => {
+}, ref) => {
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     // Log the button click event
     trackButtonClick(label, pageName, additionalLogData);
@@ -52,15 +59,30 @@ export const Button = ({
     }
   };
 
+  const Comp = asChild ? Slot : "button";
+
   return (
-    <button
-      className={`px-4 py-2 rounded ${variantStyles[variant]} transition-all duration-300 ease-in-out ${className}`}
+    <Comp
+      className={`px-4 py-2 rounded ${variantStyles[variant]} transition-all duration-300 ease-in-out ${isLoading ? 'opacity-70 cursor-not-allowed' : ''} ${className}`}
       onClick={handleClick}
+      ref={ref}
       {...rest}
     >
-      {children || label}
-    </button>
+      {isLoading ? (
+        <div className="inline-flex items-center">
+          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          {children || label}
+        </div>
+      ) : (
+        children || label
+      )}
+    </Comp>
   );
-};
+});
+
+Button.displayName = "Button";
 
 export default Button; 

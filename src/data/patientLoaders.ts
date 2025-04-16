@@ -3,7 +3,11 @@
  * Returns mock data if API mode is 'mock', otherwise logs a warning and returns fallback.
  */
 import { getApiMode } from './loaderUtils';
-import { getMockPatientUser, getMockPatientProfileData1, getMockAppointments } from './mockDataService';
+import { 
+  getMockPatientUser, 
+  getMockPatientProfileData1, 
+  getMockAppointments 
+} from './mockDataService';
 import { logInfo, logWarn } from '@/lib/logger';
 import type { Appointment } from '@/types/appointment';
 
@@ -18,10 +22,29 @@ export async function loadPatientProfile(patientId: string): Promise<any> {
   try {
     if (mode === 'mock') {
       await new Promise(res => setTimeout(res, 150));
-      const user = getMockPatientUser();
-      const profile = getMockPatientProfileData1();
-      logInfo(`[${label}] Loaded mock data`);
-      return { user, profile };
+      try {
+        const user = getMockPatientUser();
+        const profile = getMockPatientProfileData1();
+        logInfo(`[${label}] Loaded mock data`);
+        return { user, profile };
+      } catch (err) {
+        logWarn(`[${label}] Error with mock data, creating fallback:`, { error: err instanceof Error ? err.message : String(err) });
+        // Provide a fallback if the mock functions fail
+        return {
+          user: {
+            id: 'fallback_user',
+            firstName: 'Fallback',
+            lastName: 'User',
+            email: 'fallback@example.com'
+          },
+          profile: {
+            userId: 'fallback_user',
+            dateOfBirth: new Date('1990-01-01'),
+            gender: 'Unspecified',
+            bloodType: 'Unknown'
+          }
+        };
+      }
     } else {
       logWarn(`[${label}] Live fetch not implemented for mode: ${mode}`);
       return null;

@@ -123,7 +123,91 @@ const Navbar: React.FC = () => {
           ) : user && userProfile ? (
             <>
               {renderRoleLinks()}
-              <Button variant="ghost" onClick={logout} className="ml-2">Logout</Button>
+              {/* User Dropdown Menu */}
+              <Menu as="div" className="relative ml-4">
+                <Menu.Button className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary">
+                  {userProfile.profilePictureUrl ? (
+                    <img
+                      src={userProfile.profilePictureUrl}
+                      alt="User avatar"
+                      className="w-8 h-8 rounded-full object-cover border"
+                    />
+                  ) : (
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary text-white font-bold text-lg">
+                      {(userProfile.firstName ?? userProfile.email ?? '').charAt(0)}
+                    </span>
+                  )}
+                  <span className="text-gray-800 dark:text-gray-100 font-medium max-w-[120px] truncate">
+                    {userProfile.firstName && userProfile.lastName
+                      ? `${userProfile.firstName} ${userProfile.lastName}`
+                      : userProfile.email || 'User'}
+                  </span>
+                  {/* Role badge */}
+                  {role && (
+                    <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 capitalize">
+                      {role}
+                    </span>
+                  )}
+                </Menu.Button>
+                <Transition
+                  as={Fragment}
+                  enter="transition ease-out duration-100"
+                  enterFrom="transform opacity-0 scale-95"
+                  enterTo="transform opacity-100 scale-100"
+                  leave="transition ease-in duration-75"
+                  leaveFrom="transform opacity-100 scale-100"
+                  leaveTo="transform opacity-0 scale-95"
+                >
+                  <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800 rounded-md shadow-lg focus:outline-none z-50">
+                    <div className="py-1">
+                      <Menu.Item>
+                        {({ active }) => (
+                          <Link
+                            href={profilePath}
+                            className={`block px-4 py-2 text-sm ${active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                          >
+                            Profile
+                          </Link>
+                        )}
+                      </Menu.Item>
+                      <Menu.Item>
+                        {({ active }) => (
+                          <Link
+                            href="/settings"
+                            className={`block px-4 py-2 text-sm ${active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                          >
+                            Settings
+                          </Link>
+                        )}
+                      </Menu.Item>
+                      {role === 'admin' && (
+                        <Menu.Item>
+                          {({ active }) => (
+                            <Link
+                              href="/admin/dashboard"
+                              className={`block px-4 py-2 text-sm ${active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                            >
+                              Admin Panel
+                            </Link>
+                          )}
+                        </Menu.Item>
+                      )}
+                    </div>
+                    <div className="py-1">
+                      <Menu.Item>
+                        {({ active }) => (
+                          <button
+                            onClick={logout}
+                            className={`block w-full text-left px-4 py-2 text-sm ${active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                          >
+                            Logout
+                          </button>
+                        )}
+                      </Menu.Item>
+                    </div>
+                  </Menu.Items>
+                </Transition>
+              </Menu>
             </>
           ) : (
             renderLoginButtons()
@@ -149,7 +233,90 @@ const Navbar: React.FC = () => {
           ) : user && userProfile ? (
             <>
               {renderRoleLinks()}
-              <Button variant="ghost" onClick={() => { setMobileMenuOpen(false); logout(); }} className="mt-2">Logout</Button>
+              {/* User Dropdown Menu (mobile) */}
+              <Menu as="div" className="relative mt-2">
+                <Menu.Button className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary w-full">
+                  {userProfile.profilePictureUrl ? (
+                    <img
+                      src={userProfile.profilePictureUrl}
+                      alt="User avatar"
+                      className="w-8 h-8 rounded-full object-cover border"
+                    />
+                  ) : (
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary text-white font-bold text-lg">
+                      {(userProfile.firstName ?? userProfile.email ?? '').charAt(0)}
+                    </span>
+                  )}
+                  <span className="text-gray-800 dark:text-gray-100 font-medium max-w-[120px] truncate">
+                    {userProfile.firstName && userProfile.lastName
+                      ? `${userProfile.firstName} ${userProfile.lastName}`
+                      : userProfile.email || 'User'}
+                  </span>
+                  {role && (
+                    <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 capitalize">
+                      {role}
+                    </span>
+                  )}
+                </Menu.Button>
+                <Transition
+                  as={Fragment}
+                  enter="transition ease-out duration-100"
+                  enterFrom="transform opacity-0 scale-95"
+                  enterTo="transform opacity-100 scale-100"
+                  leave="transition ease-in duration-75"
+                  leaveFrom="transform opacity-100 scale-100"
+                  leaveTo="transform opacity-0 scale-95"
+                >
+                  <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800 rounded-md shadow-lg focus:outline-none z-50">
+                    <div className="py-1">
+                      <Menu.Item>
+                        {({ active }) => (
+                          <Link
+                            href={profilePath}
+                            className={`block px-4 py-2 text-sm ${active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                          >
+                            Profile
+                          </Link>
+                        )}
+                      </Menu.Item>
+                      <Menu.Item>
+                        {({ active }) => (
+                          <Link
+                            href="/settings"
+                            className={`block px-4 py-2 text-sm ${active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                          >
+                            Settings
+                          </Link>
+                        )}
+                      </Menu.Item>
+                      {role === 'admin' && (
+                        <Menu.Item>
+                          {({ active }) => (
+                            <Link
+                              href="/admin/dashboard"
+                              className={`block px-4 py-2 text-sm ${active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                            >
+                              Admin Panel
+                            </Link>
+                          )}
+                        </Menu.Item>
+                      )}
+                    </div>
+                    <div className="py-1">
+                      <Menu.Item>
+                        {({ active }) => (
+                          <button
+                            onClick={logout}
+                            className={`block w-full text-left px-4 py-2 text-sm ${active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+                          >
+                            Logout
+                          </button>
+                        )}
+                      </Menu.Item>
+                    </div>
+                  </Menu.Items>
+                </Transition>
+              </Menu>
             </>
           ) : (
             renderLoginButtons()

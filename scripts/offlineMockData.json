@@ -816,6 +816,25 @@
       "createdAt": "Mon, 14 Apr 2025 00:28:36 GMT",
       "email": "ma@gmail.com",
       "phoneVerified": false
+    },
+    {
+      "id": "mockPatient123",
+      "userType": "PATIENT",
+      "uid": "mockPatient123",
+      "displayName": "Jane Patient",
+      "firstName": "Jane",
+      "lastName": "Patient",
+      "role": "patient",
+      "email": "jane@example.com",
+      "isActive": true,
+      "phone": "",
+      "phoneNumber": "",
+      "emailVerified": true,
+      "phoneVerified": false,
+      "createdAt": {
+        "seconds": 1744834088,
+        "nanoseconds": 0
+      }
     }
   ],
   "patients": [
@@ -925,6 +944,26 @@
         "seconds": 645408000,
         "nanoseconds": 0
       }
+    },
+    {
+      "id": "mockPatient123",
+      "userId": "mockPatient123",
+      "displayName": "Jane Patient",
+      "firstName": "Jane",
+      "lastName": "Patient",
+      "gender": "Female",
+      "dateOfBirth": {
+        "seconds": 631152000,
+        "nanoseconds": 0
+      },
+      "medicalHistory": "None",
+      "bloodType": "O+",
+      "emergencyContact": {
+        "name": "John Patient",
+        "relation": "Spouse",
+        "phone": "123-456-7890"
+      },
+      "isActive": true
     }
   ],
   "doctors": [

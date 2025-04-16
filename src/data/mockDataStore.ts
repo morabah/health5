@@ -12,7 +12,7 @@ import {
   mockPatientUser,
   mockDoctorUser,
   mockAdminUser,
-  mockPatientProfileData,
+  mockPatientProfileData1,
   mockDoctorProfileData1,
   mockDoctorProfileData2,
   mockDoctorProfileData3,
@@ -113,7 +113,7 @@ export let doctorProfilesStore: DoctorProfile[] = [
   mockDoctorProfileData5,
 ];
 /** Patient profiles store */
-export let patientProfilesStore: PatientProfile[] = [mockPatientProfileData, {
+export let patientProfilesStore: PatientProfile[] = [mockPatientProfileData1, {
   userId: 'user_patient_002',
   dateOfBirth: new Date('1982-09-20T00:00:00Z'),
   gender: 'Male',

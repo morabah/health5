@@ -4,7 +4,7 @@
  */
 import { getApiMode } from './loaderUtils';
 import { getMockDoctorProfiles, getMockDoctorProfile, getMockDoctorAvailability, getMockDoctorForms, getMockDoctorAppointments } from './mockDataService';
-import { logInfo, logWarn } from '@/lib/logger';
+import { logInfo, logWarn, logError } from '@/lib/logger';
 import type { DoctorProfile } from '@/types/doctor';
 
 /**
@@ -12,24 +12,56 @@ import type { DoctorProfile } from '@/types/doctor';
  */
 export async function loadHomepageDoctors(): Promise<DoctorProfile[]> {
   const label = 'loadHomepageDoctors';
-  const mode = getApiMode();
-  logInfo(`[${label}] start`, { mode });
-  const start = performance.now();
+  let mode = 'unknown';
+  
   try {
+    mode = getApiMode();
+    logInfo(`[${label}] start`, { mode });
+    console.log(`[${label}] Loading doctors with mode: ${mode}`);
+    
+    const start = performance.now();
+
     if (mode === 'mock') {
+      // Add a small delay to simulate network request
       await new Promise(res => setTimeout(res, 150));
+      
+      // Get mock data
       const data = getMockDoctorProfiles();
+      console.log(`[${label}] Loaded ${data.length} mock doctor profiles`);
+      
+      if (!data || data.length === 0) {
+        console.warn(`[${label}] Warning: getMockDoctorProfiles returned empty data`);
+      }
+      
       logInfo(`[${label}] Loaded mock data`, { count: data.length });
       return data;
+    } else if (mode === 'live') {
+      logWarn(`[${label}] Live fetch not implemented yet`);
+      console.log(`[${label}] Falling back to mock data for 'live' mode`);
+      
+      // For now, return mock data as fallback until live is implemented
+      const fallbackData = getMockDoctorProfiles();
+      return fallbackData;
     } else {
-      logWarn(`[${label}] Live fetch not implemented for mode: ${mode}`);
-      return [];
+      logWarn(`[${label}] Unknown mode: ${mode}, falling back to mock data`);
+      return getMockDoctorProfiles();
     }
   } catch (err) {
-    logWarn(`[${label}] Error: ${(err as Error).message}`);
-    return [];
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logError(`[${label}] Error loading doctors`, { error: errorMsg, mode });
+    console.error(`[${label}] Error:`, err);
+    
+    // Always provide fallback data on error
+    try {
+      return getMockDoctorProfiles();
+    } catch (fallbackErr) {
+      console.error(`[${label}] Critical: Even fallback data failed:`, fallbackErr);
+      return []; // Empty array as last resort
+    }
   } finally {
-    logInfo(`[${label}] finished`, { duration: performance.now() - start });
+    const end = performance.now();
+    const start = end - 500; // Fallback in case start wasn't properly set
+    logInfo(`[${label}] finished`, { duration: end - start, mode });
   }
 }
 

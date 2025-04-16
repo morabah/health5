@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getApiMode } from "@/config/appConfig";
+import { getApiMode } from "@/config/apiConfig";
 
 /**
  * Hydration-safe API mode label for Home page.
