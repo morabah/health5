@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebaseClient";
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
