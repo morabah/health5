@@ -14,8 +14,23 @@ import { v4 as uuidv4 } from "uuid";
 import { Timestamp } from "firebase/firestore";
 import { getDateObject } from "@/utils/dateUtils";
 
+// Import persistence module
+import { 
+  syncAppointmentCreated,
+  syncAppointmentUpdated,
+  syncAppointmentCancelled,
+  syncNotificationAdded,
+  syncNotificationMarkedRead,
+  initDataPersistence
+} from "./mockDataPersistence";
+
 // Mutable stores (for direct mutation)
 import * as dataStore from "@/data/mockDataStore";
+
+// Initialize data persistence if we're in the browser
+if (typeof window !== 'undefined') {
+  initDataPersistence();
+}
 
 /** Simulates a random network delay (100-300ms) */
 function simulateDelay() {
@@ -218,6 +233,10 @@ export async function mockCancelAppointment({ appointmentId, reason, userId }: {
   appt.status = AppointmentStatus.CANCELLED; // Fix: Use AppointmentStatus enum for appointment logic
   appt.notes = reason;
   appt.updatedAt = Timestamp.now();
+
+  // Sync appointment cancellation across tabs
+  syncAppointmentCancelled(appointmentId, reason);
+  
   return { success: true };
 }
 
@@ -273,6 +292,9 @@ export async function mockUpdateAppointment(appointment: Appointment): Promise<{
     ...appointment,
     updatedAt: Timestamp.now()
   };
+  
+  // Sync the updated appointment across tabs
+  syncAppointmentUpdated(appointments[index]);
   
   return { success: true };
 }
@@ -387,8 +409,12 @@ export async function mockBookAppointment(appointmentData: Partial<Appointment> 
     notes: "",
   } as Appointment;
   (dataStore as any).appointmentsStore.push(appt);
+  
+  // Sync the new appointment across tabs
+  syncAppointmentCreated(appt);
+  
   // Add notification to doctor and patient
-  (dataStore as any).notificationsStore.push({
+  const doctorNotification = {
     id: uuidv4(),
     userId: appointmentData.doctorId,
     title: "New Appointment Booked",
@@ -397,8 +423,9 @@ export async function mockBookAppointment(appointmentData: Partial<Appointment> 
     createdAt: now,
     type: "appointment_booked",
     relatedId: id,
-  });
-  (dataStore as any).notificationsStore.push({
+  };
+  
+  const patientNotification = {
     id: uuidv4(),
     userId: appointmentData.patientId,
     title: "Appointment Confirmed",
@@ -407,7 +434,15 @@ export async function mockBookAppointment(appointmentData: Partial<Appointment> 
     createdAt: now,
     type: "appointment_booked",
     relatedId: id,
-  });
+  };
+  
+  (dataStore as any).notificationsStore.push(doctorNotification);
+  (dataStore as any).notificationsStore.push(patientNotification);
+  
+  // Sync notifications across tabs
+  syncNotificationAdded(doctorNotification);
+  syncNotificationAdded(patientNotification);
+  
   return { success: true, appointmentId: id };
 }
 
@@ -471,6 +506,10 @@ export async function mockMarkNotificationRead({ notificationId, userId }: { not
   const notif = (dataStore as any).notificationsStore.find((n: any) => n.id === notificationId && n.userId === userId);
   if (!notif) throw new Error("not-found");
   notif.isRead = true;
+  
+  // Sync notification status across tabs
+  syncNotificationMarkedRead(notificationId, userId);
+  
   return { success: true };
 }
 

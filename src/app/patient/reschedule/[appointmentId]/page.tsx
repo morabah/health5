@@ -4,18 +4,19 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { DayPicker } from 'react-day-picker';
-import { Appointment } from '@/types/appointments';
+import { Appointment } from '@/types/appointment';
 import { mockGetAppointmentById, mockUpdateAppointment } from '@/lib/mockApiService';
 import { getAvailableSlots } from '@/data/mockDataService';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import { toast } from 'react-hot-toast';
 import 'react-day-picker/dist/style.css';
+import { getDateObject } from '@/utils/dateUtils';
 
 const ReschedulePage = () => {
   const params = useParams();
   const router = useRouter();
-  const appointmentId = params.appointmentId as string;
+  const appointmentId = params?.appointmentId as string;
   
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +97,8 @@ const ReschedulePage = () => {
           variant="primary" 
           onClick={() => router.push('/patient/appointments')}
           className="mt-4"
+          label="Back to Appointments"
+          pageName="ReschedulePage"
         >
           Back to Appointments
         </Button>
@@ -110,7 +113,7 @@ const ReschedulePage = () => {
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-lg font-semibold mb-4">Current Appointment Details</h2>
         <p><span className="font-medium">Doctor:</span> {appointment.doctorName}</p>
-        <p><span className="font-medium">Date/Time:</span> {format(new Date(appointment.date), 'PPPP')} at {format(new Date(appointment.date), 'h:mm a')}</p>
+        <p><span className="font-medium">Date/Time:</span> {format(getDateObject(appointment.appointmentDate) || new Date(), 'PPPP')} at {format(getDateObject(appointment.appointmentDate) || new Date(), 'h:mm a')}</p>
         <p><span className="font-medium">Reason:</span> {appointment.reason}</p>
       </div>
       

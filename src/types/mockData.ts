@@ -175,8 +175,8 @@ export const mockDoctorProfiles: DoctorProfile[] = [
 export const mockDoctorAvailabilitySlots: DoctorAvailabilitySlot[] = [
   // Dr. Bob Johnson (mockDoctorUser.id) availability
   {
-    id: 'avail_001',
-    doctorId: mockDoctorUser.id,
+  id: 'avail_001',
+  doctorId: mockDoctorUser.id,
     dayOfWeek: 1, // Monday
     startTime: '09:00',
     endTime: '12:00',
@@ -267,9 +267,9 @@ export const mockDoctorAvailabilitySlots: DoctorAvailabilitySlot[] = [
     id: 'avail_012',
     doctorId: 'user_doctor_005',
     dayOfWeek: 6, // Saturday
-    startTime: '09:00',
-    endTime: '12:00',
-    isAvailable: true,
+  startTime: '09:00',
+  endTime: '12:00',
+  isAvailable: true,
   }
 ];
 

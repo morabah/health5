@@ -134,7 +134,7 @@ export default function PatientDashboardPage() {
     
     // Only fetch data when auth loading is complete
     if (!authLoading) {
-      fetchDashboardData();
+    fetchDashboardData();
     }
   }, [apiMode, hasMounted, user, userProfile, authLoading]);
 
@@ -199,7 +199,7 @@ export default function PatientDashboardPage() {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
               {greeting}{profileData.userProfile?.firstName ? `, ${profileData.userProfile.firstName}` : ""}
-            </h1>
+      </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
@@ -230,41 +230,41 @@ export default function PatientDashboardPage() {
                 <span>Logout</span>
               </Link>
             </Button>
-          </div>
-        </div>
-        
+      </div>
+      </div>
+
         {/* Main Dashboard Layout */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Left Column (2/3 width on desktop) */}
           <div className="md:col-span-2 space-y-6">
-            {/* Stats Section */}
+      {/* Stats Section */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {stats.map((stat) => (
+        {stats.map((stat) => (
                 <Card 
                   key={stat.title} 
                   className={`flex flex-col p-4 border ${stat.borderColor} ${stat.color} hover:shadow-md transition-shadow`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
-                      {stat.icon}
+            {stat.icon}
                     </div>
                     <span className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</span>
                   </div>
                   <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-auto">
                     {stat.title}
                   </div>
-                </Card>
-              ))}
-            </div>
-            
-            {/* Upcoming Appointments Section */}
+          </Card>
+        ))}
+      </div>
+
+      {/* Upcoming Appointments Section */}
             <Card className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
               <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-2">
                   <FaCalendarCheck className="text-blue-500 dark:text-blue-400" />
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Upcoming Appointments</h2>
                 </div>
-                <Link href="/patient/appointments">
+          <Link href="/patient/appointments">
                   <Button 
                     size="sm" 
                     variant="secondary" 
@@ -274,15 +274,15 @@ export default function PatientDashboardPage() {
                   >
                     View All
                   </Button>
-                </Link>
-              </div>
+          </Link>
+        </div>
               
               <div className="p-4">
-                {loadingAppointments ? (
-                  <div className="flex justify-center py-6"><Spinner /></div>
-                ) : error ? (
+        {loadingAppointments ? (
+          <div className="flex justify-center py-6"><Spinner /></div>
+        ) : error ? (
                   <Alert variant="error" message={error} isVisible={true} />
-                ) : upcomingAppointments.length === 0 ? (
+        ) : upcomingAppointments.length === 0 ? (
                   <div className="text-center py-6">
                     <p className="text-gray-500 dark:text-gray-400 mb-4">No upcoming appointments found.</p>
                     <Button 
@@ -306,8 +306,8 @@ export default function PatientDashboardPage() {
                           <div className="text-sm text-gray-600 dark:text-gray-300">{appt.doctorSpecialty || "General Practitioner"}</div>
                           <div className="text-sm text-gray-600 dark:text-gray-300">
                             {formatDate(appt.appointmentDate)} • {appt.startTime}
-                          </div>
-                        </div>
+                  </div>
+                </div>
                         <div className="flex flex-col md:flex-row gap-2 md:items-center mt-2 md:mt-0">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             appt.status === AppointmentStatus.CONFIRMED 
@@ -329,9 +329,9 @@ export default function PatientDashboardPage() {
                           >
                             <Link href={`/patient/appointments/${appt.id}`}>View Details</Link>
                           </Button>
-                        </div>
-                      </div>
-                    ))}
+                </div>
+              </div>
+            ))}
                     
                     {upcomingAppointments.length > 3 && (
                       <div className="text-center pt-2">
@@ -343,16 +343,16 @@ export default function PatientDashboardPage() {
                         </Link>
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
+          </div>
+        )}
+      </div>
             </Card>
-            
+
             {/* Quick Actions */}
             <Card className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Quick Actions</h2>
-              </div>
+                  </div>
               <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                 {[
                   { name: "Book Appointment", href: "/find", bgColor: "bg-blue-600 hover:bg-blue-700" },
@@ -372,9 +372,9 @@ export default function PatientDashboardPage() {
                     <Link href={action.href}>{action.name}</Link>
                   </Button>
                 ))}
-              </div>
+                  </div>
             </Card>
-          </div>
+                </div>
           
           {/* Right Column (1/3 width on desktop) */}
           <div className="space-y-6">
@@ -416,15 +416,15 @@ export default function PatientDashboardPage() {
                           <div className="flex justify-between">
                             <span className="text-gray-500 dark:text-gray-400">Blood Type</span>
                             <span className="text-gray-900 dark:text-white">{profileData.patientProfile.bloodType}</span>
-                          </div>
+          </div>
                         </>
-                      )}
+        )}
                       <div className="flex justify-between">
                         <span className="text-gray-500 dark:text-gray-400">Email</span>
                         <span className="text-gray-900 dark:text-white">{profileData.userProfile.email}</span>
                       </div>
-                    </div>
-                    
+      </div>
+
                     <div className="mt-6">
                       <Button 
                         asChild
@@ -434,7 +434,7 @@ export default function PatientDashboardPage() {
                       >
                         <Link href="/patient/profile">Edit Profile</Link>
                       </Button>
-                    </div>
+        </div>
                   </>
                 )}
               </div>
@@ -456,8 +456,8 @@ export default function PatientDashboardPage() {
                       <div key={index} className="flex gap-3 pb-3 border-b border-gray-100 dark:border-gray-700 last:border-0">
                         <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                           <FaUserMd className="text-gray-600 dark:text-gray-300" />
-                        </div>
-                        <div>
+              </div>
+              <div>
                           <p className="text-sm font-medium text-gray-900 dark:text-white">
                             Appointment with Dr. {appt.doctorName}
                           </p>
@@ -486,8 +486,8 @@ export default function PatientDashboardPage() {
                 </div>
               </div>
             </Card>
-          </div>
-        </div>
+              </div>
+            </div>
       </div>
     </div>
   );
