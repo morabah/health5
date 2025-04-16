@@ -185,6 +185,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         setUser(parsedUser);
         setUserProfile(parsedProfile);
+        
+        // Also update the user in the dataStore to ensure consistency
+        // This prevents the data from being reset when logging out and back in
+        import('@/data/mockDataStore').then(mod => {
+          try {
+            const { usersStore } = mod;
+            if (usersStore && parsedUser && parsedUser.uid) {
+              // Find the user in the store
+              const userToUpdate = usersStore.find(u => u.id === parsedUser.uid);
+              if (userToUpdate) {
+                // Update relevant fields directly
+                if (typeof parsedProfile.firstName === 'string') {
+                  userToUpdate.firstName = parsedProfile.firstName;
+                }
+                if (typeof parsedProfile.lastName === 'string') {
+                  userToUpdate.lastName = parsedProfile.lastName;
+                }
+                if (typeof parsedProfile.email === 'string' || parsedProfile.email === null) {
+                  userToUpdate.email = parsedProfile.email;
+                }
+                if (typeof parsedProfile.phone === 'string' || parsedProfile.phone === null) {
+                  userToUpdate.phone = parsedProfile.phone;
+                }
+                userToUpdate.updatedAt = new Date();
+                
+                logInfo("Updated user profile in mock data store");
+              }
+            }
+          } catch (err) {
+            logInfo("Error updating user in mock data store", { error: err });
+          }
+        });
+        
         logInfo("Refreshed user profile from localStorage");
       }
     } catch (error) {

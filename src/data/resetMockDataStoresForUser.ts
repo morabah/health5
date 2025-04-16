@@ -26,11 +26,103 @@ export function resetMockDataStoresForUser(role: UserType | 'patient' | 'doctor'
     throw new Error("Mock data stores are not properly initialized.");
   }
 
+  // Check if we have stored profile data to preserve
+  let storedProfile: any = null;
+  let storedUser: any = null;
+  
+  if (typeof window !== 'undefined') {
+    try {
+      const profileData = localStorage.getItem('auth_profile');
+      const userData = localStorage.getItem('auth_user');
+      
+      if (profileData && userData) {
+        storedProfile = JSON.parse(profileData);
+        storedUser = JSON.parse(userData);
+      }
+    } catch (error) {
+      console.error("Error loading stored profile data:", error);
+    }
+  }
+
+  // Create base users for the stores
+  let basePatientUser = { ...mockPatientUser };
+  let baseDoctorUser = { ...mockDoctorUser };
+  let baseAdminUser = { ...mockAdminUser };
+  
+  // If we have a stored profile and it matches the current role, use it instead
+  if (storedProfile && storedUser && storedUser.userType === role) {
+    if (role === 'patient' && storedUser.uid === mockPatientUser.id) {
+      basePatientUser = {
+        ...mockPatientUser,
+        ...storedProfile
+      };
+    } else if (role === 'doctor' && storedUser.uid === mockDoctorUser.id) {
+      baseDoctorUser = {
+        ...mockDoctorUser,
+        ...storedProfile
+      };
+    } else if (role === 'admin' && storedUser.uid === mockAdminUser.id) {
+      baseAdminUser = {
+        ...mockAdminUser,
+        ...storedProfile
+      };
+    }
+  }
+
   // Clear all stores IN-PLACE using .splice to preserve references
-  usersStore.splice(0, usersStore.length, mockPatientUser, mockDoctorUser, mockAdminUser);
-  doctorProfilesStore.splice(0, doctorProfilesStore.length,
-    mockDoctorProfileData1, mockDoctorProfileData2, mockDoctorProfileData3, mockDoctorProfileData4, mockDoctorProfileData5);
-  patientProfilesStore.splice(0, patientProfilesStore.length, mockPatientProfileData1);
+  usersStore.splice(0, usersStore.length, basePatientUser, baseDoctorUser, baseAdminUser);
+  
+  // Update the appropriate profile stores
+  if (role === 'patient') {
+    // If we have a stored patient profile, update the patientProfileData1
+    const updatedPatientProfile = { 
+      ...mockPatientProfileData1
+    };
+    
+    // If stored profile exists and is for the current user, merge the changes
+    if (storedProfile && storedUser && storedUser.uid === mockPatientUser.id) {
+      // Using type assertion to avoid linter errors
+      const patientStoredProfile = storedProfile as any;
+      
+      Object.assign(updatedPatientProfile, {
+        userId: mockPatientUser.id,
+        dateOfBirth: patientStoredProfile.dateOfBirth || mockPatientProfileData1.dateOfBirth,
+        gender: patientStoredProfile.gender || mockPatientProfileData1.gender,
+        bloodType: patientStoredProfile.bloodType || mockPatientProfileData1.bloodType,
+        medicalHistory: patientStoredProfile.medicalHistory || mockPatientProfileData1.medicalHistory
+      });
+    }
+    
+    patientProfilesStore.splice(0, patientProfilesStore.length, updatedPatientProfile);
+    
+  } else if (role === 'doctor') {
+    // If we have a stored doctor profile, update the doctorProfileData1
+    const updatedDoctorProfile = { 
+      ...mockDoctorProfileData1
+    };
+    
+    // If stored profile exists and is for the current user, merge the changes
+    if (storedProfile && storedUser && storedUser.uid === mockDoctorUser.id) {
+      // Using type assertion to avoid linter errors
+      const doctorStoredProfile = storedProfile as any;
+      
+      // Preserve any fields that were updated in the profile
+      if (doctorStoredProfile.firstName && doctorStoredProfile.lastName) {
+        updatedDoctorProfile.specialty = doctorStoredProfile.specialty || mockDoctorProfileData1.specialty;
+        updatedDoctorProfile.bio = doctorStoredProfile.bio || mockDoctorProfileData1.bio;
+        updatedDoctorProfile.location = doctorStoredProfile.location || mockDoctorProfileData1.location;
+      }
+    }
+    
+    doctorProfilesStore.splice(0, doctorProfilesStore.length,
+      updatedDoctorProfile, mockDoctorProfileData2, mockDoctorProfileData3, mockDoctorProfileData4, mockDoctorProfileData5);
+  } else {
+    // For admin or other roles, use the default profile data
+    doctorProfilesStore.splice(0, doctorProfilesStore.length,
+      mockDoctorProfileData1, mockDoctorProfileData2, mockDoctorProfileData3, mockDoctorProfileData4, mockDoctorProfileData5);
+    patientProfilesStore.splice(0, patientProfilesStore.length, mockPatientProfileData1);
+  }
+  
   appointmentsStore.splice(0, appointmentsStore.length);
   notificationsStore.splice(0, notificationsStore.length);
 
