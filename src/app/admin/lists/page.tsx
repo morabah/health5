@@ -4,8 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
-import { db } from "@/lib/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
+import { loadAdminUsers } from '@/data/adminLoaders';
 
 interface User {
   id: string;
@@ -25,8 +24,7 @@ export default function AdminListsPage() {
       setLoading(true);
       setError(null);
       try {
-        const snapshot = await getDocs(collection(db, "mockUsers"));
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+        const items = await loadAdminUsers();
         setUsers(items);
       } catch (err) {
         setError("Failed to load users.");

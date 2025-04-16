@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { loadDoctorAvailability } from '@/data/doctorLoaders';
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -41,21 +40,12 @@ export default function BookAppointmentPage() {
 
   useEffect(() => {
     async function fetchDoctorAndSlots() {
-      if (!db || !doctorId) return;
       setLoading(true);
       try {
         // Fetch doctor info
-        const docRef = doc(collection(db, "mockDoctors"), doctorId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setDoctor({ id: doctorId, ...docSnap.data() } as Doctor);
-        }
-        // Fetch slots (mock: all slots for doctorId)
-        const slotsRef = collection(db, "mockDoctorSlots");
-        const q = query(slotsRef, where("doctorId", "==", doctorId));
-        const snapshot = await getDocs(q);
-        const slotList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Slot[];
-        setSlots(slotList);
+        const doctorData = await loadDoctorAvailability(doctorId);
+        setDoctor({ id: doctorId, ...doctorData } as Doctor);
+        setSlots(doctorData.slots);
       } catch {
         setDoctor(null);
         setSlots([]);

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadPatientAppointmentsFull, Appointment } from "@/data/loadPatientAppointmentsFull";
+import { loadPatientAppointments } from "@/data/patientLoaders";
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +10,7 @@ import { logValidation } from "@/lib/logger";
 type TabKey = "upcoming" | "past" | "cancelled";
 
 export default function PatientAppointmentsPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>("upcoming");
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -23,8 +23,8 @@ export default function PatientAppointmentsPage() {
     async function fetchAppointments() {
       setLoading(true);
       try {
-        const appts = await loadPatientAppointmentsFull();
-        setAppointments(appts);
+        const items = await loadPatientAppointments('mockPatientId');
+        setAppointments(items);
       } catch {
         setAppointments([]);
       } finally {

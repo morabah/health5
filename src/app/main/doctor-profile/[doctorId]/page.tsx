@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { collection, doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { loadDoctorProfilePublic } from '@/data/doctorLoaders';
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -35,16 +34,10 @@ export default function DoctorProfilePage() {
 
   useEffect(() => {
     async function fetchDoctor() {
-      if (!db || !doctorId) return;
       setLoading(true);
       try {
-        const docRef = doc(collection(db, "mockDoctors"), doctorId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setDoctor({ id: doctorId, ...docSnap.data() } as Doctor);
-        } else {
-          setDoctor(null);
-        }
+        const data = await loadDoctorProfilePublic(doctorId);
+        setDoctor(data);
       } catch {
         setDoctor(null);
       } finally {

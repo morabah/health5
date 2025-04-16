@@ -7,9 +7,7 @@ import Alert from "@/components/ui/Alert";
 import { UserProfile } from "@/types/user";
 import { PatientProfile } from "@/types/patient";
 import { Appointment } from "@/types/appointment";
-import { loadPatientProfile } from "@/data/loadPatientProfile";
-import { loadPatientAppointments } from "@/data/loadPatientAppointments";
-import { Timestamp } from "firebase/firestore";
+import { loadPatientProfile, loadPatientAppointments } from "@/data/patientLoaders";
 import { logInfo, logWarn, logError, logValidation } from "@/lib/logger";
 import { FaUserMd, FaCalendarCheck, FaUser, FaNotesMedical } from "react-icons/fa";
 import Link from "next/link";
@@ -27,56 +25,33 @@ export default function PatientDashboardPage() {
   const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
-    let isMounted = true;
-    setLoadingProfile(true);
-    setLoadingAppointments(true);
-    setError(null);
-    logInfo("[3.10] PatientDashboard: Fetching profile and appointments", { testId: "3.10" });
-    const perfStart = performance.now();
+    async function fetchDashboardData() {
+      setLoadingProfile(true);
+      setLoadingAppointments(true);
+      setError(null);
+      logInfo("[3.10] PatientDashboard: Fetching profile and appointments", { testId: "3.10" });
+      const perfStart = performance.now();
 
-    // Fetch User + Patient profile via loader
-    const fetchProfile = async () => {
       try {
-        const data = await loadPatientProfile(MOCK_PATIENT_ID);
-        if (!data.userProfile || !data.patientProfile) {
+        const profile = await loadPatientProfile(MOCK_PATIENT_ID);
+        const appointments = await loadPatientAppointments(MOCK_PATIENT_ID);
+        if (!profile.userProfile || !profile.patientProfile) {
           throw new Error("Profile not found for mockPatient123");
         }
-        if (isMounted) {
-          setProfileData(data);
-          logInfo("[3.10] PatientDashboard: Profile loaded", { user: data.userProfile });
-        }
+        setProfileData(profile);
+        setUpcomingAppointments(appointments);
       } catch (err) {
         logError("[3.10] Failed to fetch patient profile", { error: err });
-        if (isMounted) setError("Failed to load profile.");
+        setError("Failed to load dashboard data.");
       } finally {
-        if (isMounted) setLoadingProfile(false);
+        setLoadingProfile(false);
+        setLoadingAppointments(false);
+        const perfEnd = performance.now();
+        logInfo("[3.10] PatientDashboard: Data fetch complete", { durationMs: perfEnd - perfStart });
+        logValidation("3.10", "success");
       }
-    };
-
-    // Fetch Upcoming Appointments via loader
-    const fetchAppointments = async () => {
-      try {
-        const appts = await loadPatientAppointments(MOCK_PATIENT_ID, Timestamp.now(), 3);
-        if (isMounted) {
-          setUpcomingAppointments(appts);
-          logInfo("[3.10] PatientDashboard: Appointments loaded", { count: appts.length });
-        }
-      } catch (err) {
-        logError("[3.10] Failed to fetch appointments", { error: err });
-        if (isMounted) setError("Failed to load appointments.");
-      } finally {
-        if (isMounted) setLoadingAppointments(false);
-      }
-    };
-
-    Promise.all([fetchProfile(), fetchAppointments()]).finally(() => {
-      const perfEnd = performance.now();
-      logInfo("[3.10] PatientDashboard: Data fetch complete", { durationMs: perfEnd - perfStart });
-      logValidation("3.10", "success");
-    });
-    return () => {
-      isMounted = false;
-    };
+    }
+    fetchDashboardData();
   }, []);
 
   // UI: Stats Cards

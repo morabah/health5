@@ -1,8 +1,29 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ProtectedPage from "@/components/shared/ProtectedPage";
+import { loadDoctorDashboardData } from '@/data/doctorLoaders';
 
 export default function DoctorDashboardPage() {
+  const [dashboardData, setDashboardData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    async function fetchDashboardData() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await loadDoctorDashboardData('mockDoctorId');
+        setDashboardData(data);
+      } catch (err) {
+        setError("Failed to load dashboard data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDashboardData();
+  }, []);
+
   return (
     <ProtectedPage>
       <main className="min-h-screen flex flex-col items-center justify-center">

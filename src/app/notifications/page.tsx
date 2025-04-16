@@ -4,8 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
-import { db } from "@/lib/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
+import { loadNotifications } from '@/data/notificationLoaders';
 
 interface Notification {
   id: string;
@@ -25,8 +24,7 @@ export default function NotificationsPage() {
       setLoading(true);
       setError(null);
       try {
-        const snapshot = await getDocs(collection(db, "mockNotifications"));
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Notification[];
+        const items = await loadNotifications('mockUserId');
         setNotifications(items);
       } catch (err) {
         setError("Failed to load notifications.");

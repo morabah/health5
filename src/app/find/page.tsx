@@ -4,8 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
-import { db } from "@/lib/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
+import { loadHomepageDoctors } from '@/data/doctorLoaders';
 
 interface Doctor {
   id: string;
@@ -25,8 +24,7 @@ export default function FindDoctorPage() {
       setLoading(true);
       setError(null);
       try {
-        const snapshot = await getDocs(collection(db, "mockDoctors"));
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Doctor[];
+        const items = await loadHomepageDoctors();
         setDoctors(items);
       } catch (err) {
         setError("Failed to load doctors.");
