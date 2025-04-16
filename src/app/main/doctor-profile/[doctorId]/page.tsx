@@ -57,18 +57,31 @@ export default function DoctorProfilePage() {
       try {
         const data = await loadDoctorProfilePublic(doctorId);
         
-        // Ensure doctor name is properly formatted
         if (data) {
-          if (!data.name || data.name.trim() === '') {
-            data.name = `Dr. ${data.firstName || ''} ${data.lastName || ''}`.trim();
-            
-            if (data.name.trim() === '') {
-              data.name = `Doctor (ID: ${data.userId.substring(0, 8)})`;
-            }
-          }
+          // Convert DoctorProfile to Doctor format with proper fallback values
+          const doctorData: Doctor = {
+            id: data.userId || doctorId,
+            userId: data.userId || doctorId,
+            name: `Dr. ${data.userId?.substring(0, 8) || 'Unknown'}`,
+            firstName: '',
+            lastName: '',
+            specialty: data.specialty || 'General Practice',
+            experience: data.yearsOfExperience || 0,
+            location: data.location || 'Not specified',
+            languages: data.languages || ['English'],
+            fee: data.consultationFee || 0,
+            available: true, // Default to available
+            profilePicUrl: data.profilePictureUrl || '',
+            bio: data.bio || 'No biography available',
+            education: data.education || 'No education information available',
+            services: ['General Consultation'], // Default service
+            reviews: [], // Empty reviews array as default
+          };
+          
+          setDoctor(doctorData);
+        } else {
+          setDoctor(null);
         }
-        
-        setDoctor(data);
       } catch (error) {
         console.error("Error fetching doctor profile:", error);
         setDoctor(null);

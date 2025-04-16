@@ -1,12 +1,32 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { loadDoctorAvailability } from '@/data/doctorLoaders';
-import { Spinner } from "@/components/ui/Spinner";
-import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
-import { logValidation } from "@/lib/logger";
+import { loadDoctorProfilePublic } from '@/data/doctorLoaders';
+import { mockGetAvailableSlots, mockBookAppointment } from "@/lib/mockApiService";
+import Spinner from "@/components/ui/Spinner";
+import Card from "@/components/ui/Card";
+import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
+import { toast } from "react-hot-toast";
+import { format, addDays, isSameDay } from "date-fns";
+import { DayPicker } from "react-day-picker";
+import 'react-day-picker/dist/style.css';
+import ApiModeIndicator from "@/components/ui/ApiModeIndicator";
+import EmptyState from "@/components/ui/EmptyState";
+import { useAuth } from "@/context/AuthContext";
+import { 
+  MapPinIcon, 
+  GlobeAltIcon, 
+  BriefcaseIcon, 
+  CurrencyDollarIcon,
+  CalendarIcon,
+  ClockIcon,
+  ChevronLeftIcon,
+  VideoCameraIcon,
+  UserGroupIcon
+} from "@heroicons/react/24/outline";
+import { Timestamp } from "firebase/firestore";
+import { AppointmentStatus } from "@/types/enums";
 
 interface Doctor {
   id: string;
@@ -14,176 +34,444 @@ interface Doctor {
   firstName: string;
   lastName: string;
   specialty: string;
-  profilePicUrl: string;
+  experience: number;
+  location: string;
+  languages: string[];
   fee: number;
+  available: boolean;
+  profilePicUrl: string;
   userId: string;
 }
 
-interface Slot {
-  id: string;
-  date: string; // ISO
-  time: string; // e.g. "09:00 AM"
-  available: boolean;
-}
-
-type AppointmentType = "In-person" | "Video";
+type AppointmentType = "IN_PERSON" | "VIDEO";
 
 export default function BookAppointmentPage() {
   const { doctorId } = useParams() as { doctorId: string };
   const [doctor, setDoctor] = useState<Doctor | null>(null);
-  const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string>("");
-  const [selectedSlot, setSelectedSlot] = useState<string>("");
-  const [appointmentType, setAppointmentType] = useState<AppointmentType>("In-person");
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [appointmentType, setAppointmentType] = useState<AppointmentType>("IN_PERSON");
   const [reason, setReason] = useState<string>("");
-  const [booking, setBooking] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [bookingInProgress, setBookingInProgress] = useState(false);
+  
   const router = useRouter();
-
+  const { user } = useAuth();
+  
+  // Check if user is logged in
   useEffect(() => {
-    async function fetchDoctorAndSlots() {
+    if (!user) {
+      toast.error("Please log in to book an appointment");
+      router.push('/auth/login');
+    }
+  }, [user, router]);
+
+  // Load doctor profile
+  useEffect(() => {
+    async function fetchDoctor() {
       setLoading(true);
       try {
-        // Fetch doctor info
-        const doctorData = await loadDoctorAvailability(doctorId);
-        setDoctor({ id: doctorId, ...doctorData } as Doctor);
-        setSlots(doctorData.slots);
-      } catch {
+        const data = await loadDoctorProfilePublic(doctorId);
+        
+        if (data) {
+          // Convert to Doctor format with proper fallback values
+          const doctorData: Doctor = {
+            id: data.userId || doctorId,
+            userId: data.userId || doctorId,
+            name: `Dr. ${data.userId?.substring(0, 8) || 'Unknown'}`,
+            firstName: '',
+            lastName: '',
+            specialty: data.specialty || 'General Practice',
+            experience: data.yearsOfExperience || 0,
+            location: data.location || 'Not specified',
+            languages: data.languages || ['English'],
+            fee: data.consultationFee || 0,
+            available: true,
+            profilePicUrl: data.profilePictureUrl || '',
+          };
+          
+          setDoctor(doctorData);
+          
+          // Set default date to tomorrow
+          const tomorrow = addDays(new Date(), 1);
+          setSelectedDate(tomorrow);
+        } else {
+          toast.error("Doctor not found");
+          setDoctor(null);
+        }
+      } catch (error) {
+        console.error("Error fetching doctor:", error);
+        toast.error("Could not load doctor information");
         setDoctor(null);
-        setSlots([]);
       } finally {
         setLoading(false);
       }
     }
-    fetchDoctorAndSlots();
+
+    if (doctorId) {
+      fetchDoctor();
+    }
   }, [doctorId]);
 
+  // Load available slots when selected date changes
   useEffect(() => {
-    logValidation("main-book-appointment-ui", "success");
-  }, []);
+    async function fetchAvailableSlots() {
+      if (!selectedDate || !doctor) return;
+      
+      setLoadingSlots(true);
+      setSelectedTime(null);
+      
+      try {
+        const dateString = format(selectedDate, 'yyyy-MM-dd');
+        const slots = await mockGetAvailableSlots({ 
+          doctorId: doctor.userId, 
+          dateString 
+        });
+        
+        setAvailableSlots(slots);
+      } catch (error) {
+        console.error("Error fetching available slots:", error);
+        toast.error("Could not load available time slots");
+        setAvailableSlots([]);
+      } finally {
+        setLoadingSlots(false);
+      }
+    }
+    
+    fetchAvailableSlots();
+  }, [selectedDate, doctor]);
 
-  // Extract unique dates from slots
-  const availableDates = Array.from(new Set(slots.map((slot) => slot.date)));
-  const slotsForDate = slots.filter((slot) => slot.date === selectedDate && slot.available);
+  const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
+  };
 
-  const handleBook = async () => {
-    setBooking(true);
-    // Simulate booking
-    setTimeout(() => {
-      setSuccess(true);
-      setBooking(false);
-      setTimeout(() => router.push("/patient/appointments"), 1500);
-    }, 1200);
+  const handleTimeSelect = (time: string) => {
+    setSelectedTime(time);
+  };
+
+  const handleAppointmentTypeChange = (type: AppointmentType) => {
+    setAppointmentType(type);
+  };
+
+  const handleBookAppointment = async () => {
+    if (!doctor || !selectedDate || !selectedTime || !user) {
+      toast.error("Please select all appointment details");
+      return;
+    }
+    
+    setBookingInProgress(true);
+    
+    try {
+      // Create a Timestamp from the selected date
+      const dateObj = new Date(selectedDate);
+      const appointmentTimestamp = Timestamp.fromDate(dateObj);
+      
+      // Calculate end time (30 minutes after start)
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const endHour = hours + (minutes + 30 >= 60 ? 1 : 0);
+      const endMinute = (minutes + 30) % 60;
+      const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+      
+      // Create the appointment data object
+      const appointmentData = {
+        patientId: user.uid,
+        doctorId: doctor.userId,
+        appointmentDate: appointmentTimestamp,
+        startTime: selectedTime,
+        endTime: endTime,
+        reason: reason.trim() || "General consultation",
+        status: AppointmentStatus.PENDING,
+        appointmentType: appointmentType === "IN_PERSON" ? "In-person" : "Video" as "In-person" | "Video",
+        patientName: user.displayName || 'Patient',
+        doctorName: doctor.name,
+        doctorSpecialty: doctor.specialty
+      };
+      
+      const result = await mockBookAppointment(appointmentData);
+      
+      if (result.success) {
+        toast.success("Appointment booked successfully!");
+        router.push('/patient/appointments');
+      } else {
+        throw new Error("Booking failed");
+      }
+    } catch (error) {
+      console.error("Error booking appointment:", error);
+      toast.error("Failed to book appointment. Please try again.");
+    } finally {
+      setBookingInProgress(false);
+    }
+  };
+
+  const goBack = () => {
+    router.push('/main/find-doctors');
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[300px]">
-        <Spinner />
-      </div>
+      <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-center items-center min-h-[400px]">
+            <div className="text-center">
+              <Spinner size="lg" />
+              <p className="mt-4 text-gray-600 dark:text-gray-400">Loading doctor information...</p>
+            </div>
+          </div>
+        </div>
+      </main>
     );
   }
 
   if (!doctor) {
-    return <div className="text-center text-muted-foreground">Doctor not found.</div>;
+    return (
+      <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-center items-center min-h-[400px]">
+            <EmptyState
+              title="Doctor not found"
+              message="The doctor you are looking for does not exist or is unavailable."
+              action={
+                <Button onClick={goBack} variant="primary" label="Go Back" pageName="BookAppointmentPage">
+                  Back to Find Doctors
+                </Button>
+              }
+            />
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-8 px-4 md:px-12 lg:px-32">
-      <div className="max-w-2xl mx-auto">
-        <Card className="p-6 mb-6 flex flex-col md:flex-row gap-6">
-          <div className="md:w-1/3 flex flex-col items-center md:items-start">
-            <img
-              src={doctor.profilePicUrl}
-              alt={doctor.firstName ?? doctor.name ?? doctor.userId}
-              className="w-20 h-20 rounded-full object-cover border mb-2"
-            />
-            <div className="font-semibold text-lg">{doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}</div>
-            <div className="text-sm text-muted-foreground">{doctor.specialty}</div>
-            <div className="text-xs text-muted-foreground">Fee: ${doctor.fee}</div>
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={goBack}
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            >
+              <ChevronLeftIcon className="h-6 w-6" />
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Book Appointment</h1>
           </div>
-          <div className="md:w-2/3">
-            <div className="mb-4">
-              <label className="font-medium">Select Date</label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {availableDates.length === 0 ? (
-                  <span className="text-muted-foreground">No available dates.</span>
-                ) : (
-                  availableDates.map((date) => (
-                    <Button
-                      key={date}
-                      variant={selectedDate === date ? "default" : "secondary"}
-                      onClick={() => { setSelectedDate(date); setSelectedSlot(""); }}
-                    >
-                      {new Date(date).toLocaleDateString()}
-                    </Button>
-                  ))
-                )}
-              </div>
-            </div>
-            {selectedDate && (
-              <div className="mb-4">
-                <label className="font-medium">Select Time Slot</label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {slotsForDate.length === 0 ? (
-                    <span className="text-muted-foreground">No slots available for this date.</span>
+          <ApiModeIndicator />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+          {/* Doctor Information Sidebar */}
+          <div className="md:col-span-4">
+            <Card className="overflow-hidden border border-gray-200 dark:border-gray-700">
+              <div className="relative">
+                <div className="h-32 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+                <div className="absolute top-4 right-4">
+                  {doctor.available ? (
+                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full border border-green-200">
+                      Available
+                    </span>
                   ) : (
-                    slotsForDate.map((slot) => (
-                      <Button
-                        key={slot.id}
-                        variant={selectedSlot === slot.id ? "default" : "secondary"}
-                        onClick={() => setSelectedSlot(slot.id)}
-                      >
-                        {slot.time}
-                      </Button>
-                    ))
+                    <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full border border-red-200">
+                      Unavailable
+                    </span>
                   )}
                 </div>
-              </div>
-            )}
-            {selectedSlot && (
-              <div className="mb-4">
-                <label className="font-medium">Appointment Type</label>
-                <div className="flex gap-4 mt-2">
-                  {["In-person", "Video"].map((type) => (
-                    <Button
-                      key={type}
-                      variant={appointmentType === type ? "default" : "secondary"}
-                      onClick={() => setAppointmentType(type as AppointmentType)}
-                    >
-                      {type}
-                    </Button>
-                  ))}
+                <div className="absolute -bottom-16 left-6">
+                  <img
+                    src={doctor.profilePicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name)}&background=0D8ABC&color=fff&size=128`}
+                    alt={doctor.name}
+                    className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name)}&background=0D8ABC&color=fff&size=128`;
+                    }}
+                  />
                 </div>
               </div>
-            )}
-            {selectedSlot && (
-              <div className="mb-4">
-                <label className="font-medium">Reason for Visit (optional)</label>
-                <Input
-                  type="text"
-                  placeholder="Brief reason for visit"
-                  value={reason}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReason(e.target.value)}
-                />
+              
+              <div className="p-6 pt-20">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  {doctor.name}
+                </h2>
+                
+                <div className="flex items-center mt-1 text-sm text-blue-600 dark:text-blue-400 mb-4">
+                  <BriefcaseIcon className="w-4 h-4 mr-2" />
+                  <span>{doctor.specialty || 'General Practice'}</span>
+                </div>
+                
+                <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                    <MapPinIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                    <span>{doctor.location || 'Location not specified'}</span>
+                  </div>
+                  
+                  <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                    <GlobeAltIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                    <span>{doctor.languages?.join(', ') || 'English'}</span>
+                  </div>
+                  
+                  <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                    <CurrencyDollarIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                    <span>Consultation fee: ${doctor.fee}</span>
+                  </div>
+                </div>
               </div>
-            )}
-            {selectedSlot && (
-              <Button
-                className="w-full mt-2"
-                onClick={handleBook}
-                disabled={booking}
-              >
-                {booking ? "Booking..." : "Book Appointment"}
-              </Button>
-            )}
-            {success && (
-              <div className="text-green-600 mt-3 text-center">Appointment booked! Redirecting...</div>
-            )}
+            </Card>
           </div>
-        </Card>
+          
+          {/* Booking Form */}
+          <div className="md:col-span-8">
+            <Card className="border border-gray-200 dark:border-gray-700">
+              <div className="p-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Schedule Your Appointment</h3>
+                
+                {/* Step 1: Select Date */}
+                <div className="mb-8">
+                  <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">1. Select a Date</h4>
+                  <div className="flex justify-center">
+                    <DayPicker
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={handleDateSelect}
+                      disabled={[
+                        { before: addDays(new Date(), 1) }, // Disable past dates and today
+                      ]}
+                      className="border rounded-lg bg-white dark:bg-gray-800 p-4"
+                    />
+                  </div>
+                </div>
+                
+                {/* Step 2: Select Time */}
+                {selectedDate && (
+                  <div className="mb-8">
+                    <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
+                      2. Select a Time Slot for {format(selectedDate, 'MMMM d, yyyy')}
+                    </h4>
+                    
+                    {loadingSlots ? (
+                      <div className="flex justify-center py-4">
+                        <Spinner size="md" />
+                      </div>
+                    ) : availableSlots.length === 0 ? (
+                      <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                        No available time slots for this date. Please select another date.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        {availableSlots.map((time) => (
+                          <button
+                            key={time}
+                            onClick={() => handleTimeSelect(time)}
+                            className={`py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                              selectedTime === time
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600'
+                            }`}
+                          >
+                            {time}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Step 3: Appointment Type */}
+                {selectedTime && (
+                  <div className="mb-8">
+                    <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">3. Appointment Type</h4>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <button
+                        onClick={() => handleAppointmentTypeChange("IN_PERSON")}
+                        className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg border ${
+                          appointmentType === "IN_PERSON"
+                            ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <UserGroupIcon className="w-5 h-5" />
+                        <span className="font-medium">In-Person Visit</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => handleAppointmentTypeChange("VIDEO")}
+                        className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg border ${
+                          appointmentType === "VIDEO"
+                            ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <VideoCameraIcon className="w-5 h-5" />
+                        <span className="font-medium">Video Consultation</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Step 4: Reason for Visit */}
+                {selectedTime && (
+                  <div className="mb-8">
+                    <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">4. Reason for Visit (Optional)</h4>
+                    <Input
+                      type="text"
+                      placeholder="Brief description of your symptoms or reason for visit"
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                )}
+                
+                {/* Appointment Summary & Confirm Button */}
+                {selectedDate && selectedTime && (
+                  <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-2">Appointment Summary</h4>
+                      <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                        <div className="flex items-center">
+                          <CalendarIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                          <span>Date: {format(selectedDate, 'MMMM d, yyyy')}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <ClockIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                          <span>Time: {selectedTime}</span>
+                        </div>
+                        <div className="flex items-center">
+                          {appointmentType === "IN_PERSON" ? (
+                            <UserGroupIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                          ) : (
+                            <VideoCameraIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                          )}
+                          <span>Type: {appointmentType === "IN_PERSON" ? "In-Person Visit" : "Video Consultation"}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <CurrencyDollarIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                          <span>Fee: ${doctor.fee}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full justify-center"
+                      onClick={handleBookAppointment}
+                      disabled={bookingInProgress}
+                      isLoading={bookingInProgress}
+                      label="Confirm Appointment"
+                      pageName="BookAppointmentPage"
+                    >
+                      Confirm Appointment
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

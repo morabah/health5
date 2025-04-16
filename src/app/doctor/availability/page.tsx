@@ -6,9 +6,9 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import { toast } from "react-hot-toast";
 import { mockSetDoctorAvailability } from "@/lib/mockApiService";
-import { loadDoctorAvailability } from '@/data/loadDoctorAvailability';
+import { getMockDoctorAvailability } from '@/data/mockDataService';
 import ApiModeIndicator from "@/components/ui/ApiModeIndicator";
-import { format, addDays, parseISO } from "date-fns";
+import { format, addDays } from "date-fns";
 import { DayPicker } from "react-day-picker";
 import 'react-day-picker/dist/style.css';
 import Link from "next/link";
@@ -20,6 +20,15 @@ interface TimeSlot {
 
 interface WeeklySchedule {
   [key: number]: TimeSlot[]; // 0-6 for Sunday-Saturday
+}
+
+interface AvailabilitySlot {
+  id?: string;
+  doctorId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
 }
 
 export default function DoctorAvailabilityPage() {
@@ -38,6 +47,7 @@ export default function DoctorAvailabilityPage() {
   });
   const [blockedDates, setBlockedDates] = useState<Date[]>([]);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  const [dataChanged, setDataChanged] = useState(false);
 
   // Time slots from 8AM to 6PM in 30-minute increments
   useEffect(() => {
@@ -58,34 +68,54 @@ export default function DoctorAvailabilityPage() {
       setLoading(true);
       setError(null);
       try {
-        // For now, we'll populate with sample data - in a real implementation,
-        // this would retrieve the doctor's current availability settings
-        const items = await loadDoctorAvailability();
+        // Get current doctor's availability settings
+        const availabilityData = await getMockDoctorAvailability(user.uid);
         
-        // Initialize schedule with sample data
+        // Initialize schedule based on doctor's availability
         const schedule: WeeklySchedule = {
           0: [], // Sunday
-          1: [{ startTime: '09:00', endTime: '09:30' }, { startTime: '10:00', endTime: '10:30' }], // Monday
-          2: [{ startTime: '14:00', endTime: '14:30' }, { startTime: '15:00', endTime: '15:30' }], // Tuesday
-          3: [{ startTime: '11:00', endTime: '11:30' }, { startTime: '12:00', endTime: '12:30' }], // Wednesday
-          4: [{ startTime: '13:00', endTime: '13:30' }, { startTime: '16:00', endTime: '16:30' }], // Thursday
-          5: [{ startTime: '09:00', endTime: '09:30' }, { startTime: '14:00', endTime: '14:30' }], // Friday
+          1: [], // Monday
+          2: [], // Tuesday
+          3: [], // Wednesday
+          4: [], // Thursday
+          5: [], // Friday
           6: [], // Saturday
         };
         
-        setWeeklySchedule(schedule);
-        
-        // Set some sample blocked dates
-        const blocked = [
-          addDays(new Date(), 2),
-          addDays(new Date(), 5),
-          addDays(new Date(), 10)
-        ];
-        setBlockedDates(blocked);
+        // Process availability data
+        if (availabilityData && Array.isArray(availabilityData) && availabilityData.length > 0) {
+          // It's an array of slots
+          availabilityData.forEach((slot: AvailabilitySlot) => {
+            if (slot.dayOfWeek >= 0 && slot.dayOfWeek <= 6 && slot.isAvailable) {
+              schedule[slot.dayOfWeek].push({
+                startTime: slot.startTime,
+                endTime: slot.endTime
+              });
+            }
+          });
+          
+          setWeeklySchedule(schedule);
+          
+          // We might get blockedDates from the API in a future implementation
+        } else {
+          // Set default schedule if no availability data
+          const defaultSchedule: WeeklySchedule = {
+            0: [], // Sunday
+            1: [{ startTime: '09:00', endTime: '09:30' }, { startTime: '10:00', endTime: '10:30' }], // Monday
+            2: [{ startTime: '14:00', endTime: '14:30' }, { startTime: '15:00', endTime: '15:30' }], // Tuesday
+            3: [{ startTime: '11:00', endTime: '11:30' }, { startTime: '12:00', endTime: '12:30' }], // Wednesday
+            4: [{ startTime: '13:00', endTime: '13:30' }, { startTime: '16:00', endTime: '16:30' }], // Thursday
+            5: [{ startTime: '09:00', endTime: '09:30' }, { startTime: '14:00', endTime: '14:30' }], // Friday
+            6: [], // Saturday
+          };
+          
+          setWeeklySchedule(defaultSchedule);
+        }
+        setDataChanged(false); // Reset the change tracker after loading
         
       } catch (err) {
-        setError('Failed to load availability settings.');
-        console.error(err);
+        console.error('Error loading availability data:', err);
+        setError('Failed to load availability settings. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -127,6 +157,7 @@ export default function DoctorAvailabilityPage() {
         ];
       }
       
+      setDataChanged(true); // Mark data as changed
       return newSchedule;
     });
   };
@@ -150,18 +181,22 @@ export default function DoctorAvailabilityPage() {
         format(d, 'yyyy-MM-dd') === format(dateToToggle, 'yyyy-MM-dd')
       );
       
+      let newDates;
       if (dateIndex >= 0) {
         // Remove date from blocked dates
         console.log('Removing date from blocked dates');
-        return [
+        newDates = [
           ...prevDates.slice(0, dateIndex),
           ...prevDates.slice(dateIndex + 1)
         ];
       } else {
         // Add date to blocked dates
         console.log('Adding date to blocked dates');
-        return [...prevDates, dateToToggle];
+        newDates = [...prevDates, dateToToggle];
       }
+      
+      setDataChanged(true); // Mark data as changed
+      return newDates;
     });
   };
 
@@ -207,6 +242,7 @@ export default function DoctorAvailabilityPage() {
       if (result.success) {
         toast.success('Availability settings saved successfully');
         console.log('Availability saved successfully');
+        setDataChanged(false); // Reset the change tracker after saving
       } else {
         throw new Error('Failed to save availability');
       }
@@ -307,22 +343,28 @@ export default function DoctorAvailabilityPage() {
               <h2 className="text-xl font-semibold mb-4">Block Specific Dates</h2>
               <p className="text-gray-600 dark:text-gray-300 mb-4">
                 Select dates when you&apos;re unavailable regardless of your weekly schedule.
+                Click on a date to block or unblock it.
               </p>
               
               <div className="mb-4">
                 <DayPicker
                   mode="multiple"
                   selected={blockedDates}
-                  onSelect={setBlockedDates}
+                  onSelect={(dates) => {
+                    if (dates) {
+                      setBlockedDates(dates);
+                      setDataChanged(true);
+                    }
+                  }}
                   className="mx-auto"
-                  required
+                  fromDate={new Date()} // Only allow selecting current or future dates
                 />
               </div>
               
               {blockedDates.length > 0 && (
                 <div className="mt-4">
                   <h3 className="font-medium mb-2">Blocked Dates:</h3>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto">
                     {blockedDates.map((date, index) => (
                       <div key={index} className="bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 py-1 px-3 rounded-full text-sm flex items-center">
                         {format(date, 'MMM d, yyyy')}
@@ -345,12 +387,12 @@ export default function DoctorAvailabilityPage() {
               <Button
                 variant="primary"
                 onClick={handleSaveAvailability}
-                disabled={saving}
+                disabled={saving || !dataChanged}
                 isLoading={saving}
                 label="Save Availability Settings"
                 pageName="DoctorAvailabilityPage"
               >
-                Save Availability Settings
+                {dataChanged ? 'Save Changes' : 'No Changes to Save'}
               </Button>
             </div>
           </div>

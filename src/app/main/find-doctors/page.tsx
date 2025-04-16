@@ -23,7 +23,9 @@ import {
   CurrencyDollarIcon,
   CalendarIcon,
   ClockIcon,
-  UserIcon
+  UserIcon,
+  MagnifyingGlassIcon,
+  AdjustmentsHorizontalIcon
 } from "@heroicons/react/24/outline";
 import { CheckCircleIcon, HeartIcon } from "@heroicons/react/24/solid";
 
@@ -85,6 +87,7 @@ export default function FindDoctorsPage() {
   const [language, setLanguage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
   const router = useRouter();
 
   // Process doctor data to ensure names are properly formatted
@@ -233,81 +236,108 @@ export default function FindDoctorsPage() {
     toast.success("Navigating to booking page...");
   };
 
+  const toggleFilters = () => {
+    setShowFilters(!showFilters);
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Find a Doctor</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Find My Doctor</h1>
+            <p className="text-gray-600 dark:text-gray-400">
               Search for healthcare specialists matching your needs
             </p>
           </div>
-          <ApiModeIndicator />
+          <div className="mt-4 md:mt-0">
+            <ApiModeIndicator />
+          </div>
         </div>
         
-        {/* Search and Filters Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-          <div className="mb-6">
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Search by Doctor Name or Specialty
-            </label>
-            <Input
-              id="search"
-              type="text"
-              placeholder="e.g., Dr. Smith or Cardiology"
-              value={searchQuery}
-              onChange={handleSearchChange}
-              className="w-full"
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div>
-              <label htmlFor="specialty" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Specialty
-              </label>
-              <Select
-                id="specialty"
-                value={specialty}
-                onChange={(e) => setSpecialty(e.target.value)}
-                options={specialtyOptions}
-              />
+        {/* Search Bar - Always Visible */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                </div>
+                <Input
+                  id="search"
+                  type="text"
+                  placeholder="Search by doctor name or specialty..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="pl-10 w-full"
+                />
+              </div>
             </div>
             <div>
-              <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Location
-              </label>
-              <Select
-                id="location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                options={locationOptions}
-              />
-            </div>
-            <div>
-              <label htmlFor="language" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Language
-              </label>
-              <Select
-                id="language"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                options={languageOptions}
-              />
+              <Button 
+                onClick={toggleFilters}
+                variant="secondary"
+                className="w-full md:w-auto flex items-center justify-center gap-2"
+                label={showFilters ? "Hide Filters" : "Show Filters"}
+                pageName="FindDoctorsPage"
+              >
+                <AdjustmentsHorizontalIcon className="h-5 w-5" />
+                {showFilters ? "Hide Filters" : "Show Filters"}
+              </Button>
             </div>
           </div>
           
-          <div className="flex justify-end">
-            <Button 
-              onClick={handleResetFilters}
-              variant="secondary"
-              label="Reset Filters"
-              pageName="FindDoctorsPage"
-            >
-              Reset Filters
-            </Button>
-          </div>
+          {/* Advanced Filters - Toggleable */}
+          {showFilters && (
+            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label htmlFor="specialty" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Specialty
+                  </label>
+                  <Select
+                    id="specialty"
+                    value={specialty}
+                    onChange={(e) => setSpecialty(e.target.value)}
+                    options={specialtyOptions}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Location
+                  </label>
+                  <Select
+                    id="location"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    options={locationOptions}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="language" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Language
+                  </label>
+                  <Select
+                    id="language"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    options={languageOptions}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end mt-6">
+                <Button 
+                  onClick={handleResetFilters}
+                  variant="secondary"
+                  label="Reset Filters"
+                  pageName="FindDoctorsPage"
+                >
+                  Reset Filters
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
         
         {error && (
@@ -332,122 +362,101 @@ export default function FindDoctorsPage() {
               />
             ) : (
               <>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  Found {filteredDoctors.length} {filteredDoctors.length === 1 ? 'doctor' : 'doctors'} matching your criteria
-                </p>
+                <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 flex items-center">
+                  <div className="mr-3 bg-blue-100 dark:bg-blue-800 rounded-full p-2">
+                    <CheckCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <p className="text-blue-700 dark:text-blue-300">
+                    Found <span className="font-semibold">{filteredDoctors.length}</span> {filteredDoctors.length === 1 ? 'doctor' : 'doctors'} matching your criteria
+                  </p>
+                </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                   {filteredDoctors.map((doctor) => (
                     <div 
                       key={doctor.id}
-                      className="cursor-pointer transform transition duration-300 hover:scale-102 hover:-translate-y-1"
+                      className="cursor-pointer transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
                       onClick={() => viewDoctorProfile(doctor.id)}
                     >
-                      <Card className="overflow-hidden hover:shadow-lg transition border border-gray-200 dark:border-gray-700">
+                      <Card className="h-full overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+                        {/* Header with gradient background */}
                         <div className="relative">
-                          <div className="h-12 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+                          <div className="h-24 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
                           <div className="absolute top-4 right-4">
                             {doctor.available ? (
-                              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full border border-green-200">
+                              <span className="bg-green-100 text-green-800 text-xs font-medium px-3 py-1.5 rounded-full border border-green-200 shadow-sm">
                                 Available
                               </span>
                             ) : (
-                              <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full border border-red-200">
+                              <span className="bg-red-100 text-red-800 text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 shadow-sm">
                                 Unavailable
                               </span>
                             )}
                           </div>
+                          
+                          {/* Doctor Image */}
+                          <div className="absolute -bottom-12 left-6">
+                            <img
+                              src={doctor.profilePicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name)}&background=0D8ABC&color=fff&size=128`}
+                              alt={doctor.name}
+                              className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.onerror = null;
+                                target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name)}&background=0D8ABC&color=fff&size=128`;
+                              }}
+                            />
+                          </div>
                         </div>
                         
-                        <div className="p-6">
-                          <div className="flex items-start">
-                            <div className="relative -mt-10 mr-4 flex-shrink-0 z-10">
-                              <img
-                                src={doctor.profilePicUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(doctor.name) + '&background=0D8ABC&color=fff&size=128'}
-                                alt={doctor.name}
-                                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.onerror = null;
-                                  target.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(doctor.name) + '&background=0D8ABC&color=fff&size=128';
-                                }}
-                              />
-                            </div>
-                            
-                            <div className="flex-1 pt-3">
-                              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1 line-clamp-1">
-                                {doctor.name}
-                              </h2>
-                              
-                              <div className="flex items-center text-sm text-blue-600 dark:text-blue-400">
-                                <BriefcaseIcon className="w-4 h-4 mr-1" />
-                                <span>{doctor.specialty || 'General Practice'}</span>
-                              </div>
-                              
-                              <div className="flex items-center mt-1 text-sm text-gray-600 dark:text-gray-400">
-                                <MapPinIcon className="w-4 h-4 mr-1 flex-shrink-0" />
-                                <span className="line-clamp-1">{doctor.location || 'Location not specified'}</span>
-                              </div>
-                            </div>
+                        {/* Doctor Details */}
+                        <div className="p-6 pt-16">
+                          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                            {doctor.name}
+                          </h2>
+                          
+                          <div className="flex items-center text-blue-600 dark:text-blue-400 mb-4">
+                            <BriefcaseIcon className="w-4 h-4 mr-2" />
+                            <span className="font-medium">{doctor.specialty || 'General Practice'}</span>
                           </div>
                           
-                          <div className="grid grid-cols-2 gap-4 mt-4">
-                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
-                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
-                                <UserIcon className="w-4 h-4 mr-1" />
-                                <span>{doctor.experience || 0} years exp.</span>
-                              </div>
+                          <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                              <MapPinIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                              <span>{doctor.location || 'Location not specified'}</span>
                             </div>
                             
-                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
-                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
-                                <CurrencyDollarIcon className="w-4 h-4 mr-1" />
-                                <span>${doctor.fee || 0}</span>
-                              </div>
+                            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                              <UserIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                              <span>{doctor.experience || 0} years of experience</span>
                             </div>
                             
-                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
-                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
-                                <GlobeAltIcon className="w-4 h-4 mr-1 flex-shrink-0" />
-                                <span className="line-clamp-1">
-                                  {doctor.languages?.join(', ') || 'English'}
-                                </span>
-                              </div>
+                            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                              <GlobeAltIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                              <span>{doctor.languages?.join(', ') || 'English'}</span>
                             </div>
                             
-                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
-                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
-                                {doctor.rating ? (
-                                  <>
-                                    <StarIcon className="w-4 h-4 mr-1" />
-                                    <span>{doctor.rating.toFixed(1)}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <CalendarIcon className="w-4 h-4 mr-1" />
-                                    <span>New Doctor</span>
-                                  </>
-                                )}
-                              </div>
+                            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                              <CurrencyDollarIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                              <span>Consultation fee: ${doctor.fee}</span>
                             </div>
                           </div>
                           
                           {doctor.nextAvailable && doctor.available && (
-                            <div className="mt-4 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <div className="mt-4 py-2 px-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                               <div className="flex items-center text-sm text-blue-700 dark:text-blue-300">
-                                <ClockIcon className="w-4 h-4 mr-1" />
+                                <ClockIcon className="w-5 h-5 mr-2 flex-shrink-0" />
                                 <span>Next Available: {doctor.nextAvailable}</span>
                               </div>
                             </div>
                           )}
                           
-                          <div className="flex justify-between items-center mt-4 space-x-2">
+                          <div className="flex items-center gap-4 mt-6">
                             <Button
                               variant="secondary"
-                              size="sm"
+                              className="flex-1 py-2.5"
                               label="View Profile"
                               pageName="FindDoctorsPage"
-                              className="flex-1"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 viewDoctorProfile(doctor.id);
@@ -459,11 +468,10 @@ export default function FindDoctorsPage() {
                             <Button
                               onClick={(e) => bookAppointment(e, doctor.id)}
                               variant="primary"
-                              size="sm"
+                              className="flex-1 py-2.5"
                               disabled={!doctor.available}
                               label={doctor.available ? "Book Appointment" : "Unavailable"}
                               pageName="FindDoctorsPage"
-                              className="flex-1"
                             >
                               {doctor.available ? "Book Appointment" : "Unavailable"}
                             </Button>
