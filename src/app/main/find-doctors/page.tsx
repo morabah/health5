@@ -10,12 +10,22 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import { debounce } from "@/utils/helpers";
+import { formatTimeString } from "@/utils/helpers";
 import EmptyState from "@/components/ui/EmptyState";
 import ApiModeIndicator from "@/components/ui/ApiModeIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "react-hot-toast";
-import { StarIcon, MapPinIcon, GlobeAltIcon, BriefcaseIcon, CurrencyDollarIcon } from "@heroicons/react/24/outline";
-import { CheckCircleIcon } from "@heroicons/react/24/solid";
+import { 
+  StarIcon, 
+  MapPinIcon, 
+  GlobeAltIcon, 
+  BriefcaseIcon, 
+  CurrencyDollarIcon,
+  CalendarIcon,
+  ClockIcon,
+  UserIcon
+} from "@heroicons/react/24/outline";
+import { CheckCircleIcon, HeartIcon } from "@heroicons/react/24/solid";
 
 interface Doctor {
   id: string;
@@ -32,6 +42,7 @@ interface Doctor {
   userId: string;
   bio?: string;
   rating?: number;
+  nextAvailable?: string;
 }
 
 const specialtyOptions = [
@@ -76,6 +87,46 @@ export default function FindDoctorsPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // Process doctor data to ensure names are properly formatted
+  const processDoctorData = (doctorData: Doctor[]) => {
+    return doctorData.map(doctor => {
+      // Make sure each doctor has a properly formatted name
+      let displayName = doctor.name;
+      
+      if (!displayName || displayName.trim() === '') {
+        if (doctor.firstName || doctor.lastName) {
+          displayName = `Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim();
+        } else {
+          displayName = `Doctor (ID: ${doctor.userId.substring(0, 8)})`;
+        }
+      }
+      
+      // Add mock next available time if not present
+      const nextAvailable = doctor.nextAvailable || getRandomTimeSlot();
+      
+      return {
+        ...doctor,
+        name: displayName,
+        nextAvailable
+      };
+    });
+  };
+
+  // Generate a random time slot for demonstration
+  const getRandomTimeSlot = () => {
+    const hours = Math.floor(Math.random() * 8) + 9; // 9 AM to 5 PM
+    const minutes = Math.random() > 0.5 ? '00' : '30';
+    const daysAhead = Math.floor(Math.random() * 5) + 1; // 1-5 days ahead
+    
+    const date = new Date();
+    date.setDate(date.getDate() + daysAhead);
+    
+    const month = date.toLocaleString('default', { month: 'short' });
+    const day = date.getDate();
+    
+    return `${month} ${day}, ${hours}:${minutes}`;
+  };
+
   // Fetch all doctors initially
   useEffect(() => {
     async function fetchDoctors() {
@@ -93,8 +144,11 @@ export default function FindDoctorsPage() {
           results = await loadDoctors();
         }
         
-        setDoctors(results);
-        applyFilters(results, searchQuery, specialty, location, language);
+        // Process the results to ensure names are properly formatted
+        const processedResults = processDoctorData(results);
+        
+        setDoctors(processedResults);
+        applyFilters(processedResults, searchQuery, specialty, location, language);
       } catch (e) {
         setError('Failed to load doctors. Please try again later.');
         console.error('Error fetching doctors:', e);
@@ -114,7 +168,7 @@ export default function FindDoctorsPage() {
     if (query) {
       const lowerQuery = query.toLowerCase();
       filtered = filtered.filter(doctor => {
-        const fullName = (doctor.name || `${doctor.firstName} ${doctor.lastName}`).toLowerCase();
+        const fullName = doctor.name.toLowerCase();
         return fullName.includes(lowerQuery) || 
                (doctor.specialty && doctor.specialty.toLowerCase().includes(lowerQuery));
       });
@@ -173,14 +227,22 @@ export default function FindDoctorsPage() {
       router.push('/auth/login');
       return;
     }
+    
+    // Navigate to booking page with the doctor ID
     router.push(`/main/book-appointment/${doctorId}`);
+    toast.success("Navigating to booking page...");
   };
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Find a Doctor</h1>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Find a Doctor</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Search for healthcare specialists matching your needs
+            </p>
+          </div>
           <ApiModeIndicator />
         </div>
         
@@ -256,8 +318,9 @@ export default function FindDoctorsPage() {
         
         {/* Results Section */}
         {loading ? (
-          <div className="flex justify-center items-center min-h-[400px]">
+          <div className="flex flex-col justify-center items-center min-h-[400px]">
             <Spinner size="lg" />
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading doctors...</p>
           </div>
         ) : (
           <>
@@ -277,66 +340,122 @@ export default function FindDoctorsPage() {
                   {filteredDoctors.map((doctor) => (
                     <div 
                       key={doctor.id}
-                      className="cursor-pointer"
+                      className="cursor-pointer transform transition duration-300 hover:scale-102 hover:-translate-y-1"
                       onClick={() => viewDoctorProfile(doctor.id)}
                     >
-                      <Card className="overflow-hidden hover:shadow-lg transition">
+                      <Card className="overflow-hidden hover:shadow-lg transition border border-gray-200 dark:border-gray-700">
+                        <div className="relative">
+                          <div className="h-12 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+                          <div className="absolute top-4 right-4">
+                            {doctor.available ? (
+                              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full border border-green-200">
+                                Available
+                              </span>
+                            ) : (
+                              <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full border border-red-200">
+                                Unavailable
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
                         <div className="p-6">
                           <div className="flex items-start">
-                            <div className="relative mr-4 flex-shrink-0">
+                            <div className="relative -mt-10 mr-4 flex-shrink-0 z-10">
                               <img
-                                src={doctor.profilePicUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(doctor.name || `${doctor.firstName} ${doctor.lastName}`) + '&background=0D8ABC&color=fff'}
-                                alt={doctor.name || `${doctor.firstName} ${doctor.lastName}`}
-                                className="w-24 h-24 rounded-full object-cover border-2 border-blue-100"
+                                src={doctor.profilePicUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(doctor.name) + '&background=0D8ABC&color=fff&size=128'}
+                                alt={doctor.name}
+                                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.onerror = null;
+                                  target.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(doctor.name) + '&background=0D8ABC&color=fff&size=128';
+                                }}
                               />
-                              {doctor.available && (
-                                <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1 border-2 border-white">
-                                  <CheckCircleIcon className="w-4 h-4 text-white" />
-                                </div>
-                              )}
                             </div>
                             
-                            <div className="flex-1">
-                              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                {doctor.name || `Dr. ${doctor.firstName} ${doctor.lastName}`}
+                            <div className="flex-1 pt-3">
+                              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1 line-clamp-1">
+                                {doctor.name}
                               </h2>
                               
-                              <div className="flex items-center mt-1 text-sm text-blue-600 dark:text-blue-400">
+                              <div className="flex items-center text-sm text-blue-600 dark:text-blue-400">
                                 <BriefcaseIcon className="w-4 h-4 mr-1" />
                                 <span>{doctor.specialty || 'General Practice'}</span>
                               </div>
                               
                               <div className="flex items-center mt-1 text-sm text-gray-600 dark:text-gray-400">
-                                <MapPinIcon className="w-4 h-4 mr-1" />
-                                <span>{doctor.location || 'Location not specified'}</span>
+                                <MapPinIcon className="w-4 h-4 mr-1 flex-shrink-0" />
+                                <span className="line-clamp-1">{doctor.location || 'Location not specified'}</span>
                               </div>
-                              
-                              <div className="flex items-center mt-1 text-sm text-gray-600 dark:text-gray-400">
-                                <GlobeAltIcon className="w-4 h-4 mr-1" />
-                                <span>{doctor.languages?.join(', ') || 'English'}</span>
-                              </div>
-                              
-                              <div className="flex items-center mt-1 text-sm text-gray-600 dark:text-gray-400">
-                                <CurrencyDollarIcon className="w-4 h-4 mr-1" />
-                                <span>${doctor.fee || '0'} / consultation</span>
-                              </div>
-                              
-                              {doctor.rating && (
-                                <div className="flex items-center mt-1 text-sm text-yellow-500">
-                                  <StarIcon className="w-4 h-4 mr-1" />
-                                  <span>{doctor.rating.toFixed(1)}</span>
-                                </div>
-                              )}
                             </div>
                           </div>
                           
-                          {doctor.bio && (
-                            <p className="mt-4 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                              {doctor.bio}
-                            </p>
+                          <div className="grid grid-cols-2 gap-4 mt-4">
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
+                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                                <UserIcon className="w-4 h-4 mr-1" />
+                                <span>{doctor.experience || 0} years exp.</span>
+                              </div>
+                            </div>
+                            
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
+                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                                <CurrencyDollarIcon className="w-4 h-4 mr-1" />
+                                <span>${doctor.fee || 0}</span>
+                              </div>
+                            </div>
+                            
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
+                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                                <GlobeAltIcon className="w-4 h-4 mr-1 flex-shrink-0" />
+                                <span className="line-clamp-1">
+                                  {doctor.languages?.join(', ') || 'English'}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
+                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                                {doctor.rating ? (
+                                  <>
+                                    <StarIcon className="w-4 h-4 mr-1" />
+                                    <span>{doctor.rating.toFixed(1)}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CalendarIcon className="w-4 h-4 mr-1" />
+                                    <span>New Doctor</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {doctor.nextAvailable && doctor.available && (
+                            <div className="mt-4 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                              <div className="flex items-center text-sm text-blue-700 dark:text-blue-300">
+                                <ClockIcon className="w-4 h-4 mr-1" />
+                                <span>Next Available: {doctor.nextAvailable}</span>
+                              </div>
+                            </div>
                           )}
                           
-                          <div className="mt-4 flex justify-end">
+                          <div className="flex justify-between items-center mt-4 space-x-2">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              label="View Profile"
+                              pageName="FindDoctorsPage"
+                              className="flex-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                viewDoctorProfile(doctor.id);
+                              }}
+                            >
+                              View Profile
+                            </Button>
+                            
                             <Button
                               onClick={(e) => bookAppointment(e, doctor.id)}
                               variant="primary"
@@ -344,6 +463,7 @@ export default function FindDoctorsPage() {
                               disabled={!doctor.available}
                               label={doctor.available ? "Book Appointment" : "Unavailable"}
                               pageName="FindDoctorsPage"
+                              className="flex-1"
                             >
                               {doctor.available ? "Book Appointment" : "Unavailable"}
                             </Button>

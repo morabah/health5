@@ -8,9 +8,10 @@ import { toast } from "react-hot-toast";
 import { mockSetDoctorAvailability } from "@/lib/mockApiService";
 import { loadDoctorAvailability } from '@/data/loadDoctorAvailability';
 import ApiModeIndicator from "@/components/ui/ApiModeIndicator";
-import { format, addDays } from "date-fns";
+import { format, addDays, parseISO } from "date-fns";
 import { DayPicker } from "react-day-picker";
 import 'react-day-picker/dist/style.css';
+import Link from "next/link";
 
 interface TimeSlot {
   startTime: string;
@@ -36,8 +37,6 @@ export default function DoctorAvailabilityPage() {
     6: [], // Saturday
   });
   const [blockedDates, setBlockedDates] = useState<Date[]>([]);
-  const [selectedDay, setSelectedDay] = useState<number>(1); // Monday by default
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
 
   // Time slots from 8AM to 6PM in 30-minute increments
@@ -75,7 +74,6 @@ export default function DoctorAvailabilityPage() {
         };
         
         setWeeklySchedule(schedule);
-        setTimeSlots(schedule[selectedDay] || []);
         
         // Set some sample blocked dates
         const blocked = [
@@ -96,81 +94,98 @@ export default function DoctorAvailabilityPage() {
     fetchAvailability();
   }, [user]);
 
-  // Update time slots when selected day changes
-  useEffect(() => {
-    setTimeSlots(weeklySchedule[selectedDay] || []);
-  }, [selectedDay, weeklySchedule]);
-
-  const handleDaySelection = (day: number) => {
-    setSelectedDay(day);
+  const toggleTimeSlot = (day: number, time: string) => {
+    console.log('Toggling time slot:', { day, time });
+    
+    setWeeklySchedule(prevSchedule => {
+      const newSchedule = {...prevSchedule};
+      
+      // Check if this time slot is already selected
+      const timeIndex = newSchedule[day].findIndex(
+        slot => slot.startTime === time
+      );
+      
+      // Calculate end time (30 minutes later)
+      const [hours, minutes] = time.split(':');
+      const endTimeMinutes = (parseInt(minutes) + 30) % 60;
+      const endTimeHours = parseInt(hours) + (endTimeMinutes === 0 ? 1 : 0);
+      const endTime = `${endTimeHours.toString().padStart(2, '0')}:${endTimeMinutes.toString().padStart(2, '0')}`;
+      
+      if (timeIndex >= 0) {
+        // If found, remove it (toggle off)
+        console.log('Removing slot', { day, time, index: timeIndex });
+        newSchedule[day] = [
+          ...newSchedule[day].slice(0, timeIndex),
+          ...newSchedule[day].slice(timeIndex + 1)
+        ];
+      } else {
+        // If not found, add it (toggle on)
+        console.log('Adding slot', { day, time, endTime });
+        newSchedule[day] = [
+          ...newSchedule[day],
+          { startTime: time, endTime }
+        ];
+      }
+      
+      return newSchedule;
+    });
   };
 
-  const handleAddTimeSlot = (startTime: string) => {
-    // Calculate end time (30 min after start time)
-    const [hours, minutes] = startTime.split(':').map(Number);
-    let endHour = hours;
-    let endMinute = minutes + 30;
-    
-    if (endMinute >= 60) {
-      endHour += 1;
-      endMinute -= 60;
+  const isTimeSlotSelected = (day: number, time: string): boolean => {
+    if (!weeklySchedule || !weeklySchedule[day]) {
+      console.warn(`No schedule found for day ${day}`, weeklySchedule);
+      return false;
     }
     
-    const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
-    
-    // Add new time slot
-    const newSlot = { startTime, endTime };
-    const updatedSlots = [...timeSlots, newSlot];
-    
-    // Update the time slots for the selected day
-    setTimeSlots(updatedSlots);
-    
-    // Update the weekly schedule
-    setWeeklySchedule(prev => ({
-      ...prev,
-      [selectedDay]: updatedSlots
-    }));
+    const isSelected = weeklySchedule[day].some(slot => slot.startTime === time);
+    return isSelected;
   };
 
-  const handleRemoveTimeSlot = (index: number) => {
-    const updatedSlots = timeSlots.filter((_, i) => i !== index);
+  const handleBlockDate = (dateToToggle: Date) => {
+    console.log('Toggling blocked date:', format(dateToToggle, 'yyyy-MM-dd'));
     
-    // Update the time slots for the selected day
-    setTimeSlots(updatedSlots);
-    
-    // Update the weekly schedule
-    setWeeklySchedule(prev => ({
-      ...prev,
-      [selectedDay]: updatedSlots
-    }));
-  };
-
-  const handleBlockDate = (date: Date) => {
-    // Toggle date selection
-    const isAlreadyBlocked = blockedDates.some(
-      blockedDate => blockedDate.toDateString() === date.toDateString()
-    );
-    
-    if (isAlreadyBlocked) {
-      setBlockedDates(blockedDates.filter(
-        blockedDate => blockedDate.toDateString() !== date.toDateString()
-      ));
-    } else {
-      setBlockedDates([...blockedDates, date]);
-    }
+    setBlockedDates(prevDates => {
+      // Check if this date is already blocked
+      const dateIndex = prevDates.findIndex(d => 
+        format(d, 'yyyy-MM-dd') === format(dateToToggle, 'yyyy-MM-dd')
+      );
+      
+      if (dateIndex >= 0) {
+        // Remove date from blocked dates
+        console.log('Removing date from blocked dates');
+        return [
+          ...prevDates.slice(0, dateIndex),
+          ...prevDates.slice(dateIndex + 1)
+        ];
+      } else {
+        // Add date to blocked dates
+        console.log('Adding date to blocked dates');
+        return [...prevDates, dateToToggle];
+      }
+    });
   };
 
   const handleSaveAvailability = async () => {
-    if (!user) return;
+    if (!user) {
+      toast.error('You must be logged in to save availability settings');
+      return;
+    }
     
     setSaving(true);
+    setError(null);
+    
     try {
+      console.log('Saving availability settings:', {
+        weeklySchedule,
+        blockedDates: blockedDates.map(d => format(d, 'yyyy-MM-dd'))
+      });
+      
       // Convert weekly schedule to the format expected by the API
       const formattedSlots = Object.entries(weeklySchedule).flatMap(([day, slots]: [string, TimeSlot[]]) => 
         slots.map((slot: TimeSlot, index: number) => ({
           id: `slot_${day}_${index}`,
           doctorId: user.uid,
-          dayOfWeek: parseInt(day),
+          dayOfWeek: parseInt(day) as 0 | 1 | 2 | 3 | 4 | 5 | 6,
           startTime: slot.startTime,
           endTime: slot.endTime,
           isAvailable: true,
@@ -183,16 +198,22 @@ export default function DoctorAvailabilityPage() {
       );
       
       // Save to the API
-      await mockSetDoctorAvailability({
+      const result = await mockSetDoctorAvailability({
         doctorId: user.uid,
         slots: formattedSlots,
         blockedDates: formattedBlockedDates
       });
       
-      toast.success('Availability settings saved successfully');
+      if (result.success) {
+        toast.success('Availability settings saved successfully');
+        console.log('Availability saved successfully');
+      } else {
+        throw new Error('Failed to save availability');
+      }
     } catch (err) {
       console.error('Error saving availability:', err);
       toast.error('Failed to save availability settings');
+      setError('There was a problem saving your availability settings. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -203,90 +224,81 @@ export default function DoctorAvailabilityPage() {
     return days[day];
   };
 
-  // Determine if a time slot is already selected for the current day
-  const isTimeSlotSelected = (time: string): boolean => {
-    return timeSlots.some(slot => slot.startTime === time);
-  };
-
   return (
     <main className="bg-gray-50 dark:bg-gray-900 py-6 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Manage Availability</h1>
-          <ApiModeIndicator />
+          <div className="flex items-center gap-2">
+            <Link href="/doctor/dashboard">
+              <Button 
+                variant="secondary" 
+                label="Back to Dashboard" 
+                pageName="DoctorAvailabilityPage"
+              >
+                Back to Dashboard
+              </Button>
+            </Link>
+            <ApiModeIndicator />
+          </div>
         </div>
         
         {loading ? (
           <div className="flex justify-center py-12">
             <Spinner size="lg" />
           </div>
+        ) : error ? (
+          <Card className="p-6">
+            <div className="text-red-500">{error}</div>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             {/* Weekly Schedule Section */}
             <Card className="md:col-span-8 p-6">
               <h2 className="text-xl font-semibold mb-4">Weekly Schedule</h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-4">
-                Set your recurring weekly availability to let patients know when you're generally available.
+              <p className="text-gray-600 dark:text-gray-300 mb-6">
+                Set your recurring weekly availability to let patients know when you&apos;re generally available.
+                Click on time slots to toggle them as available or unavailable.
               </p>
               
-              {/* Day selector tabs */}
-              <div className="flex flex-wrap border-b border-gray-200 mb-4">
-                {[1, 2, 3, 4, 5].map((day) => (
-                  <button
-                    key={day}
-                    onClick={() => handleDaySelection(day)}
-                    className={`py-2 px-4 text-sm font-medium ${
-                      selectedDay === day
-                        ? 'text-blue-600 border-b-2 border-blue-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    {getDayName(day)}
-                  </button>
-                ))}
-              </div>
-              
-              <div className="mb-6">
-                <h3 className="font-medium mb-2">Available Time Slots for {getDayName(selectedDay)}</h3>
-                
-                {timeSlots.length === 0 ? (
-                  <p className="text-gray-500 italic mb-4">No time slots set for this day.</p>
-                ) : (
-                  <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                    {timeSlots.map((slot, index) => (
-                      <div 
-                        key={index} 
-                        className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-2 rounded"
-                      >
-                        <span>{slot.startTime} - {slot.endTime}</span>
-                        <button 
-                          onClick={() => handleRemoveTimeSlot(index)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          &times;
-                        </button>
-                      </div>
+              {/* Weekly Schedule Grid */}
+              <div className="mb-6 overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-gray-800">
+                      <th className="py-2 px-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Time</th>
+                      {[1, 2, 3, 4, 5].map((day) => (
+                        <th key={day} className="py-2 px-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {getDayName(day)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableTimes.map(time => (
+                      <tr key={time} className="border-t border-gray-200 dark:border-gray-700">
+                        <td className="py-2 px-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                          {time}
+                        </td>
+                        {[1, 2, 3, 4, 5].map((day) => (
+                          <td key={day} className="py-2 px-3 text-center">
+                            <button
+                              onClick={() => toggleTimeSlot(day, time)}
+                              className={`w-full py-1 px-2 text-sm rounded-md transition-colors ${
+                                isTimeSlotSelected(day, time)
+                                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                              }`}
+                              aria-label={`Toggle ${time} on ${getDayName(day)}`}
+                            >
+                              {isTimeSlotSelected(day, time) ? 'Available' : 'Unavailable'}
+                            </button>
+                          </td>
+                        ))}
+                      </tr>
                     ))}
-                  </div>
-                )}
-                
-                <h3 className="font-medium mt-4 mb-2">Add New Time Slot</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 mb-4">
-                  {availableTimes.map(time => (
-                    <button
-                      key={time}
-                      onClick={() => handleAddTimeSlot(time)}
-                      disabled={isTimeSlotSelected(time)}
-                      className={`py-1 px-2 text-sm rounded-md ${
-                        isTimeSlotSelected(time)
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-blue-50 hover:bg-blue-100 text-blue-700'
-                      }`}
-                    >
-                      {time}
-                    </button>
-                  ))}
-                </div>
+                  </tbody>
+                </table>
               </div>
             </Card>
             
@@ -294,7 +306,7 @@ export default function DoctorAvailabilityPage() {
             <Card className="md:col-span-4 p-6">
               <h2 className="text-xl font-semibold mb-4">Block Specific Dates</h2>
               <p className="text-gray-600 dark:text-gray-300 mb-4">
-                Select dates when you're unavailable regardless of your weekly schedule.
+                Select dates when you&apos;re unavailable regardless of your weekly schedule.
               </p>
               
               <div className="mb-4">
@@ -306,6 +318,26 @@ export default function DoctorAvailabilityPage() {
                   required
                 />
               </div>
+              
+              {blockedDates.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="font-medium mb-2">Blocked Dates:</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {blockedDates.map((date, index) => (
+                      <div key={index} className="bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 py-1 px-3 rounded-full text-sm flex items-center">
+                        {format(date, 'MMM d, yyyy')}
+                        <button 
+                          onClick={() => handleBlockDate(date)}
+                          className="ml-2 text-red-500 hover:text-red-700"
+                          aria-label={`Remove blocked date ${format(date, 'MMM d, yyyy')}`}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
             
             {/* Save Button */}
