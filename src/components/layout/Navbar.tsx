@@ -44,6 +44,7 @@ const Navbar: React.FC = () => {
     if (userProfile.userType === UserType.PATIENT) {
       return (
         <>
+          <Link href="/patient/dashboard" className="hover:text-primary font-medium transition-colors">Dashboard</Link>
           <Link href="/main/find-doctors" className="hover:text-primary font-medium transition-colors">Find Doctors</Link>
           <Link href="/patient/appointments" className="hover:text-primary font-medium transition-colors">My Appointments</Link>
           <Link href="/patient/profile" className="hover:text-primary font-medium transition-colors">Profile</Link>
@@ -53,9 +54,18 @@ const Navbar: React.FC = () => {
     if (userProfile.userType === UserType.DOCTOR) {
       return (
         <>
+          <Link href="/doctor/dashboard" className="hover:text-primary font-medium transition-colors">Dashboard</Link>
           <Link href="/doctor/profile" className="hover:text-primary font-medium transition-colors">Profile</Link>
           <Link href="/doctor/availability" className="hover:text-primary font-medium transition-colors">Availability</Link>
           <Link href="/main/notifications" className="hover:text-primary font-medium transition-colors">Notifications</Link>
+        </>
+      );
+    }
+    if (userProfile.userType === UserType.ADMIN) {
+      return (
+        <>
+          <Link href="/admin/dashboard" className="hover:text-primary font-medium transition-colors">Dashboard</Link>
+          <Link href="/admin/lists" className="hover:text-primary font-medium transition-colors">User Lists</Link>
         </>
       );
     }

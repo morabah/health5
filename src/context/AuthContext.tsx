@@ -6,6 +6,7 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useRef,
   ReactNode
 } from "react";
 import type { UserProfile } from "../types/user";
@@ -33,11 +34,36 @@ const AuthContext = createContext<AuthContextState | undefined>(undefined);
 /**
  * AuthProvider manages global mock authentication state for the app.
  * Wrap your app in this provider to enable useAuth().
+ * Implements session timeout: logs out user after 30 minutes of inactivity.
  */
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<any | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Simulate logout (must be declared before resetTimeout for closure safety)
+  const logout = useCallback(() => {
+    logInfo("Mock logout called");
+    setUser(null);
+    setUserProfile(null);
+    setLoading(false);
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+      timeoutIdRef.current = null;
+    }
+  }, []);
+
+  // Session timeout: reset timer on user activity
+  const resetTimeout = useCallback(() => {
+    if (timeoutIdRef.current) clearTimeout(timeoutIdRef.current);
+    // 30 min inactivity
+    timeoutIdRef.current = setTimeout(() => {
+      logInfo("Session timeout: Logging out due to inactivity");
+      logout();
+    }, 30 * 60 * 1000);
+    logInfo("Session timeout reset");
+  }, [logout]);
 
   // Simulate async mock login
   const login = useCallback((role: "patient" | "doctor") => {
@@ -53,16 +79,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       setLoading(false);
       logInfo("Mock login completed", { role });
-    }, 300);
-  }, []);
+      resetTimeout(); // Ensure session timer starts on login
+    }, 500);
+  }, [resetTimeout]);
 
-  // Simulate logout
-  const logout = useCallback(() => {
-    logInfo("Mock logout called");
-    setUser(null);
-    setUserProfile(null);
-    setLoading(false);
-  }, []);
+  useEffect(() => {
+    if (!user) return;
+    // Events that indicate user activity
+    const events = ["mousemove", "keydown", "mousedown", "touchstart", "scroll"];
+    events.forEach((event) => window.addEventListener(event, resetTimeout));
+    resetTimeout();
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, resetTimeout));
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
+      }
+    };
+  }, [user, resetTimeout]);
 
   // Simulate initial auth check delay
   useEffect(() => {

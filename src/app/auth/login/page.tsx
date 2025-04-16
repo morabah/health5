@@ -4,11 +4,13 @@ import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const { login, loading } = useAuth();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -31,6 +33,34 @@ export default function LoginPage() {
         <div className="mt-6 flex flex-col gap-2 text-center">
           <Link href="/auth/forgot-password" className="text-blue-600 dark:text-blue-400 hover:underline">Forgot password?</Link>
           <Link href="/auth/register" className="text-blue-600 dark:text-blue-400 hover:underline">Don't have an account? Register</Link>
+        </div>
+        <div className="mt-8">
+          <div className="flex flex-col gap-3">
+            <Button
+              type="button"
+              className="w-full bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => login("admin" as any)}
+              disabled={loading}
+            >
+              Log in as Admin
+            </Button>
+            <Button
+              type="button"
+              className="w-full bg-green-600 text-white hover:bg-green-700"
+              onClick={() => login("patient")}
+              disabled={loading}
+            >
+              Log in as Patient
+            </Button>
+            <Button
+              type="button"
+              className="w-full bg-purple-600 text-white hover:bg-purple-700"
+              onClick={() => login("doctor")}
+              disabled={loading}
+            >
+              Log in as Doctor
+            </Button>
+          </div>
         </div>
       </Card>
     </main>

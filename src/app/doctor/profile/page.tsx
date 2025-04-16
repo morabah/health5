@@ -4,8 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
-import { db } from "@/lib/firebaseClient";
-import { doc, getDoc } from "firebase/firestore";
+import { loadDoctorProfile } from '@/data/loadDoctorProfile';
 
 interface DoctorProfile {
   id: string;
@@ -27,16 +26,11 @@ export default function DoctorProfilePage() {
       setLoading(true);
       setError(null);
       try {
-        // For static mock, use a fixed ID or fetch from auth context if available
-        const ref = doc(db, "mockDoctorProfiles", "mockDoctorId");
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          setProfile({ id: snap.id, ...snap.data() } as DoctorProfile);
-        } else {
-          setProfile(null);
-        }
+        const data = await loadDoctorProfile();
+        setProfile(data);
       } catch (err) {
-        setError("Failed to load profile.");
+        setError('Failed to load profile.');
+        setProfile(null);
       } finally {
         setLoading(false);
       }
@@ -51,7 +45,7 @@ export default function DoctorProfilePage() {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Profile Details</h2>
           <Button asChild>
-            <Link href="/doctor">Back to Dashboard</Link>
+            <a href="/doctor/dashboard">Back to Dashboard</a>
           </Button>
         </div>
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}

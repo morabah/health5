@@ -1,24 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebaseClient";
+import { loadPatientAppointmentsFull, Appointment } from "@/data/loadPatientAppointmentsFull";
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { logValidation } from "@/lib/logger";
-
-interface Appointment {
-  id: string;
-  doctorName: string;
-  specialty: string;
-  date: string; // ISO
-  time: string;
-  status: "upcoming" | "past" | "cancelled";
-  type: "In-person" | "Video";
-  reason?: string;
-  notes?: string;
-}
 
 type TabKey = "upcoming" | "past" | "cancelled";
 
@@ -34,12 +21,9 @@ export default function PatientAppointmentsPage() {
 
   useEffect(() => {
     async function fetchAppointments() {
-      if (!db) return;
       setLoading(true);
       try {
-        const apptRef = collection(db, "mockPatientAppointments");
-        const snapshot = await getDocs(apptRef);
-        const appts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Appointment[];
+        const appts = await loadPatientAppointmentsFull();
         setAppointments(appts);
       } catch {
         setAppointments([]);
@@ -87,7 +71,12 @@ export default function PatientAppointmentsPage() {
   return (
     <div className="min-h-screen bg-background text-foreground py-8 px-4 md:px-12 lg:px-32">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6">My Appointments</h1>
+        <div className="w-full flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">My Appointments</h1>
+          <Button asChild>
+            <a href="/patient/dashboard">Back to Dashboard</a>
+          </Button>
+        </div>
         <div className="flex gap-4 mb-6">
           {(["upcoming", "past", "cancelled"] as TabKey[]).map((key) => (
             <button

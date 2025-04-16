@@ -4,8 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
-import { db } from "@/lib/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
+import { loadDoctorForms } from '@/data/loadDoctorForms';
 
 interface FormSubmission {
   id: string;
@@ -25,11 +24,10 @@ export default function DoctorFormsPage() {
       setLoading(true);
       setError(null);
       try {
-        const snapshot = await getDocs(collection(db, "mockDoctorForms"));
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FormSubmission[];
+        const items = await loadDoctorForms();
         setForms(items);
       } catch (err) {
-        setError("Failed to load forms.");
+        setError('Failed to load forms.');
       } finally {
         setLoading(false);
       }
@@ -44,7 +42,7 @@ export default function DoctorFormsPage() {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Submitted Forms</h2>
           <Button asChild>
-            <Link href="/doctor">Back to Dashboard</Link>
+            <a href="/doctor/dashboard">Back to Dashboard</a>
           </Button>
         </div>
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}

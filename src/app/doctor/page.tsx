@@ -4,8 +4,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Spinner from "@/components/ui/Spinner";
 import Link from "next/link";
-import { db } from "@/lib/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
+import { loadDoctorAppointments } from '@/data/loadDoctorAppointments';
 
 interface Appointment {
   id: string;
@@ -24,11 +23,10 @@ export default function DoctorPage() {
       setLoading(true);
       setError(null);
       try {
-        const snapshot = await getDocs(collection(db, "mockDoctorAppointments"));
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Appointment[];
+        const items = await loadDoctorAppointments();
         setAppointments(items);
       } catch (err) {
-        setError("Failed to load appointments.");
+        setError('Failed to load appointments.');
       } finally {
         setLoading(false);
       }

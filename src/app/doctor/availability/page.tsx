@@ -4,8 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
-import { db } from "@/lib/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
+import { loadDoctorAvailability } from '@/data/loadDoctorAvailability';
 
 interface AvailabilitySlot {
   id: string;
@@ -24,11 +23,10 @@ export default function DoctorAvailabilityPage() {
       setLoading(true);
       setError(null);
       try {
-        const snapshot = await getDocs(collection(db, "mockDoctorAvailability"));
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as AvailabilitySlot[];
+        const items = await loadDoctorAvailability();
         setSlots(items);
       } catch (err) {
-        setError("Failed to load availability slots.");
+        setError('Failed to load availability slots.');
       } finally {
         setLoading(false);
       }
