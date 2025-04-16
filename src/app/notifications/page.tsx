@@ -7,6 +7,7 @@ import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
 import { mockGetNotifications, mockMarkNotificationRead } from "@/lib/mockApiService";
 import { useAuth } from "@/context/AuthContext";
+import { formatDate } from "@/utils/dateUtils";
 
 interface Notification {
   id: string;
@@ -80,11 +81,17 @@ export default function NotificationsPage() {
               <li key={n.id} className={`py-4 flex flex-col gap-1 ${n.isRead ? 'opacity-60' : ''}`}>
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-gray-900 dark:text-gray-100">{n.type}</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{n.createdAt}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{formatDate(n.createdAt)}</span>
                 </div>
                 <div className="text-gray-700 dark:text-gray-300">{n.message}</div>
                 {!n.isRead && (
-                  <Button size="sm" onClick={() => handleMarkRead(n.id)} disabled={markingId === n.id}>
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleMarkRead(n.id)} 
+                    disabled={markingId === n.id}
+                    label={markingId === n.id ? "Marking..." : "Mark as Read"}
+                    pageName="NotificationsPage"
+                  >
                     {markingId === n.id ? "Marking..." : "Mark as Read"}
                   </Button>
                 )}

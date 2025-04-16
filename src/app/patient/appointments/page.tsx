@@ -12,39 +12,9 @@ import EmptyState from "@/components/ui/EmptyState";
 import { FaCalendarCheck, FaCalendarTimes, FaHistory, FaFilter, FaSearch, 
   FaUserMd, FaNotesMedical, FaClock, FaMapMarkerAlt, FaExclamationTriangle } from "react-icons/fa";
 import Link from "next/link";
+import { formatDate } from "@/utils/dateUtils";
 
 type FilterType = "all" | "upcoming" | "past" | "cancelled";
-
-function formatAppointmentDate(dateInput: any): string {
-  if (!dateInput) return 'No date available';
-  
-  try {
-    // Check if the date is already a Date object
-    if (dateInput instanceof Date) {
-      return dateInput.toLocaleDateString();
-    }
-    
-    // Check if the date is a Firestore Timestamp with toDate method
-    if (typeof dateInput === 'object' && dateInput !== null && typeof dateInput.toDate === 'function') {
-      return dateInput.toDate().toLocaleDateString();
-    }
-    
-    // Check if it's a string ISO date format
-    if (typeof dateInput === 'string') {
-      return new Date(dateInput).toLocaleDateString();
-    }
-    
-    // Handle timestamp as number
-    if (typeof dateInput === 'number') {
-      return new Date(dateInput).toLocaleDateString();
-    }
-    
-    return String(dateInput);
-  } catch (error) {
-    console.error('Error formatting date:', error, dateInput);
-    return 'Invalid date';
-  }
-}
 
 export default function PatientAppointmentsPage() {
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -337,7 +307,7 @@ export default function PatientAppointmentsPage() {
                       <div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">Date & Time</div>
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {formatAppointmentDate(appt.appointmentDate)} 
+                          {formatDate(appt.appointmentDate)} 
                           <span className="ml-1">{appt.startTime}</span>
                         </div>
                       </div>
@@ -457,7 +427,7 @@ export default function PatientAppointmentsPage() {
                       <div className="space-y-1">
                         <div className="text-sm text-gray-500 dark:text-gray-400">Date</div>
                         <div className="font-medium text-gray-900 dark:text-white">
-                          {formatAppointmentDate(appt.appointmentDate)}
+                          {formatDate(appt.appointmentDate)}
                         </div>
                       </div>
                       <div className="space-y-1">

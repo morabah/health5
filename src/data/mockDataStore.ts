@@ -166,7 +166,60 @@ export let appointmentsStore: Appointment[] = [
   },
 ];
 /** Notifications store */
-export let notificationsStore: Notification[] = [...mockNotificationsArray];
+export let notificationsStore: Notification[] = [
+  ...mockNotificationsArray,
+  // Add more recent test notifications for patient_001 (who is logged in for testing)
+  {
+    id: 'notif_test_001',
+    userId: 'user_patient_001',
+    title: 'Welcome to Health Appointments',
+    message: 'Thank you for joining our platform. We\'re here to help you manage your healthcare needs effectively.',
+    isRead: false,
+    createdAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
+    type: 'system',
+    relatedId: null
+  },
+  {
+    id: 'notif_test_002',
+    userId: 'user_patient_001',
+    title: 'Doctor Available',
+    message: 'Dr. Emily Carter has new appointment slots available for next week.',
+    isRead: false,
+    createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
+    type: 'availability',
+    relatedId: 'user_doctor_003'
+  },
+  {
+    id: 'notif_test_003',
+    userId: 'user_patient_001',
+    title: 'Appointment Change',
+    message: 'Your appointment with Dr. Michael Kim has been rescheduled to May 12, 2025 at 2:00 PM.',
+    isRead: false,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+    type: 'appointment',
+    relatedId: 'appt_006'
+  },
+  {
+    id: 'notif_test_004',
+    userId: 'user_patient_001',
+    title: 'Health Tip',
+    message: 'Remember to stay hydrated and get at least 30 minutes of exercise daily for optimal heart health.',
+    isRead: false,
+    createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000), // 8 hours ago
+    type: 'system',
+    relatedId: null
+  },
+  {
+    id: 'notif_test_005',
+    userId: 'user_patient_001',
+    title: 'Insurance Update Required',
+    message: 'Please update your insurance information before your next appointment.',
+    isRead: true,
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    type: 'form',
+    relatedId: 'form_002'
+  }
+];
 
 /**
  * Returns a copy of the users store.

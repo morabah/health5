@@ -2,7 +2,7 @@
  * Simulates backend API calls by operating on in-memory mock data stores.
  * Use for all mock CRUD and query operations in dev/test mode.
  */
-import { logInfo } from "@/lib/logger";
+import { logInfo, logError } from "@/lib/logger";
 import type { UserProfile } from "@/types/user";
 import type { DoctorProfile, DoctorVerificationData } from "@/types/doctor";
 import type { PatientProfile } from "@/types/patient";
@@ -222,23 +222,33 @@ export async function mockCancelAppointment({ appointmentId, reason, userId }: {
 }
 
 /**
- * Gets an appointment by its ID.
- * @param appointmentId The unique identifier of the appointment
+ * Retrieves an appointment by its ID
+ * @param appointmentId - The ID of the appointment to retrieve
  * @returns The appointment object if found, null otherwise
  */
 export async function mockGetAppointmentById(appointmentId: string): Promise<Appointment | null> {
   logInfo("[mockApiService] mockGetAppointmentById", { appointmentId });
+  
+  // Simulate network delay
   await simulateDelay();
   
-  const appointments = dataStore.getAppointmentsStore();
-  const appointment = appointments.find(a => a.id === appointmentId);
-  
-  if (!appointment) {
-    logInfo("[mockApiService] Appointment not found", { appointmentId });
-    return null;
+  try {
+    // Get appointments from the data store
+    const appointments = dataStore.getAppointmentsStore();
+    
+    // Find the appointment with the matching ID
+    const appointment = appointments.find(appt => appt.id === appointmentId);
+    
+    if (appointment) {
+      return appointment;
+    } else {
+      logInfo("[mockApiService] Appointment not found", { appointmentId });
+      return null;
+    }
+  } catch (error) {
+    logError("[mockApiService] Error getting appointment by ID", { appointmentId, error });
+    throw error;
   }
-  
-  return appointment;
 }
 
 /**
@@ -434,7 +444,22 @@ export async function mockUpdateUserProfile(userId: string, updates: Partial<Use
 export async function mockGetNotifications(userId: string): Promise<Notification[]> {
   logInfo("[mockApiService] mockGetNotifications", { userId });
   await simulateDelay();
-  return dataStore.getNotificationsStore().filter(n => n.userId === userId);
+  
+  // Ensure we're filtering by the user's ID to get only their notifications
+  const userNotifications = dataStore.getNotificationsStore().filter(n => n.userId === userId);
+  
+  // Log the count for debugging
+  logInfo("[mockApiService] Found notifications", { 
+    count: userNotifications.length, 
+    userId: userId 
+  });
+  
+  // Sort notifications by date (newest first)
+  return userNotifications.sort((a, b) => {
+    const dateA = a.createdAt instanceof Date ? a.createdAt : a.createdAt.toDate();
+    const dateB = b.createdAt instanceof Date ? b.createdAt : b.createdAt.toDate();
+    return dateB.getTime() - dateA.getTime();
+  });
 }
 
 /**

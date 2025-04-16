@@ -65,8 +65,8 @@ const ReschedulePage = () => {
       // Update the appointment with the new date
       await mockUpdateAppointment({
         ...appointment,
-        date: newDate,
-        lastUpdated: new Date()
+        appointmentDate: newDate,
+        updatedAt: new Date()
       });
 
       toast.success('Appointment rescheduled successfully');
