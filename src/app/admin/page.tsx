@@ -5,7 +5,7 @@ import Button from "@/components/ui/Button";
 import Spinner from "@/components/ui/Spinner";
 import Link from "next/link";
 import { db } from "@/lib/firebaseClient";
-import { collection, getDocs } from "firebase/firestore";
+import { loadAdminDashboardData } from '@/data/adminLoaders';
 
 interface UserVerification {
   id: string;
@@ -24,9 +24,8 @@ export default function AdminPage() {
       setLoading(true);
       setError(null);
       try {
-        const snapshot = await getDocs(collection(db, "mockUserVerifications"));
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as UserVerification[];
-        setVerifications(items);
+        const data = await loadAdminDashboardData();
+        setVerifications(data);
       } catch (err) {
         setError("Failed to load verifications.");
       } finally {

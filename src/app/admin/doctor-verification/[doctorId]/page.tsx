@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { collection, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { logValidation } from "@/lib/logger";
+import { loadDoctorVerificationData } from '@/data/doctorLoaders';
 
 interface Doctor {
   id: string;
@@ -35,26 +35,19 @@ export default function DoctorVerificationPage() {
   const router = useRouter();
 
   useEffect(() => {
-    async function fetchDoctor() {
-      if (!db || !doctorId) return;
+    async function fetchVerification() {
       setLoading(true);
       try {
-        const docRef = doc(collection(db, "mockDoctors"), doctorId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const docData = docSnap.data() as Doctor;
-          setDoctor({ id: doctorId, ...docData });
-          setStatus(docData.status || "pending");
-        } else {
-          setDoctor(null);
-        }
+        const data = await loadDoctorVerificationData(doctorId);
+        setDoctor(data);
+        setStatus(data.status || "pending");
       } catch {
         setDoctor(null);
       } finally {
         setLoading(false);
       }
     }
-    fetchDoctor();
+    fetchVerification();
   }, [doctorId]);
 
   useEffect(() => {

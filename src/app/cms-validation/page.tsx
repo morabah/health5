@@ -13,7 +13,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { appEventBus, LogPayload, ValidationPayload, setEventInLocalStorage, syncApiModeChange } from '@/lib/eventBus';
 import { logInfo, logError, logWarn, logValidation, logApiModeChange } from '@/lib/logger';
-import '@/lib/firestoreFetchAll'; // Attach getAllFirestoreData to window for DataSyncPanel
 import { VerificationButtons } from './VerificationButtons';
 import { DataSyncPanel } from './DataSyncPanel';
 import { UserProfileSchema, PatientProfileSchema, DoctorProfileSchema, DoctorAvailabilitySlotSchema, VerificationDocumentSchema, AppointmentSchema, NotificationSchema } from '@/lib/zodSchemas';
@@ -87,7 +86,7 @@ const CmsValidationPage: React.FC = () => {
     
     // 1. Direct event bus emission
     appEventBus.emit('log_event', {
-      level: 'INFO',
+      level: 'INFO' as LogLevel, // Use enum value if available
       message: `Test INFO log (direct emit) ${testId}`,
       timestamp: new Date().toISOString(),
       data: { source: 'cms_test_button', method: 'direct_emit', testId }
@@ -101,7 +100,7 @@ const CmsValidationPage: React.FC = () => {
     // 3. LocalStorage approach
     try {
       const localStoragePayload = {
-        level: 'INFO',
+        level: 'INFO' as LogLevel,
         message: `Test INFO log (localStorage) ${testId}`,
         timestamp: new Date().toISOString(),
         data: { source: 'cms_test_button', method: 'localStorage', testId }
@@ -156,7 +155,7 @@ const CmsValidationPage: React.FC = () => {
     setTimeout(() => {
       console.log('[CMS] Emitting test event after subscription');
       appEventBus.emit('log_event', {
-        level: 'INFO',
+        level: 'INFO' as LogLevel,
         message: 'Event bus subscription test',
         timestamp: new Date().toISOString(),
         data: { type: 'subscription_test' }
@@ -218,11 +217,11 @@ const CmsValidationPage: React.FC = () => {
    */
   const handleModeSwitch = useCallback((mode: 'mock' | 'live') => {
     setApiModeState(mode);
-    setApiMode(mode);
+    setApiMode(mode as ApiMode);
     
     // Use direct event bus emission for reliability
     appEventBus.emit('log_event', {
-      level: 'INFO',
+      level: 'INFO' as LogLevel,
       message: `CMS: Switched API Mode state to -> ${mode}`,
       timestamp: new Date().toISOString(),
       data: { previousMode: apiMode, newMode: mode }
@@ -259,7 +258,7 @@ const CmsValidationPage: React.FC = () => {
       
       // Add a "force sync" event
       const syncEvent: LogPayload = {
-        level: 'INFO',
+        level: 'INFO' as LogLevel,
         message: 'Force sync with localStorage test',
         timestamp: new Date().toISOString(),
         data: { source: 'cms_page', triggered_by: 'force_sync_button' }
@@ -663,7 +662,7 @@ const CmsValidationPage: React.FC = () => {
   function deepDiff(obj1: any, obj2: any) {
     // Returns { added, removed, changed } per collection
     const result: Record<string, { added: any[]; removed: any[]; changed: { id: string, diffs: any }[] }> = {};
-    for (const key of new Set([...Object.keys(obj1), ...Object.keys(obj2)])) {
+    for (const key of Array.from(new Set([...Object.keys(obj1), ...Object.keys(obj2)]))) {
       const arr1 = obj1[key] || [];
       const arr2 = obj2[key] || [];
       const byId = (arr: any[]) => Object.fromEntries(arr.map((d: any) => [d.id || d.userId, d]));
@@ -673,7 +672,7 @@ const CmsValidationPage: React.FC = () => {
       const added = [];
       const removed = [];
       const changed = [];
-      for (const id of allIds) {
+      for (const id of Array.from(allIds)) {
         if (!(id in m1)) added.push(m2[id]);
         else if (!(id in m2)) removed.push(m1[id]);
         else {
@@ -1983,7 +1982,7 @@ const CmsValidationPage: React.FC = () => {
           onClick={() => {
             // Log that we're navigating to the home page
             appEventBus.emit('log_event', {
-              level: 'INFO',
+              level: 'INFO' as LogLevel,
               message: 'Navigation from CMS to Home page',
               timestamp: new Date().toISOString(),
               data: { from: 'CMS', to: 'Home' }
@@ -1995,7 +1994,7 @@ const CmsValidationPage: React.FC = () => {
         <button
           onClick={() => {
             appEventBus.emit('log_event', {
-              level: 'INFO',
+              level: 'INFO' as LogLevel,
               message: 'Manual log test from CMS page',
               timestamp: new Date().toISOString(),
               data: { type: 'manual_test' }
@@ -2065,21 +2064,76 @@ const CmsValidationPage: React.FC = () => {
         />
       )}
       {syncAllModal && (
-        <SyncAllModal
-          syncing={syncAllModal.syncing}
-          progress={syncAllModal.progress}
-          total={syncAllModal.total}
-          results={syncAllModal.results}
-          onClose={() => setSyncAllModal(null)}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh]">
+            <button onClick={() => setSyncAllModal(null)} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close">&times;</button>
+            <h4 className="text-lg font-semibold mb-4">Syncing All Collections</h4>
+            <div className="flex items-center justify-center p-6">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+              <span className="ml-3 text-blue-700">Syncing...</span>
+            </div>
+            <div className="mb-4 flex justify-between items-center">
+              <div>
+                <span className="font-semibold">Progress:</span> 
+                <span className="text-blue-700">{syncAllModal.progress}/{syncAllModal.total}</span>
+              </div>
+              <button
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded"
+                onClick={() => setSyncAllModal(null)}
+              >
+                Cancel
+              </button>
+            </div>
+            <ul className="space-y-3 text-sm">
+              {syncAllModal.results.map(r => (
+                <li key={r.collection} className={`p-3 rounded ${r.status === 'success' ? 'border border-green-200 bg-green-50 dark:bg-green-900/10 dark:border-green-900/30' : 'border border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900/30'}`}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold">{r.collection}:</span> 
+                    <span className={`text-${r.status === 'success' ? 'green' : 'red'}-700 dark:text-${r.status === 'success' ? 'green' : 'red'}-400 text-xs px-2 py-0.5 bg-${r.status === 'success' ? 'green' : 'red'}-100 dark:bg-${r.status === 'success' ? 'green' : 'red'}-900/30 rounded-full`}>{r.status}</span>
+                  </div>
+                  <div className="mt-2 ml-4 text-xs overflow-x-auto">
+                    <p>{r.message}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
       {backupModal && (
-        <BackupModal
-          restoring={backupModal.restoring}
-          error={backupModal.error}
-          onClose={() => setBackupModal(null)}
-          onRestore={handleRestoreFromBackup}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg max-w-2xl w-full p-6 relative overflow-y-auto max-h-[90vh]">
+            <button onClick={() => setBackupModal(null)} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close">&times;</button>
+            <h4 className="text-lg font-semibold mb-4">Backup/Restore Firestore Data</h4>
+            {backupModal.restoring && (
+              <div className="flex items-center justify-center p-6">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+                <span className="ml-3 text-blue-700">Restoring...</span>
+              </div>
+            )}
+            {backupModal.error && (
+              <div className="text-red-700 mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded">{backupModal.error}</div>
+            )}
+            <div className="mb-4 flex justify-between items-center">
+              <div>
+                <span className="font-semibold">Status:</span> 
+                <span className="text-blue-700">{backupModal.restoring ? 'Restoring...' : 'Ready'}</span>
+              </div>
+              <button
+                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded"
+                onClick={handleBackup}
+              >
+                Backup
+              </button>
+              <input
+                type="file"
+                accept=".json"
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                onChange={(e) => handleRestoreFromBackup(e.target.files[0])}
+              />
+            </div>
+          </div>
+        </div>
       )}
       {/* Add buttons to dashboard */}
       <div className="flex flex-wrap gap-2 items-center mb-4">

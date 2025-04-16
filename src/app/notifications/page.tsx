@@ -41,9 +41,9 @@ export default function NotificationsPage() {
       <Card className="w-full max-w-2xl mb-8 p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Recent Notifications</h2>
-          <Button asChild>
-            <Link href="/">Back to Home</Link>
-          </Button>
+          <Link href="/">
+            <Button label="Back to Home" pageName="Notifications" />
+          </Link>
         </div>
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}
         {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
@@ -60,9 +60,12 @@ export default function NotificationsPage() {
                 </div>
                 <div className="text-gray-700 dark:text-gray-300">{n.message}</div>
                 <div>
-                  <Button size="sm" onClick={() => console.log('Mark as read', n.id)} disabled={n.read}>
-                    Mark as Read
-                  </Button>
+                  <Button
+                    label="Mark as Read"
+                    pageName="Notifications"
+                    onClick={() => console.log('Mark as read', n.id)}
+                    disabled={n.read}
+                  />
                 </div>
               </li>
             ))}

@@ -1,5 +1,7 @@
+// This file is deprecated. Use patientLoaders.ts for all patient appointment data loading.
+throw new Error("loadPatientAppointmentsFull.ts is deprecated. Use patientLoaders.ts instead.");
+
 import { db } from "@/lib/firebaseClient";
-import { collection, getDocs, query, where } from "firebase/firestore";
 
 export interface Appointment {
   id: string;

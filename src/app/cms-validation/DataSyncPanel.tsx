@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { appEventBus } from "@/lib/eventBus";
 import { logInfo, logError } from "@/lib/logger";
+import "@/lib/firestoreFetchAll";
+import { Disclosure } from '@headlessui/react';
 
 // Utility to deeply compare two objects/arrays
 export function deepDiff(a: any, b: any): { added: any[]; removed: any[]; changed: any[] } {
@@ -76,6 +78,27 @@ interface DataSyncPanelProps {
   apiMode?: string;
 }
 
+function CollectionDiff({ title, items, color, renderItem }: { title: string; items: any[]; color: string; renderItem: (item: any, idx: number) => React.ReactNode }) {
+  if (!items.length) return null;
+  return (
+    <Disclosure defaultOpen={false} as="div" className="mb-2">
+      {({ open }) => (
+        <>
+          <Disclosure.Button className={`w-full flex justify-between items-center px-3 py-2 rounded bg-${color}-50 dark:bg-${color}-900/30 border border-${color}-300 text-${color}-800 dark:text-${color}-100 font-semibold text-xs shadow-sm hover:bg-${color}-100 focus:outline-none mb-1`}>
+            <span>{title} <span className="font-mono">({items.length})</span></span>
+            <span className="ml-2">{open ? '▼' : '▶'}</span>
+          </Disclosure.Button>
+          <Disclosure.Panel className="pl-3 pr-1 py-1">
+            <ul className="space-y-1 text-xs">
+              {items.map(renderItem)}
+            </ul>
+          </Disclosure.Panel>
+        </>
+      )}
+    </Disclosure>
+  );
+}
+
 export const DataSyncPanel: React.FC<DataSyncPanelProps> = ({ selectedCollection, selectedCollectionData, apiMode }) => {
   const [diff, setDiff] = useState<{ added: any[]; removed: any[]; changed: any[] } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -84,6 +107,7 @@ export const DataSyncPanel: React.FC<DataSyncPanelProps> = ({ selectedCollection
   const [onlineData, setOnlineData] = useState<any | null>(null);
 
   const handleCompare = async () => {
+    console.log('[CMS DEBUG] handleCompare triggered');
     setLoading(true);
     setError(null);
     try {
@@ -92,6 +116,9 @@ export const DataSyncPanel: React.FC<DataSyncPanelProps> = ({ selectedCollection
         fetchOfflineData(),
         fetchOnlineData(),
       ]);
+      if (!offline || typeof offline !== 'object' || !online || typeof online !== 'object') {
+        throw new Error('Offline or online data is missing or not an object');
+      }
       setOnlineData(online);
       const d = deepDiff(offline, online);
       setDiff(d);
@@ -143,7 +170,11 @@ export const DataSyncPanel: React.FC<DataSyncPanelProps> = ({ selectedCollection
         {loading ? "Comparing..." : "Compare Offline & Online Data"}
       </button>
       {lastCompared && <p className="text-xs text-gray-500 mb-2">Last compared: {lastCompared}</p>}
-      {error && <p className="text-xs text-red-600 mb-2">Error: {error}</p>}
+      {error && (
+        <div className="text-red-600 text-xs mt-2">
+          Error: {error}
+        </div>
+      )}
       <div className="flex flex-col md:flex-row gap-4 mt-4">
         <div className="flex-1">
           <h4 className="text-xs font-semibold mb-1">
@@ -175,10 +206,55 @@ export const DataSyncPanel: React.FC<DataSyncPanelProps> = ({ selectedCollection
             <p className="text-green-600">Offline and online data are in sync.</p>
           ) : (
             <>
-              {diff.added.length > 0 && <p className="text-emerald-700">Added: {diff.added.length}</p>}
-              {diff.removed.length > 0 && <p className="text-red-700">Removed: {diff.removed.length}</p>}
-              {diff.changed.length > 0 && <p className="text-orange-700">Changed: {diff.changed.length}</p>}
-              <div className="flex gap-2 mt-3">
+              <div className="flex gap-4 mb-2">
+                {diff.added.length > 0 && <span className="text-emerald-700">Added: {diff.added.length}</span>}
+                {diff.removed.length > 0 && <span className="text-red-700">Removed: {diff.removed.length}</span>}
+                {diff.changed.length > 0 && <span className="text-orange-700">Changed: {diff.changed.length}</span>}
+              </div>
+              {/* Per-collection grouped diff display */}
+              <div className="space-y-2">
+                <CollectionDiff
+                  title="Added"
+                  items={diff.added}
+                  color="emerald"
+                  renderItem={(item, idx) => (
+                    <li key={idx} className="bg-emerald-100 dark:bg-emerald-900/40 rounded p-2 overflow-x-auto">
+                      <pre className="whitespace-pre-wrap break-all">{JSON.stringify(item, null, 2)}</pre>
+                    </li>
+                  )}
+                />
+                <CollectionDiff
+                  title="Removed"
+                  items={diff.removed}
+                  color="red"
+                  renderItem={(item, idx) => (
+                    <li key={idx} className="bg-red-100 dark:bg-red-900/40 rounded p-2 overflow-x-auto">
+                      <pre className="whitespace-pre-wrap break-all">{JSON.stringify(item, null, 2)}</pre>
+                    </li>
+                  )}
+                />
+                <CollectionDiff
+                  title="Changed"
+                  items={diff.changed}
+                  color="orange"
+                  renderItem={(item, idx) => (
+                    <li key={idx} className="bg-orange-100 dark:bg-orange-900/40 rounded p-2 overflow-x-auto">
+                      <div className="font-mono text-xs mb-1">ID: {item.id}</div>
+                      <div className="flex flex-col md:flex-row gap-2">
+                        <div className="flex-1">
+                          <div className="font-semibold text-xs mb-0.5">From (Online):</div>
+                          <pre className="whitespace-pre-wrap break-all bg-orange-50 dark:bg-orange-950/40 rounded p-1">{JSON.stringify(item.from, null, 2)}</pre>
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-semibold text-xs mb-0.5">To (Offline):</div>
+                          <pre className="whitespace-pre-wrap break-all bg-orange-50 dark:bg-orange-950/40 rounded p-1">{JSON.stringify(item.to, null, 2)}</pre>
+                        </div>
+                      </div>
+                    </li>
+                  )}
+                />
+              </div>
+              <div className="flex gap-2 mt-4">
                 <button
                   className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium shadow"
                   onClick={handleSyncOfflineToOnline}
