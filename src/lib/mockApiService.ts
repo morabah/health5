@@ -12,6 +12,7 @@ import { getUsersStore, getDoctorProfilesStore, getPatientProfilesStore, getAppo
 import { UserType, VerificationStatus, AppointmentStatus } from "@/types/enums";
 import { v4 as uuidv4 } from "uuid";
 import { Timestamp } from "firebase/firestore";
+import { getDateObject } from "@/utils/dateUtils";
 
 // Mutable stores (for direct mutation)
 import * as dataStore from "@/data/mockDataStore";
@@ -113,7 +114,16 @@ export async function mockGetMyAppointments(userId: string, userType: UserType, 
     (userType === UserType.PATIENT ? a.patientId === userId : a.doctorId === userId)
   );
   if (statusFilter) appts = appts.filter(a => statusFilter.includes(a.status));
-  if (dateFilter) appts = appts.filter(a => a.appointmentDate.toDate().toDateString() === dateFilter.toDateString());
+  if (dateFilter) {
+    appts = appts.filter(a => {
+      if (a.appointmentDate instanceof Date) {
+        return a.appointmentDate.toDateString() === dateFilter.toDateString();
+      } else if (typeof a.appointmentDate.toDate === 'function') {
+        return a.appointmentDate.toDate().toDateString() === dateFilter.toDateString();
+      }
+      return false;
+    });
+  }
   return appts;
 }
 
@@ -318,15 +328,76 @@ export const mockDoctorUser: UserProfile = {
   emailVerified: true,
   phoneVerified: true,
   createdAt: Timestamp.now(),
-  updatedAt: Timestamp.now(),
-  specialty: 'Cardiology',
-  licenseNumber: 'DOC-12345',
+  updatedAt: Timestamp.now()
 };
 
 // Add stub exports for missing admin mocks
 export async function mockGetDoctorVerifications() {
   // TODO: Replace with real mock data
   return [];
+}
+
+/**
+ * Gets verification data for a specific doctor
+ * @param doctorId The doctor's user ID
+ * @returns Doctor verification data including documents and status
+ */
+export async function mockGetDoctorVerificationData(doctorId: string) {
+  logInfo("[mockApiService] mockGetDoctorVerificationData", { doctorId });
+  await simulateDelay();
+  
+  const doctor = dataStore.getDoctorProfilesStore().find(d => d.userId === doctorId);
+  if (!doctor) throw new Error("not-found");
+  
+  const user = dataStore.getUsersStore().find(u => u.id === doctorId);
+  
+  // Omit the timestamp fields that are causing issues
+  return {
+    doctorId,
+    name: `${user?.firstName || ''} ${user?.lastName || ''}`,
+    specialty: doctor.specialty,
+    licenseNumber: doctor.licenseNumber,
+    verificationStatus: doctor.verificationStatus,
+    verificationNotes: doctor.verificationNotes || '',
+    licenseDocumentUrl: doctor.licenseDocumentUrl,
+    certificateUrl: doctor.certificateUrl
+  };
+}
+
+/**
+ * Updates the verification status of a doctor
+ * @param doctorId The doctor's user ID
+ * @param status The new verification status
+ * @param notes Admin notes about the verification decision
+ * @returns Success indicator
+ */
+export async function mockSetDoctorVerificationStatus({ doctorId, status, notes }: { doctorId: string; status: VerificationStatus; notes: string }): Promise<{ success: boolean }> {
+  logInfo("[mockApiService] mockSetDoctorVerificationStatus", { doctorId, status, notes });
+  await simulateDelay();
+  
+  // Find the doctor profile in the doctor profiles store
+  const doctorProfilesStore = dataStore.getDoctorProfilesStore();
+  const docIndex = doctorProfilesStore.findIndex(d => d.userId === doctorId);
+  if (docIndex === -1) throw new Error("not-found");
+  
+  // Update the doctor profile
+  doctorProfilesStore[docIndex].verificationStatus = status;
+  doctorProfilesStore[docIndex].verificationNotes = notes;
+  doctorProfilesStore[docIndex].updatedAt = Timestamp.now();
+  
+  // Add notification to the doctor about their verification status change
+  dataStore.getNotificationsStore().push({
+    id: uuidv4(),
+    userId: doctorId,
+    title: "Verification Status Updated",
+    message: `Your verification status has been updated to ${status}.`,
+    isRead: false,
+    createdAt: Timestamp.now(),
+    type: "verification_update",
+    relatedId: doctorId,
+  });
+  
+  return { success: true };
 }
 
 export async function mockGetSystemLogs() {

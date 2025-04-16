@@ -12,6 +12,8 @@ import { loadPatientProfile, loadPatientAppointments } from "@/data/patientLoade
 import { logInfo, logWarn, logError, logValidation } from "@/lib/logger";
 import { FaUserMd, FaCalendarCheck, FaUser, FaNotesMedical } from "react-icons/fa";
 import Link from "next/link";
+import { getApiMode, onApiModeChange } from "@/config/apiConfig";
+import { formatDate, isPastDate } from "@/utils/dateUtils";
 
 const MOCK_PATIENT_ID = "mockPatient123";
 
@@ -25,13 +27,42 @@ export default function PatientDashboardPage() {
   }>({ userProfile: null, patientProfile: null });
   const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
   const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
+  const [apiMode, setApiMode] = useState<'live' | 'mock'>(getApiMode());
+  const [hasMounted, setHasMounted] = useState(false);
 
+  // Add effect to handle component mounting
   useEffect(() => {
+    setHasMounted(true);
+    return () => setHasMounted(false);
+  }, []);
+
+  // Add effect to listen for API mode changes
+  useEffect(() => {
+    if (!hasMounted) return;
+
+    console.log('[PatientDashboard] Setting up API mode listener, current mode:', apiMode);
+    
+    // Register for API mode changes
+    const unsubscribe = onApiModeChange((newMode) => {
+      console.log('[PatientDashboard] API mode changed:', newMode);
+      setApiMode(newMode);
+    });
+    
+    // Cleanup listener on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, [hasMounted]);
+
+  // Update main data fetch to depend on apiMode
+  useEffect(() => {
+    if (!hasMounted) return;
+    
     async function fetchDashboardData() {
       setLoadingProfile(true);
       setLoadingAppointments(true);
       setError(null);
-      logInfo("[3.10] PatientDashboard: Fetching profile and appointments", { testId: "3.10" });
+      logInfo("[PatientDashboard] Fetching profile and appointments", { apiMode });
       const perfStart = performance.now();
 
       try {
@@ -41,23 +72,36 @@ export default function PatientDashboardPage() {
           throw new Error("Profile not found for mockPatient123");
         }
         setProfileData(profile);
-        const upcoming = appointments.filter((appt) => appt.status === AppointmentStatus.PENDING || appt.status === AppointmentStatus.CONFIRMED);
-        const past = appointments.filter((appt) => appt.status === AppointmentStatus.COMPLETED || appt.status === AppointmentStatus.CANCELLED);
+        
+        // Filter appointments using the isPastDate utility
+        const upcoming = appointments.filter((appt) => 
+          appt.status === AppointmentStatus.PENDING || 
+          appt.status === AppointmentStatus.CONFIRMED ||
+          !isPastDate(appt.appointmentDate)
+        );
+        
+        const past = appointments.filter((appt) => 
+          appt.status === AppointmentStatus.COMPLETED || 
+          appt.status === AppointmentStatus.CANCELLED ||
+          isPastDate(appt.appointmentDate)
+        );
+        
         setUpcomingAppointments(upcoming);
         setPastAppointments(past);
       } catch (err) {
-        logError("[3.10] Failed to fetch patient profile", { error: err });
+        logError("[PatientDashboard] Failed to fetch patient profile", { error: err });
         setError("Failed to load dashboard data.");
       } finally {
         setLoadingProfile(false);
         setLoadingAppointments(false);
         const perfEnd = performance.now();
-        logInfo("[3.10] PatientDashboard: Data fetch complete", { durationMs: perfEnd - perfStart });
+        logInfo("[PatientDashboard] Data fetch complete", { durationMs: perfEnd - perfStart, apiMode });
         logValidation("3.10", "success");
       }
     }
+    
     fetchDashboardData();
-  }, []);
+  }, [apiMode, hasMounted]); // Add apiMode as a dependency
 
   useEffect(() => {
     async function fetchData() {
@@ -68,8 +112,19 @@ export default function PatientDashboardPage() {
         console.log('[DEBUG] userId:', userId);
         const appts = await loadPatientAppointments(userId!);
         console.log('[DEBUG] fetched upcoming appointments:', appts);
-        setUpcomingAppointments(appts.filter(a => a.status === AppointmentStatus.PENDING || a.status === AppointmentStatus.CONFIRMED));
-        setPastAppointments(appts.filter(a => a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CANCELLED));
+        
+        // Filter appointments using the isPastDate utility
+        setUpcomingAppointments(appts.filter(a => 
+          a.status === AppointmentStatus.PENDING || 
+          a.status === AppointmentStatus.CONFIRMED ||
+          !isPastDate(a.appointmentDate)
+        ));
+        
+        setPastAppointments(appts.filter(a => 
+          a.status === AppointmentStatus.COMPLETED || 
+          a.status === AppointmentStatus.CANCELLED ||
+          isPastDate(a.appointmentDate)
+        ));
       } catch (err) {
         setError('Failed to load appointments.');
         setUpcomingAppointments([]);
@@ -115,15 +170,49 @@ export default function PatientDashboardPage() {
       </h1>
       <p className="text-gray-600 dark:text-gray-300 mb-6">This is your patient dashboard.</p>
 
+      {/* API Mode Indicator - Add this to show current mode */}
+      <div className={`inline-flex items-center px-3 py-1 mb-4 rounded-full border text-xs font-semibold ${apiMode === 'live' ? 'bg-green-100 text-green-800 border-green-300' : 'bg-blue-100 text-blue-800 border-blue-300'}`}
+           aria-label={`Current data source: ${apiMode === 'live' ? 'Live (Firestore)' : 'Mock (Offline Data)'}`}>
+        <span className="mr-2">Data Source:</span> {apiMode === 'live' ? 'Live (Firestore)' : 'Mock (Offline Data)'}
+      </div>
+
       {/* Quick Links */}
       <div className="w-full flex flex-wrap gap-4 justify-end mb-6">
-        <Button asChild variant="secondary"><Link href="/patient/profile">Profile</Link></Button>
-        <Button asChild variant="secondary"><Link href="/notifications">Notifications</Link></Button>
-        <Button asChild variant="secondary"><Link href="/auth/logout">Logout</Link></Button>
+        <Button 
+          asChild 
+          variant="secondary" 
+          label="Profile" 
+          pageName="PatientDashboard"
+        >
+          <Link href="/patient/profile">Profile</Link>
+        </Button>
+        <Button 
+          asChild 
+          variant="secondary" 
+          label="Notifications" 
+          pageName="PatientDashboard"
+        >
+          <Link href="/notifications">Notifications</Link>
+        </Button>
+        <Button 
+          asChild 
+          variant="secondary" 
+          label="Logout" 
+          pageName="PatientDashboard"
+        >
+          <Link href="/auth/logout">Logout</Link>
+        </Button>
       </div>
       {/* Book Appointment CTA */}
       <div className="w-full flex justify-end mb-4">
-        <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"><Link href="/find">Book Appointment</Link></Button>
+        <Button 
+          asChild 
+          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold" 
+          label="Book Appointment" 
+          pageName="PatientDashboard"
+        >
+          <Link href="/find">Book Appointment</Link>
+        </Button>
       </div>
 
       {/* Stats Section */}
@@ -142,13 +231,20 @@ export default function PatientDashboardPage() {
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-bold dark:text-white">Upcoming Appointments</h2>
           <Link href="/patient/appointments">
-            <Button size="sm" variant="secondary">View All</Button>
+            <Button 
+              size="sm" 
+              variant="secondary" 
+              label="View All" 
+              pageName="PatientDashboard"
+            >
+              View All
+            </Button>
           </Link>
         </div>
         {loadingAppointments ? (
           <div className="flex justify-center py-6"><Spinner /></div>
         ) : error ? (
-          <Alert type="error">{error}</Alert>
+          <Alert variant="error" message={error} isVisible={true} />
         ) : upcomingAppointments.length === 0 ? (
           <div className="text-gray-500 dark:text-gray-400">No upcoming appointments found.</div>
         ) : (
@@ -159,7 +255,9 @@ export default function PatientDashboardPage() {
                   <div className="font-bold text-lg mb-1 text-blue-900 dark:text-white">
                     <Link href={appt.doctorId ? `/main/doctor-profile/${appt.doctorId}` : '#'} className="hover:underline" aria-label={`View profile for ${appt.doctorName || 'Doctor'}`}>{appt.doctorName || 'Doctor'}</Link>
                   </div>
-                  <div className="text-gray-700 dark:text-gray-300 mb-1">{appt.appointmentDate ? appt.appointmentDate.toDate().toLocaleString() : ''}</div>
+                  <div className="text-gray-700 dark:text-gray-300 mb-1">
+                    {formatDate(appt.appointmentDate)}
+                  </div>
                   <div className="mb-1">
                     <span className={
                       appt.status === AppointmentStatus.PENDING ? "inline-block px-2 py-1 text-xs rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
@@ -172,9 +270,37 @@ export default function PatientDashboardPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 md:mt-0">
-                  <Button asChild size="sm" aria-label={`View appointment details`}><Link href={`/patient/appointments/${appt.id}`}>View</Link></Button>
-                  {appt.status === AppointmentStatus.PENDING && <Button size="sm" variant="secondary" disabled>Cancel</Button>}
-                  {appt.status === AppointmentStatus.PENDING && <Button size="sm" variant="secondary" disabled>Reschedule</Button>}
+                  <Button 
+                    asChild 
+                    size="sm" 
+                    aria-label={`View appointment details`}
+                    label="View" 
+                    pageName="PatientDashboard"
+                  >
+                    <Link href={`/patient/appointments/${appt.id}`}>View</Link>
+                  </Button>
+                  {appt.status === AppointmentStatus.PENDING && 
+                    <Button 
+                      size="sm" 
+                      variant="secondary" 
+                      disabled 
+                      label="Cancel" 
+                      pageName="PatientDashboard"
+                    >
+                      Cancel
+                    </Button>
+                  }
+                  {appt.status === AppointmentStatus.PENDING && 
+                    <Button 
+                      size="sm" 
+                      variant="secondary" 
+                      disabled 
+                      label="Reschedule" 
+                      pageName="PatientDashboard"
+                    >
+                      Reschedule
+                    </Button>
+                  }
                 </div>
               </div>
             ))}
@@ -185,10 +311,10 @@ export default function PatientDashboardPage() {
       {/* Past Appointments Section */}
       <div className="mb-8">
         <h2 className="text-xl font-bold dark:text-white mb-2">Past Appointments</h2>
-        {!loadingAppointments && !error && upcomingAppointments.length === 0 && (
+        {!loadingAppointments && !error && pastAppointments.length === 0 && (
           <div className="text-gray-500 dark:text-gray-400">No past appointments found.</div>
         )}
-        {!loadingAppointments && upcomingAppointments.length > 0 && (
+        {!loadingAppointments && pastAppointments.length > 0 && (
           <div className="grid grid-cols-1 gap-4">
             {pastAppointments.map((appt) => (
               <div key={appt.id} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200 dark:border-gray-700">
@@ -196,7 +322,9 @@ export default function PatientDashboardPage() {
                   <div className="font-bold text-lg mb-1 text-blue-900 dark:text-white">
                     <Link href={appt.doctorId ? `/main/doctor-profile/${appt.doctorId}` : '#'} className="hover:underline" aria-label={`View profile for ${appt.doctorName || 'Doctor'}`}>{appt.doctorName || 'Doctor'}</Link>
                   </div>
-                  <div className="text-gray-700 dark:text-gray-300 mb-1">{appt.appointmentDate ? appt.appointmentDate.toDate().toLocaleString() : ''}</div>
+                  <div className="text-gray-700 dark:text-gray-300 mb-1">
+                    {formatDate(appt.appointmentDate)}
+                  </div>
                   <div className="mb-1">
                     <span className={
                       appt.status === AppointmentStatus.COMPLETED ? "inline-block px-2 py-1 text-xs rounded bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200" :
@@ -208,7 +336,15 @@ export default function PatientDashboardPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 md:mt-0">
-                  <Button asChild size="sm" aria-label={`View appointment details`}><Link href={`/patient/appointments/${appt.id}`}>View</Link></Button>
+                  <Button 
+                    asChild 
+                    size="sm" 
+                    aria-label={`View appointment details`}
+                    label="View" 
+                    pageName="PatientDashboard"
+                  >
+                    <Link href={`/patient/appointments/${appt.id}`}>View</Link>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -221,7 +357,14 @@ export default function PatientDashboardPage() {
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-bold dark:text-white">Profile Info</h2>
           <Link href="/patient/profile">
-            <Button size="sm" variant="secondary">Edit Profile</Button>
+            <Button 
+              size="sm" 
+              variant="secondary"
+              label="Edit Profile" 
+              pageName="PatientDashboard"
+            >
+              Edit Profile
+            </Button>
           </Link>
         </div>
         <Card className="dark:bg-gray-800">
@@ -239,7 +382,9 @@ export default function PatientDashboardPage() {
               </div>
               <div>
                 <div className="text-sm text-gray-500 dark:text-gray-300">DOB</div>
-                <div className="font-semibold dark:text-white">{profileData.patientProfile.dateOfBirth && profileData.patientProfile.dateOfBirth.toDate().toLocaleDateString()}</div>
+                <div className="font-semibold dark:text-white">
+                  {formatDate(profileData.patientProfile.dateOfBirth, { year: 'numeric', month: 'long', day: 'numeric' })}
+                </div>
               </div>
               <div>
                 <div className="text-sm text-gray-500 dark:text-gray-300">Gender</div>
@@ -255,10 +400,30 @@ export default function PatientDashboardPage() {
               </div>
             </div>
           ) : (
-            <Alert type="error">Profile data not found.</Alert>
+            <Alert variant="error" message="Profile data not found." isVisible={true} />
           )}
         </Card>
       </div>
+
+      {/* Action buttons */}
+      <div className="mt-6 flex flex-wrap gap-2">
+        <Button
+          variant="secondary"
+          label="View Medical Records"
+          pageName="PatientDashboard"
+        >
+          View Medical Records
+        </Button>
+      </div>
+
+      {/* Alert message for errors */}
+      {error && (
+        <Alert
+          variant="error"
+          message={error}
+          isVisible={true}
+        />
+      )}
     </div>
   );
 }

@@ -40,7 +40,7 @@ export default function DoctorPage() {
       <Card className="w-full max-w-3xl mb-8 p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">My Appointments</h2>
-          <Button asChild>
+          <Button asChild label="Set Availability" pageName="DoctorDashboard">
             <Link href="/doctor/availability">Set Availability</Link>
           </Button>
         </div>
@@ -67,7 +67,12 @@ export default function DoctorPage() {
                     <td className="px-4 py-2">{appt.date}</td>
                     <td className="px-4 py-2">{appt.status}</td>
                     <td className="px-4 py-2">
-                      <Button size="sm" onClick={() => console.log('View appt', appt.id)}>
+                      <Button 
+                        size="sm" 
+                        onClick={() => console.log('View appt', appt.id)}
+                        label="View"
+                        pageName="DoctorDashboard"
+                      >
                         View
                       </Button>
                     </td>
@@ -79,10 +84,10 @@ export default function DoctorPage() {
         )}
       </Card>
       <div className="w-full max-w-3xl flex justify-end gap-2">
-        <Button asChild variant="secondary">
+        <Button asChild variant="secondary" label="Profile" pageName="DoctorDashboard">
           <Link href="/doctor/profile">Profile</Link>
         </Button>
-        <Button asChild variant="secondary">
+        <Button asChild variant="secondary" label="Forms" pageName="DoctorDashboard">
           <Link href="/doctor/forms">Forms</Link>
         </Button>
       </div>

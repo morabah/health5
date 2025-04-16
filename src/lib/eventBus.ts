@@ -97,45 +97,34 @@ export function setEventInLocalStorage(payload: LogPayload): void {
  */
 export function syncApiModeChange(newMode: string, source: string, preventAutoSync: boolean = false): void {
   if (typeof window === 'undefined') return;
-  
+
   try {
-    console.log(`[EVENT_BUS] Syncing API mode change to ${newMode} from ${source}`);
+    // Get current value
+    const oldMode = localStorage.getItem('apiMode') || 'mock';
     
-    // Get old mode first for logging
-    const oldMode = localStorage.getItem('apiMode') || 'unknown';
+    // Only update if the mode is actually changing
+    if (newMode === oldMode && source !== 'force_refresh') {
+      console.log(`[EVENT_BUS] API mode already set to ${newMode}, not updating`);
+      return;
+    }
     
-    // Force clear any browser cache by removing first
-    localStorage.removeItem('apiMode');
+    console.log(`[EVENT_BUS] Syncing API mode: ${oldMode} -> ${newMode} (source: ${source})`);
     
-    // Set the new mode
+    // Update localStorage
     localStorage.setItem('apiMode', newMode);
     
-    // Create an API mode change record
-    const timestamp = Date.now().toString();
-    const record = {
-      oldMode,
-      newMode,
-      source,
-      timestamp,
-      preventAutoSync
-    };
+    // Generate consistent timestamp for all channels
+    const timestamp = new Date().toISOString();
     
-    // Store API mode change data in multiple formats to ensure it's detected
-    localStorage.setItem('apiMode_force_update', timestamp);
-    localStorage.setItem('apiMode_last_change', `${newMode}_${timestamp}`);
-    localStorage.setItem('api_mode_record', JSON.stringify(record));
-    localStorage.setItem('apiMode_sync_event', `${newMode}_${timestamp}_${preventAutoSync ? '1' : '0'}`);
-    
-    // Use sessionStorage as backup
-    sessionStorage.setItem('apiMode_broadcast', `${newMode}_${timestamp}`);
-    
-    // 1. Emit event on the primary event bus (for same-tab listeners)
+    // Create the common event payload
     const payload: ApiModePayload = {
       oldMode,
       newMode,
       source,
-      timestamp: new Date().toISOString()
+      timestamp
     };
+    
+    // 1. Emit on the application event bus
     appEventBus.emit('api_mode_change', payload);
     
     // 2. Try to use BroadcastChannel for modern cross-tab communication
@@ -245,6 +234,47 @@ if (typeof window !== 'undefined') {
             // Emit an API mode change event ON THE EVENT BUS
             const payload: ApiModePayload = {
               oldMode: 'unknown', // We don't know the old mode in this cross-tab context
+              newMode,
+              source: 'storage_event',
+              timestamp: new Date().toISOString()
+            };
+            appEventBus.emit('api_mode_change', payload);
+          } else {
+            const reason = preventAutoSync ? 'prevented by flag' : 'too old or invalid timestamp';
+            console.log(`[EVENT_BUS] API mode change ignored: ${reason}`);
+          }
+        }
+      } catch (e) {
+        console.error('[EVENT_BUS] Error handling API mode sync event:', e);
+      }
+    }
+  });
+}
+
+// Listen for localStorage API mode changes across tabs
+export function setupApiModeSyncListener() {
+  if (typeof window === 'undefined') return;
+  
+  console.log('[EVENT_BUS] Setting up API mode sync listener');
+  
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'apiMode') {
+      try {
+        const newMode = event.newValue;
+        
+        if (newMode === 'live' || newMode === 'mock') {
+          console.log(`[EVENT_BUS] Storage event detected API mode change: ${newMode}`);
+          
+          // Create a timestamp for this event
+          const timestamp = new Date().toISOString();
+          
+          // Check if we should prevent auto-sync
+          const preventAutoSync = false; // Default to allowing sync
+          
+          // Only emit on event bus, as the localStorage is already updated
+          if (!preventAutoSync) {
+            const payload: ApiModePayload = {
+              oldMode: event.oldValue || 'unknown',
               newMode,
               source: 'storage_event',
               timestamp: new Date().toISOString()
