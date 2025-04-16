@@ -12,6 +12,37 @@ import EmptyState from "@/components/ui/EmptyState";
 
 type TabKey = "upcoming" | "past" | "cancelled";
 
+function formatAppointmentDate(dateInput: any): string {
+  if (!dateInput) return 'No date available';
+  
+  try {
+    // Check if the date is already a Date object
+    if (dateInput instanceof Date) {
+      return dateInput.toLocaleDateString();
+    }
+    
+    // Check if the date is a Firestore Timestamp with toDate method
+    if (typeof dateInput === 'object' && dateInput !== null && typeof dateInput.toDate === 'function') {
+      return dateInput.toDate().toLocaleDateString();
+    }
+    
+    // Check if it's a string ISO date format
+    if (typeof dateInput === 'string') {
+      return new Date(dateInput).toLocaleDateString();
+    }
+    
+    // Handle timestamp as number
+    if (typeof dateInput === 'number') {
+      return new Date(dateInput).toLocaleDateString();
+    }
+    
+    return String(dateInput);
+  } catch (error) {
+    console.error('Error formatting date:', error, dateInput);
+    return 'Invalid date';
+  }
+}
+
 export default function PatientAppointmentsPage() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +137,11 @@ export default function PatientAppointmentsPage() {
       <div className="max-w-4xl mx-auto">
         <div className="w-full flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">My Appointments</h1>
-          <Button asChild>
+          <Button 
+            asChild
+            label="Back to Dashboard"
+            pageName="PatientAppointments"
+          >
             <a href="/patient/dashboard">Back to Dashboard</a>
           </Button>
         </div>
@@ -132,7 +167,15 @@ export default function PatientAppointmentsPage() {
                 title="No appointments found."
                 message="You have no appointments in this category. Book an appointment to get started."
                 className="my-8"
-                action={<Button onClick={() => router.push('/find')}>Book Appointment</Button>}
+                action={
+                  <Button 
+                    onClick={() => router.push('/find')}
+                    label="Book Appointment"
+                    pageName="PatientAppointments"
+                  >
+                    Book Appointment
+                  </Button>
+                }
               />
             )}
             {filteredAppointments.length > 0 && filteredAppointments.map((appt) => (
@@ -140,12 +183,30 @@ export default function PatientAppointmentsPage() {
                 <div className="flex flex-col gap-1">
                   <div className="font-semibold text-lg">{appt.doctorName}</div>
                   <div className="text-sm text-muted-foreground">{appt.specialty}</div>
-                  <div className="text-xs text-muted-foreground">{new Date(appt.date).toLocaleDateString()} {appt.time}</div>
-                  <div className="text-xs text-muted-foreground">Type: {appt.type}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatAppointmentDate(appt.appointmentDate)} {appt.startTime}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Type: {appt.appointmentType || 'In-person'}</div>
                   <div className="flex gap-2 mt-2">
-                    <Button variant="secondary" onClick={() => setDetailId(appt.id)} size="sm">View Details</Button>
+                    <Button 
+                      variant="secondary" 
+                      onClick={() => setDetailId(appt.id)} 
+                      size="sm"
+                      label="View Details"
+                      pageName="PatientAppointments"
+                    >
+                      View Details
+                    </Button>
                     {tab === "upcoming" && (
-                      <Button variant="destructive" onClick={() => handleCancel(appt.id)} size="sm">Cancel</Button>
+                      <Button 
+                        variant="danger" 
+                        onClick={() => handleCancel(appt.id)} 
+                        size="sm"
+                        label="Cancel"
+                        pageName="PatientAppointments"
+                      >
+                        Cancel
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -169,8 +230,8 @@ export default function PatientAppointmentsPage() {
                   <div className="flex flex-col gap-2">
                     <div><span className="font-medium">Doctor:</span> {appt.doctorName}</div>
                     <div><span className="font-medium">Specialty:</span> {appt.specialty}</div>
-                    <div><span className="font-medium">Date:</span> {new Date(appt.date).toLocaleDateString()} {appt.time}</div>
-                    <div><span className="font-medium">Type:</span> {appt.type}</div>
+                    <div><span className="font-medium">Date:</span> {formatAppointmentDate(appt.appointmentDate)} {appt.startTime}</div>
+                    <div><span className="font-medium">Type:</span> {appt.appointmentType || 'In-person'}</div>
                     <div><span className="font-medium">Reason:</span> {appt.reason || "-"}</div>
                     <div><span className="font-medium">Notes:</span> {appt.notes || "-"}</div>
                     <div><span className="font-medium">Status:</span> {getStatusLabel(appt.status)}</div>
@@ -195,8 +256,24 @@ export default function PatientAppointmentsPage() {
                 onChange={(e) => setCancelReason(e.target.value)}
               />
               <div className="flex gap-2 mt-2">
-                <Button variant="secondary" onClick={() => setCancellingId(null)} size="sm">Back</Button>
-                <Button variant="destructive" onClick={confirmCancel} size="sm">Confirm Cancel</Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setCancellingId(null)} 
+                  size="sm"
+                  label="Back"
+                  pageName="PatientAppointments"
+                >
+                  Back
+                </Button>
+                <Button 
+                  variant="danger" 
+                  onClick={confirmCancel} 
+                  size="sm"
+                  label="Confirm Cancel"
+                  pageName="PatientAppointments"
+                >
+                  Confirm Cancel
+                </Button>
               </div>
               {cancelSuccess && <div className="text-green-600 mt-2">Appointment cancelled.</div>}
             </div>

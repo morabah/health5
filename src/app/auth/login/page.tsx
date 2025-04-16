@@ -19,11 +19,32 @@ export default function LoginPage() {
     setFeedback("Logging in...");
     try {
       const { user, userProfile } = await mockSignIn(email, password);
-      // Optionally update auth context here if needed
-      setFeedback("Login successful. Redirecting...");
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 900);
+      
+      if (userProfile.userType === UserType.DOCTOR) {
+        await login('doctor');
+        setFeedback("Login successful. Redirecting to doctor dashboard...");
+        setTimeout(() => {
+          window.location.href = "/doctor/dashboard";
+        }, 900);
+      } else if (userProfile.userType === UserType.PATIENT) {
+        await login('patient');
+        setFeedback("Login successful. Redirecting to patient dashboard...");
+        setTimeout(() => {
+          window.location.href = "/patient/dashboard";
+        }, 900);
+      } else if (userProfile.userType === UserType.ADMIN) {
+        await login('admin');
+        setFeedback("Login successful. Redirecting to admin dashboard...");
+        setTimeout(() => {
+          window.location.href = "/admin";
+        }, 900);
+      } else {
+        await login('patient');
+        setFeedback("Login successful. Redirecting...");
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 900);
+      }
     } catch (err: any) {
       setFeedback(err.message === "invalid-credential" ? "Invalid credentials." : "Login failed.");
     }
@@ -36,7 +57,14 @@ export default function LoginPage() {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
           <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-          <Button type="submit" className="w-full">Sign In</Button>
+          <Button 
+            type="submit" 
+            className="w-full"
+            label="Sign In"
+            pageName="Login"
+          >
+            Sign In
+          </Button>
         </form>
         {feedback && <div className="mt-4 text-center text-sm text-blue-600 dark:text-blue-400">{feedback}</div>}
         <div className="mt-6 flex flex-col gap-2 text-center">
@@ -53,6 +81,8 @@ export default function LoginPage() {
                 setPassword("adminpass");
               }}
               disabled={loading}
+              label="Fill Admin Credentials"
+              pageName="Login"
             >
               Fill Admin Credentials
             </Button>
@@ -64,6 +94,8 @@ export default function LoginPage() {
                 setPassword("patientpass");
               }}
               disabled={loading}
+              label="Fill Patient Credentials"
+              pageName="Login"
             >
               Fill Patient Credentials
             </Button>
@@ -75,6 +107,8 @@ export default function LoginPage() {
                 setPassword("doctorpass");
               }}
               disabled={loading}
+              label="Fill Doctor Credentials"
+              pageName="Login"
             >
               Fill Doctor Credentials
             </Button>

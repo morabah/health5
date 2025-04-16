@@ -14,10 +14,12 @@ import { FaUserMd, FaCalendarCheck, FaUser, FaNotesMedical } from "react-icons/f
 import Link from "next/link";
 import { getApiMode, onApiModeChange } from "@/config/apiConfig";
 import { formatDate, isPastDate } from "@/utils/dateUtils";
+import { useAuth } from "@/context/AuthContext";
 
 const MOCK_PATIENT_ID = "mockPatient123";
 
 export default function PatientDashboardPage() {
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export default function PatientDashboardPage() {
     };
   }, [hasMounted]);
 
-  // Update main data fetch to depend on apiMode
+  // Update main data fetch to use authenticated user data if available
   useEffect(() => {
     if (!hasMounted) return;
     
@@ -66,12 +68,42 @@ export default function PatientDashboardPage() {
       const perfStart = performance.now();
 
       try {
-        const profile = await loadPatientProfile(MOCK_PATIENT_ID);
-        const appointments = await loadPatientAppointments(MOCK_PATIENT_ID);
-        if (!profile.userProfile || !profile.patientProfile) {
-          throw new Error("Profile not found for mockPatient123");
+        // Use auth context user if available, otherwise use mock ID
+        const userId = user?.uid || MOCK_PATIENT_ID;
+        console.log("[PatientDashboard] Using user ID:", userId);
+        
+        // If we have a userProfile from auth, use it directly
+        if (userProfile) {
+          console.log("[PatientDashboard] Using authenticated user profile");
+          
+          // Set profile data from auth context
+          setProfileData({
+            userProfile,
+            patientProfile: { 
+              userId: userProfile.id,
+              dateOfBirth: new Date('1990-01-01'), // Default values if not in auth profile
+              gender: 'Other', // Valid enum value
+              bloodType: 'Unknown',
+              medicalHistory: 'None provided'
+            }
+          });
+        } else {
+          // Fall back to loading profile from mock data
+          console.log("[PatientDashboard] Falling back to mock profile data");
+          const profile = await loadPatientProfile(userId);
+          
+          // Handle different response structures
+          const formattedProfile = {
+            userProfile: profile?.userProfile || profile?.user || null,
+            patientProfile: profile?.patientProfile || profile?.profile || null
+          };
+          
+          setProfileData(formattedProfile);
         }
-        setProfileData(profile);
+        
+        // Load appointments for the user
+        const appointments = await loadPatientAppointments(userId);
+        console.log("[PatientDashboard] Loaded appointments:", appointments.length);
         
         // Filter appointments using the isPastDate utility
         const upcoming = appointments.filter((appt) => 
@@ -89,7 +121,7 @@ export default function PatientDashboardPage() {
         setUpcomingAppointments(upcoming);
         setPastAppointments(past);
       } catch (err) {
-        logError("[PatientDashboard] Failed to fetch patient profile", { error: err });
+        logError("[PatientDashboard] Failed to fetch patient data", { error: err });
         setError("Failed to load dashboard data.");
       } finally {
         setLoadingProfile(false);
@@ -100,43 +132,11 @@ export default function PatientDashboardPage() {
       }
     }
     
-    fetchDashboardData();
-  }, [apiMode, hasMounted]); // Add apiMode as a dependency
-
-  useEffect(() => {
-    async function fetchData() {
-      setLoadingAppointments(true);
-      setError(null);
-      try {
-        const userId = profileData.userProfile?.id;
-        console.log('[DEBUG] userId:', userId);
-        const appts = await loadPatientAppointments(userId!);
-        console.log('[DEBUG] fetched upcoming appointments:', appts);
-        
-        // Filter appointments using the isPastDate utility
-        setUpcomingAppointments(appts.filter(a => 
-          a.status === AppointmentStatus.PENDING || 
-          a.status === AppointmentStatus.CONFIRMED ||
-          !isPastDate(a.appointmentDate)
-        ));
-        
-        setPastAppointments(appts.filter(a => 
-          a.status === AppointmentStatus.COMPLETED || 
-          a.status === AppointmentStatus.CANCELLED ||
-          isPastDate(a.appointmentDate)
-        ));
-      } catch (err) {
-        setError('Failed to load appointments.');
-        setUpcomingAppointments([]);
-        setPastAppointments([]);
-      } finally {
-        setLoadingAppointments(false);
-      }
+    // Only fetch data when auth loading is complete
+    if (!authLoading) {
+      fetchDashboardData();
     }
-    if (profileData.userProfile) {
-      fetchData();
-    }
-  }, [profileData.userProfile]);
+  }, [apiMode, hasMounted, user, userProfile, authLoading]);
 
   // UI: Stats Cards
   const stats = [

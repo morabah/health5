@@ -186,6 +186,7 @@ export default function Home() {
   const [doctors, setDoctors] = useState<ExtendedDoctorProfile[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [firebaseInitialized, setFirebaseInitialized] = useState<boolean>(false);
 
   useEffect(() => {
     setHasMounted(true);
@@ -193,6 +194,31 @@ export default function Home() {
     const mode = getApiMode();
     setApiMode(mode === 'live' ? 'live' : 'mock');
   }, []);
+
+  // Effect to initialize/reinitialize Firebase when apiMode changes
+  useEffect(() => {
+    if (!hasMounted) return;
+    
+    async function initializeFirebase() {
+      if (apiMode === 'live') {
+        try {
+          const { initializeFirebaseClient } = await import('@/lib/firebaseClient');
+          const { db } = initializeFirebaseClient(apiMode);
+          console.log('[Home] Firebase initialized for mode:', apiMode, 'DB instance:', !!db);
+          setFirebaseInitialized(!!db);
+        } catch (err) {
+          console.error('[Home] Error initializing Firebase:', err);
+          setFirebaseInitialized(false);
+        }
+      } else {
+        console.log('[Home] Skipping Firebase initialization for mock mode');
+        setFirebaseInitialized(false);
+      }
+    }
+    
+    console.log('[Home] API mode changed to:', apiMode, 'Initializing Firebase...');
+    initializeFirebase();
+  }, [apiMode, hasMounted]);
 
   useEffect(() => {
     if (!hasMounted) return;
@@ -216,7 +242,7 @@ export default function Home() {
     if (!hasMounted) return;
     console.log('[Home] Client-side hydration complete, loading initial data with mode:', apiMode);
     fetchDoctors(apiMode, setDoctors, setLoading, setError);
-  }, [apiMode, hasMounted]);
+  }, [apiMode, hasMounted, firebaseInitialized]); // Add firebaseInitialized as a dependency
 
   useEffect(() => {
     if (!hasMounted) return;

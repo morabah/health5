@@ -543,3 +543,98 @@ export async function mockGetSystemLogs() {
   // TODO: Replace with real mock logs
   return [];
 }
+
+/**
+ * Updates a doctor profile with the provided data
+ * @param profileData The updated doctor profile data
+ * @returns The updated doctor profile
+ */
+export async function mockUpdateDoctorProfile(profileData: any): Promise<any> {
+  console.log('[MOCK API] Updating doctor profile', profileData);
+  
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 800));
+  
+  // Save data to localStorage for persistence in mock environment
+  try {
+    const storedUser = localStorage.getItem('auth_user');
+    const storedProfile = localStorage.getItem('auth_profile');
+    
+    if (storedUser && storedProfile) {
+      const parsedUser = JSON.parse(storedUser);
+      const parsedProfile = JSON.parse(storedProfile);
+      
+      // Check if stored profile is for the same user
+      if (parsedUser.uid === profileData.id || parsedUser.userType === 'doctor') {
+        // Update the stored profile with new data
+        const updatedProfile = {
+          ...parsedProfile,
+          firstName: profileData.name.replace('Dr. ', '').split(' ')[0],
+          lastName: profileData.name.replace('Dr. ', '').split(' ').slice(1).join(' '),
+          email: profileData.email,
+          phone: profileData.phone,
+          specialty: profileData.specialty,
+          location: profileData.location,
+          bio: profileData.bio,
+          updatedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem('auth_profile', JSON.stringify(updatedProfile));
+        console.log('[MOCK API] Profile data persisted to localStorage', updatedProfile);
+      }
+    }
+  } catch (error) {
+    console.error('[MOCK API] Error persisting profile data to localStorage', error);
+  }
+  
+  // In a real implementation, this would update the database
+  return {
+    ...profileData,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Updates a patient profile with the provided data
+ * @param userId The user ID of the patient
+ * @param profileData The updated patient profile data
+ * @returns The updated patient profile
+ */
+export async function mockUpdatePatientProfile(userId: string, profileData: any): Promise<any> {
+  console.log('[MOCK API] Updating patient profile', { userId, profileData });
+  
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 800));
+  
+  // Save data to localStorage for persistence in mock environment
+  try {
+    const storedUser = localStorage.getItem('auth_user');
+    const storedProfile = localStorage.getItem('auth_profile');
+    
+    if (storedUser && storedProfile) {
+      const parsedUser = JSON.parse(storedUser);
+      const parsedProfile = JSON.parse(storedProfile);
+      
+      // Ensure we're updating the right user
+      if (parsedUser.uid === userId || parsedUser.userType === 'patient') {
+        // Update the stored profile with new data
+        const updatedProfile = {
+          ...parsedProfile,
+          ...profileData,
+          updatedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem('auth_profile', JSON.stringify(updatedProfile));
+        console.log('[MOCK API] Patient profile data persisted to localStorage', updatedProfile);
+      }
+    }
+  } catch (error) {
+    console.error('[MOCK API] Error persisting patient profile data to localStorage', error);
+  }
+  
+  // In a real implementation, this would update the database
+  return {
+    ...profileData,
+    updatedAt: new Date().toISOString()
+  };
+}

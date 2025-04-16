@@ -110,7 +110,7 @@ export function syncApiModeChange(newMode: string, source: string, preventAutoSy
     
     console.log(`[EVENT_BUS] Syncing API mode: ${oldMode} -> ${newMode} (source: ${source})`);
     
-    // Update localStorage
+    // Update localStorage - this will trigger a 'storage' event in other tabs
     localStorage.setItem('apiMode', newMode);
     
     // Generate consistent timestamp for all channels
@@ -124,7 +124,7 @@ export function syncApiModeChange(newMode: string, source: string, preventAutoSy
       timestamp
     };
     
-    // 1. Emit on the application event bus
+    // 1. Emit on the application event bus for local components
     appEventBus.emit('api_mode_change', payload);
     
     // 2. Try to use BroadcastChannel for modern cross-tab communication
@@ -265,29 +265,57 @@ export function setupApiModeSyncListener() {
         if (newMode === 'live' || newMode === 'mock') {
           console.log(`[EVENT_BUS] Storage event detected API mode change: ${newMode}`);
           
-          // Create a timestamp for this event
-          const timestamp = new Date().toISOString();
+          // Create payload for the event bus
+          const payload: ApiModePayload = {
+            oldMode: event.oldValue || 'unknown',
+            newMode,
+            source: 'storage_event',
+            timestamp: new Date().toISOString()
+          };
           
-          // Check if we should prevent auto-sync
-          const preventAutoSync = false; // Default to allowing sync
-          
-          // Only emit on event bus, as the localStorage is already updated
-          if (!preventAutoSync) {
-            const payload: ApiModePayload = {
-              oldMode: event.oldValue || 'unknown',
-              newMode,
-              source: 'storage_event',
-              timestamp: new Date().toISOString()
-            };
-            appEventBus.emit('api_mode_change', payload);
-          } else {
-            const reason = preventAutoSync ? 'prevented by flag' : 'too old or invalid timestamp';
-            console.log(`[EVENT_BUS] API mode change ignored: ${reason}`);
-          }
+          // Emit on the event bus for local components to react
+          appEventBus.emit('api_mode_change', payload);
+          console.log('[EVENT_BUS] Emitted api_mode_change event from storage event');
         }
       } catch (e) {
         console.error('[EVENT_BUS] Error handling API mode sync event:', e);
       }
     }
   });
+  
+  // Also initialize BroadcastChannel listener for modern browsers
+  try {
+    const bc = new BroadcastChannel('api_mode_channel');
+    bc.onmessage = (event) => {
+      if (event.data?.type === 'apiModeChange' && 
+          (event.data.mode === 'live' || event.data.mode === 'mock')) {
+        console.log('[EVENT_BUS] Received BroadcastChannel API mode change:', event.data.mode);
+        
+        // Only update localStorage if the value is different (prevents loop)
+        const currentMode = localStorage.getItem('apiMode');
+        if (currentMode !== event.data.mode) {
+          localStorage.setItem('apiMode', event.data.mode);
+        }
+        
+        // Emit on the event bus regardless
+        const payload: ApiModePayload = {
+          oldMode: currentMode || 'unknown',
+          newMode: event.data.mode,
+          source: 'broadcast_channel',
+          timestamp: new Date().toISOString()
+        };
+        
+        appEventBus.emit('api_mode_change', payload);
+      }
+    };
+    
+    console.log('[EVENT_BUS] BroadcastChannel listener initialized');
+  } catch (e) {
+    console.log('[EVENT_BUS] BroadcastChannel not supported, skipping initialization');
+  }
+}
+
+// Auto-setup the API mode sync listener when imported on the client
+if (typeof window !== 'undefined') {
+  setupApiModeSyncListener();
 }

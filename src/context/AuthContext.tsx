@@ -21,6 +21,7 @@ import { mockPatientUser, mockDoctorUser, mockAdminUser } from "../types/mockDat
  * @property role - The current mock user role ('patient', 'doctor', 'admin') or null if not logged in.
  * @property login - Function to simulate login as a patient, doctor, or admin (mock only).
  * @property logout - Function to simulate logout.
+ * @property refreshProfile - Function to reload the user profile from localStorage.
  */
 export interface AuthContextState {
   user: any | null;
@@ -29,6 +30,7 @@ export interface AuthContextState {
   role: 'patient' | 'doctor' | 'admin' | null;
   login: (role: 'patient' | 'doctor' | 'admin') => void;
   logout: () => void;
+  refreshProfile: () => void;
 }
 
 const AuthContext = createContext<AuthContextState | undefined>(undefined);
@@ -48,6 +50,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Simulate logout (must be declared before resetTimeout for closure safety)
   const logout = useCallback(() => {
     logInfo("Mock logout called");
+    // Clear auth data from localStorage
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_profile');
+    localStorage.removeItem('auth_role');
+    
     setUser(null);
     setUserProfile(null);
     setRole(null);
@@ -83,12 +90,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       // Use the real mockSignIn to ensure all associated data is loaded
       const { user, userProfile } = await import("@/lib/mockApiService").then(mod => mod.mockSignIn(email, 'mock'));
-      setUser({ uid: user.uid, email: user.email, userType: role });
+      const authUser = { uid: user.uid, email: user.email, userType: role };
+      
+      // Store auth data in localStorage for persistence
+      localStorage.setItem('auth_user', JSON.stringify(authUser));
+      localStorage.setItem('auth_profile', JSON.stringify(userProfile));
+      localStorage.setItem('auth_role', role);
+      
+      setUser(authUser);
       setUserProfile(userProfile);
       setRole(role);
       setLoading(false);
       logInfo("Mock login completed", { role });
-      console.log('[DEBUG][AuthContext] Login setUser:', { uid: user.uid, email: user.email, userType: role });
+      console.log('[DEBUG][AuthContext] Login setUser:', authUser);
       console.log('[DEBUG][AuthContext] Login setUserProfile:', userProfile);
       resetTimeout(); // Ensure session timer starts on login
     } catch (error) {
@@ -98,6 +112,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       logInfo("Mock login failed", { role, error });
     }
+  }, [resetTimeout]);
+
+  // Load persisted auth state on initial mount
+  useEffect(() => {
+    const loadPersistedAuth = () => {
+      try {
+        const storedUser = localStorage.getItem('auth_user');
+        const storedProfile = localStorage.getItem('auth_profile');
+        const storedRole = localStorage.getItem('auth_role');
+        
+        if (storedUser && storedProfile && storedRole) {
+          const parsedUser = JSON.parse(storedUser);
+          const parsedProfile = JSON.parse(storedProfile);
+          const roleValue = storedRole as 'patient' | 'doctor' | 'admin';
+          
+          setUser(parsedUser);
+          setUserProfile(parsedProfile);
+          setRole(roleValue);
+          logInfo("Restored auth state from localStorage", { role: roleValue });
+          resetTimeout(); // Start session timeout
+        }
+      } catch (error) {
+        logInfo("Error restoring auth state", { error });
+        // Clear potentially corrupted data
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_profile');
+        localStorage.removeItem('auth_role');
+      }
+      
+      setLoading(false);
+    };
+    
+    loadPersistedAuth();
   }, [resetTimeout]);
 
   useEffect(() => {
@@ -125,8 +172,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Function to refresh the user profile from localStorage
+  const refreshProfile = useCallback(() => {
+    logInfo("Reloading profile from localStorage");
+    try {
+      const storedUser = localStorage.getItem('auth_user');
+      const storedProfile = localStorage.getItem('auth_profile');
+      
+      if (storedUser && storedProfile) {
+        const parsedUser = JSON.parse(storedUser);
+        const parsedProfile = JSON.parse(storedProfile);
+        
+        setUser(parsedUser);
+        setUserProfile(parsedProfile);
+        logInfo("Refreshed user profile from localStorage");
+      }
+    } catch (error) {
+      logInfo("Error refreshing user profile", { error });
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, role, login, logout }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, role, login, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1430,42 +1430,12 @@ const CmsValidationPage: React.FC = () => {
     console.log('[CMS] Broadcasting API mode change to all tabs:', newMode);
     
     try {
-      // 1. Direct localStorage update (for the current tab)
-      setApiMode(newMode);
+      // Use the centralized syncApiModeChange function from the event bus
+      import('@/lib/eventBus').then(({ syncApiModeChange }) => {
+        syncApiModeChange(newMode, 'cms_validation_page');
+      });
       
-      // 2. Custom event for same-tab communication
-      window.dispatchEvent(new Event('apiModeChanged'));
-      
-      // 3. Update timestamps in different ways to trigger storage events in other tabs
-      const timestamp = Date.now().toString();
-      // localStorage.setItem('apiModeTimestamp', timestamp);
-      // localStorage.setItem('apiMode_last_change', `${newMode}_${timestamp}`);
-      
-      // 4. Add a dedicated record with the complete change info
-      // localStorage.setItem('api_mode_record', JSON.stringify({
-      //   mode: newMode,
-      //   timestamp: timestamp,
-      //   source: 'cms_validation_page'
-      // }));
-      
-      // 5. Force a global broadcast through sessionStorage as well (sometimes more reliable)
-      // sessionStorage.setItem('apiMode_broadcast', `${newMode}_${timestamp}`);
-      
-      // 6. Use the BroadcastChannel API if available
-      try {
-        const bc = new BroadcastChannel('api_mode_channel');
-        bc.postMessage({
-          type: 'apiModeChange',
-          mode: newMode,
-          timestamp: timestamp
-        });
-        // Close the channel after sending
-        setTimeout(() => bc.close(), 100);
-      } catch (e) {
-        console.log('[CMS] BroadcastChannel not supported in this browser');
-      }
-      
-      console.log('[CMS] API mode change broadcast complete');
+      console.log('[CMS] API mode change broadcast initiated');
     } catch (error) {
       console.error('[CMS] Error broadcasting API mode change:', error);
     }
