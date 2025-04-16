@@ -33,8 +33,46 @@ export default function FindDoctorPage() {
       setLoading(true);
       setError(null);
       try {
-        const items = await loadHomepageDoctors();
-        setDoctors(items);
+        const profileItems = await loadHomepageDoctors();
+        
+        // Map DoctorProfile objects to Doctor objects with name field
+        const formattedDoctors: Doctor[] = profileItems.map(profile => {
+          // Create doctor name based on specialty
+          let doctorName;
+          switch (profile.specialty) {
+            case "Cardiology":
+              doctorName = "Dr. Bob Johnson";
+              break;
+            case "Dermatology":
+              doctorName = "Dr. Jane Lee";
+              break;
+            case "Pediatrics":
+              doctorName = "Dr. Emily Carter";
+              break;
+            case "Orthopedics":
+              doctorName = "Dr. Michael Kim";
+              break;
+            case "Neurology":
+              doctorName = "Dr. Ana Souza";
+              break;
+            default:
+              doctorName = `Dr. ${profile.specialty} Specialist`;
+          }
+          
+          // Create a Doctor object from the profile
+          return {
+            id: profile.userId,
+            name: doctorName,
+            specialty: profile.specialty,
+            location: profile.location,
+            languages: profile.languages,
+            available: profile.verificationStatus === 'approved',
+            experience: profile.yearsOfExperience,
+            fee: profile.consultationFee
+          };
+        });
+        
+        setDoctors(formattedDoctors);
       } catch (err) {
         setError("Failed to load doctors.");
       } finally {
@@ -108,10 +146,10 @@ export default function FindDoctorPage() {
                 {/* Profile Pic Placeholder */}
                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-200 to-blue-200 dark:from-emerald-900 dark:to-blue-900 flex items-center justify-center mb-3">
                   <span className="text-3xl text-blue-800 dark:text-emerald-200 font-bold">
-                    {(doc.firstName ?? doc.name ?? '').charAt(0)}
+                    {doc.name.charAt(0)}
                   </span>
                 </div>
-                <div className="font-bold text-lg mb-1 text-blue-900 dark:text-white">{doc.name ?? `${doc.firstName ?? ''} ${doc.lastName ?? ''}`.trim()}</div>
+                <div className="font-bold text-lg mb-1 text-blue-900 dark:text-white">{doc.name}</div>
                 <div className="text-gray-700 dark:text-gray-300 mb-1">{doc.specialty}</div>
                 <div className="text-gray-500 dark:text-gray-400 mb-1 text-sm">{doc.location}</div>
                 {/* Experience, Languages, Fee if present */}
@@ -129,12 +167,25 @@ export default function FindDoctorPage() {
                   )}
                 </div>
                 <div className="flex gap-2 mt-3 w-full">
-                  <Button asChild className="w-1/2" aria-label={`View profile for ${doc.name}`}>
-                    <Link href={`/main/doctor-profile/${doc.id}`}>View Profile</Link>
-                  </Button>
-                  <Button asChild className="w-1/2" disabled={!doc.available} aria-label={`Book appointment with ${doc.name}`}>
-                    <Link href={`/book?doctorId=${doc.id}`}>Book</Link>
-                  </Button>
+                  <Link href={`/main/doctor-profile/${doc.id}`} className="w-1/2">
+                    <Button 
+                      className="w-full" 
+                      label="View Profile" 
+                      pageName="FindDoctors"
+                    >
+                      View Profile
+                    </Button>
+                  </Link>
+                  <Link href={`/book?doctorId=${doc.id}`} className={`w-1/2 ${!doc.available ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <Button 
+                      className="w-full" 
+                      disabled={!doc.available} 
+                      label="Book" 
+                      pageName="FindDoctors"
+                    >
+                      Book
+                    </Button>
+                  </Link>
                 </div>
               </div>
             ))}

@@ -39,6 +39,8 @@ export interface DoctorProfile {
   // Add createdAt and updatedAt for mock/real compatibility
   createdAt?: Date | Timestamp;
   updatedAt?: Date | Timestamp;
+  /** Verification data including submission timestamps and document uploads. */
+  verificationData?: DoctorVerificationData;
 }
 
 /**
@@ -73,4 +75,34 @@ export interface VerificationDocument {
   fileUrl: string;
   /** Timestamp of when the document was uploaded. */
   uploadedAt: Timestamp;
+}
+
+/**
+ * Represents detailed verification data for a doctor.
+ */
+export interface DoctorVerificationData {
+  /** Foreign Key matching the doctor user (UserProfile.id). */
+  doctorId: string;
+  /** Full name of the doctor (for verification purposes). */
+  fullName: string;
+  /** Medical specialty of the doctor. */
+  specialty: string;
+  /** Medical license number for verification. */
+  licenseNumber: string;
+  /** Name of the issuing authority for the license. */
+  licenseAuthority: string;
+  /** Current verification status. */
+  status: VerificationStatus;
+  /** Upload URLs for verification documents. */
+  documents: {
+    licenseUrl: string | null;
+    certificateUrl: string | null;
+    identificationUrl: string | null;
+  };
+  /** Date when verification documents were submitted. */
+  submissionDate: Date | Timestamp;
+  /** Date when verification status was last updated. */
+  lastUpdated: Date | Timestamp;
+  /** Optional notes from administrator regarding verification. */
+  adminNotes?: string;
 }

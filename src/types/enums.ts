@@ -23,9 +23,10 @@ export enum UserType {
  * - REJECTED: Application denied by admin.
  */
 export enum VerificationStatus {
-  PENDING = 'PENDING',
-  VERIFIED = 'VERIFIED',
-  REJECTED = 'REJECTED',
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  MORE_INFO_REQUIRED = 'more_info_required'
 }
 
 /**

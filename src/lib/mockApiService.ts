@@ -4,7 +4,7 @@
  */
 import { logInfo } from "@/lib/logger";
 import type { UserProfile } from "@/types/user";
-import type { DoctorProfile } from "@/types/doctor";
+import type { DoctorProfile, DoctorVerificationData } from "@/types/doctor";
 import type { PatientProfile } from "@/types/patient";
 import type { Appointment } from "@/types/appointment";
 import type { Notification } from "@/types/notification";
@@ -21,6 +21,73 @@ import * as dataStore from "@/data/mockDataStore";
 function simulateDelay() {
   return new Promise(res => setTimeout(res, 100 + Math.random() * 200));
 }
+
+// Initialize doctor availability slots on module load
+(function initializeDoctorAvailability() {
+  logInfo("[mockApiService] Initializing doctor availability slots");
+  
+  // Get all doctor profiles
+  const doctorProfiles = getDoctorProfilesStore();
+  
+  // For each doctor profile, set up default availability if not already set
+  doctorProfiles.forEach(doctor => {
+    // Skip if already has availability
+    if ((doctor as any).mockAvailability) {
+      return;
+    }
+    
+    // Generate dates for the next 30 days
+    const availableDates = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      
+      // Skip weekends for some doctors to create variation
+      const dayOfWeek = date.getDay();
+      if ((doctor.userId === 'user_doctor_002' || doctor.userId === 'user_doctor_004') && (dayOfWeek === 0 || dayOfWeek === 6)) {
+        continue;
+      }
+      
+      availableDates.push(date.toISOString().split('T')[0]);
+    }
+    
+    // Generate time slots
+    const timeSlots = [
+      { startTime: '09:00', endTime: '09:30' },
+      { startTime: '09:30', endTime: '10:00' },
+      { startTime: '10:00', endTime: '10:30' },
+      { startTime: '10:30', endTime: '11:00' },
+      { startTime: '11:00', endTime: '11:30' },
+      { startTime: '11:30', endTime: '12:00' },
+      { startTime: '13:00', endTime: '13:30' },
+      { startTime: '13:30', endTime: '14:00' },
+      { startTime: '14:00', endTime: '14:30' },
+      { startTime: '14:30', endTime: '15:00' },
+      { startTime: '15:00', endTime: '15:30' },
+      { startTime: '15:30', endTime: '16:00' },
+    ];
+    
+    // Randomly block some dates to create variation
+    const blockedDates: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const randomIndex = Math.floor(Math.random() * availableDates.length);
+      const dateToBlock = availableDates[randomIndex];
+      if (!blockedDates.includes(dateToBlock)) {
+        blockedDates.push(dateToBlock);
+      }
+    }
+    
+    // Assign availability to doctor profile
+    (doctor as any).mockAvailability = {
+      slots: timeSlots,
+      blockedDates: blockedDates
+    };
+    
+    logInfo(`[mockApiService] Set up availability for doctor ${doctor.userId}`);
+  });
+})();
 
 /**
  * Registers a new user (patient/doctor). Checks for email conflict, creates user/profile, adds to stores.
@@ -173,10 +240,25 @@ export async function mockSetDoctorAvailability({ doctorId, slots, blockedDates 
 export async function mockFindDoctors({ specialty, location }: { specialty?: string; location?: string }): Promise<DoctorProfile[]> {
   logInfo("[mockApiService] mockFindDoctors", { specialty, location });
   await simulateDelay();
-  let docs = dataStore.getDoctorProfilesStore().filter(d => d.verificationStatus === VerificationStatus.VERIFIED); // Fix: Use correct VerificationStatus enum values
+  
+  // Get approved doctors
+  let docs = dataStore.getDoctorProfilesStore().filter(d => d.verificationStatus === VerificationStatus.APPROVED);
+  
+  // Apply filters if provided
   if (specialty) docs = docs.filter(d => d.specialty === specialty);
   if (location) docs = docs.filter(d => d.location === location);
-  return docs;
+  
+  // Add name field to each doctor by looking up their user profile
+  return docs.map(doc => {
+    // Find the user profile for this doctor
+    const userProfile = dataStore.getUsersStore().find(u => u.id === doc.userId);
+    
+    // Create a copy of the doctor profile with the name added
+    return {
+      ...doc,
+      name: userProfile ? `Dr. ${userProfile.firstName} ${userProfile.lastName}` : undefined
+    };
+  });
 }
 
 /**
@@ -199,9 +281,35 @@ export async function mockGetAvailableSlots({ doctorId, dateString }: { doctorId
   logInfo("[mockApiService] mockGetAvailableSlots", { doctorId, dateString });
   await simulateDelay();
   const doctor = (dataStore as any).doctorProfilesStore.find((d: any) => d.userId === doctorId);
-  if (!doctor || !doctor.mockAvailability) return [];
+  
+  // If doctor has no availability data, initialize with default slots
+  if (!doctor || !doctor.mockAvailability) {
+    if (doctor) {
+      // Create default availability if needed
+      const defaultTimeSlots = [
+        { startTime: '09:00', endTime: '09:30' },
+        { startTime: '10:00', endTime: '10:30' },
+        { startTime: '11:00', endTime: '11:30' },
+        { startTime: '13:00', endTime: '13:30' },
+        { startTime: '14:00', endTime: '14:30' },
+        { startTime: '15:00', endTime: '15:30' },
+      ];
+      
+      doctor.mockAvailability = {
+        slots: defaultTimeSlots,
+        blockedDates: []
+      };
+      
+      logInfo(`[mockApiService] Created default availability for doctor ${doctorId}`);
+    } else {
+      return [];
+    }
+  }
+  
   // For demo, just return all slots not blocked
-  return doctor.mockAvailability.slots.filter((slot: any) => !doctor.mockAvailability.blockedDates.includes(dateString)).map((slot: any) => slot.startTime);
+  return doctor.mockAvailability.slots
+    .filter((slot: any) => !doctor.mockAvailability.blockedDates.includes(dateString))
+    .map((slot: any) => slot.startTime);
 }
 
 /**
@@ -354,25 +462,32 @@ export async function mockGetDoctorVerifications() {
  * @param doctorId The doctor's user ID
  * @returns Doctor verification data including documents and status
  */
-export async function mockGetDoctorVerificationData(doctorId: string) {
+export async function mockGetDoctorVerificationData(doctorId: string): Promise<DoctorVerificationData | null> {
   logInfo("[mockApiService] mockGetDoctorVerificationData", { doctorId });
   await simulateDelay();
   
   const doctor = dataStore.getDoctorProfilesStore().find(d => d.userId === doctorId);
-  if (!doctor) throw new Error("not-found");
+  if (!doctor) return null;
   
+  // Find the user to get name details
   const user = dataStore.getUsersStore().find(u => u.id === doctorId);
+  const fullName = user ? `${user.firstName} ${user.lastName}` : "Unknown Doctor";
   
-  // Omit the timestamp fields that are causing issues
   return {
-    doctorId,
-    name: `${user?.firstName || ''} ${user?.lastName || ''}`,
+    doctorId: doctor.userId,
+    fullName: fullName,
     specialty: doctor.specialty,
-    licenseNumber: doctor.licenseNumber,
-    verificationStatus: doctor.verificationStatus,
-    verificationNotes: doctor.verificationNotes || '',
-    licenseDocumentUrl: doctor.licenseDocumentUrl,
-    certificateUrl: doctor.certificateUrl
+    licenseNumber: doctor.licenseNumber || "LIC12345678",
+    licenseAuthority: "State Medical Board",
+    status: doctor.verificationStatus,
+    documents: {
+      licenseUrl: doctor.licenseDocumentUrl,
+      certificateUrl: doctor.certificateUrl,
+      identificationUrl: null
+    },
+    submissionDate: doctor.createdAt || new Date(),
+    lastUpdated: doctor.updatedAt || new Date(),
+    adminNotes: doctor.verificationNotes || ""
   };
 }
 
@@ -380,36 +495,48 @@ export async function mockGetDoctorVerificationData(doctorId: string) {
  * Updates the verification status of a doctor
  * @param doctorId The doctor's user ID
  * @param status The new verification status
- * @param notes Admin notes about the verification decision
+ * @param adminNotes Admin notes about the verification decision
  * @returns Success indicator
  */
-export async function mockSetDoctorVerificationStatus({ doctorId, status, notes }: { doctorId: string; status: VerificationStatus; notes: string }): Promise<{ success: boolean }> {
-  logInfo("[mockApiService] mockSetDoctorVerificationStatus", { doctorId, status, notes });
+export async function mockSetDoctorVerificationStatus(
+  doctorId: string, 
+  status: VerificationStatus, 
+  adminNotes: string
+): Promise<boolean> {
+  logInfo("[mockApiService] mockSetDoctorVerificationStatus", { doctorId, status, adminNotes });
   await simulateDelay();
   
-  // Find the doctor profile in the doctor profiles store
-  const doctorProfilesStore = dataStore.getDoctorProfilesStore();
-  const docIndex = doctorProfilesStore.findIndex(d => d.userId === doctorId);
-  if (docIndex === -1) throw new Error("not-found");
+  const doctorIndex = dataStore.getDoctorProfilesStore().findIndex(d => d.userId === doctorId);
+  if (doctorIndex === -1) return false;
   
-  // Update the doctor profile
-  doctorProfilesStore[docIndex].verificationStatus = status;
-  doctorProfilesStore[docIndex].verificationNotes = notes;
-  doctorProfilesStore[docIndex].updatedAt = Timestamp.now();
+  // Update the doctor's verification status
+  const doctor = dataStore.getDoctorProfilesStore()[doctorIndex];
+  doctor.verificationStatus = status;
+  doctor.verificationNotes = adminNotes;
+  doctor.updatedAt = new Date();
   
-  // Add notification to the doctor about their verification status change
-  dataStore.getNotificationsStore().push({
+  // Create a notification for the doctor
+  const statusText = {
+    [VerificationStatus.APPROVED]: "approved",
+    [VerificationStatus.REJECTED]: "rejected",
+    [VerificationStatus.PENDING]: "pending review",
+    [VerificationStatus.MORE_INFO_REQUIRED]: "needs more information"
+  }[status];
+  
+  const notification = {
     id: uuidv4(),
     userId: doctorId,
-    title: "Verification Status Updated",
-    message: `Your verification status has been updated to ${status}.`,
+    title: `Verification Status Update`,
+    message: `Your account verification status is now ${statusText}${adminNotes ? ": " + adminNotes : ""}`,
     isRead: false,
     createdAt: Timestamp.now(),
     type: "verification_update",
     relatedId: doctorId,
-  });
+  };
   
-  return { success: true };
+  dataStore.getNotificationsStore().push(notification);
+  
+  return true;
 }
 
 export async function mockGetSystemLogs() {
