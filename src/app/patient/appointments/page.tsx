@@ -198,15 +198,26 @@ export default function PatientAppointmentsPage() {
                       View Details
                     </Button>
                     {tab === "upcoming" && (
-                      <Button 
-                        variant="danger" 
-                        onClick={() => handleCancel(appt.id)} 
-                        size="sm"
-                        label="Cancel"
-                        pageName="PatientAppointments"
-                      >
-                        Cancel
-                      </Button>
+                      <>
+                        <Button 
+                          variant="danger" 
+                          onClick={() => handleCancel(appt.id)} 
+                          size="sm"
+                          label="Cancel"
+                          pageName="PatientAppointments"
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => router.push(`/patient/reschedule/${appt.id}`)} 
+                          size="sm"
+                          label="Reschedule"
+                          pageName="PatientAppointments"
+                        >
+                          Reschedule
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>

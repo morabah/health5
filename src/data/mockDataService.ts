@@ -242,3 +242,48 @@ export const getMockDoctorUser = (): UserProfile => {
 export const getMockPatientProfileData1 = (): PatientProfile => ({ ...mockPatientProfileData1 });
 export const getMockPatientProfileData2 = (): PatientProfile => ({ ...mockPatientProfileData2 });
 export const getMockPatientProfileData3 = (): PatientProfile => ({ ...mockPatientProfileData3 });
+
+/**
+ * Gets available time slots for a specific doctor on a given date
+ * @param doctorId The doctor's ID
+ * @param date The date to check for availability
+ * @returns Array of available time slots in format "HH:MM"
+ */
+export const getAvailableSlots = (doctorId: string, date: Date): string[] => {
+  console.log(`Getting available slots for doctor ${doctorId} on ${date}`);
+  
+  // Generate slots between 9 AM and 5 PM at 30-minute intervals
+  const slots: string[] = [];
+  const appointmentDuration = 30; // minutes
+  
+  // Start at 9:00 AM
+  const startHour = 9;
+  const endHour = 17; // 5:00 PM
+  
+  // Get existing appointments for this doctor on this date to exclude those times
+  const existingAppointments = getMockDoctorAppointments(doctorId).filter(appt => {
+    const apptDate = appt.appointmentDate instanceof Date 
+      ? appt.appointmentDate 
+      : appt.appointmentDate.toDate();
+      
+    return apptDate.getDate() === date.getDate() &&
+           apptDate.getMonth() === date.getMonth() &&
+           apptDate.getFullYear() === date.getFullYear();
+  });
+  
+  // Map existing appointments to their time slots
+  const bookedSlots = existingAppointments.map(appt => appt.startTime);
+  
+  // Generate all possible slots
+  for (let hour = startHour; hour < endHour; hour++) {
+    for (let minute = 0; minute < 60; minute += appointmentDuration) {
+      const timeSlot = `${hour}:${minute.toString().padStart(2, '0')}`;
+      // Add the slot if it's not already booked
+      if (!bookedSlots.includes(timeSlot)) {
+        slots.push(timeSlot);
+      }
+    }
+  }
+  
+  return slots;
+};
