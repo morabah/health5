@@ -1,18 +1,20 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { db } from "@/lib/firebase";
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { logValidation } from "@/lib/logger";
-import { loadDoctorVerificationData } from '@/data/doctorLoaders';
+import { mockGetDoctorVerificationData, mockSetDoctorVerificationStatus } from "@/lib/mockApiService";
+import { VerificationStatus } from "@/types/enums";
 
 interface Doctor {
   id: string;
   name: string;
+  firstName: string;
+  lastName: string;
   specialty: string;
   experience: number;
   location: string;
@@ -21,14 +23,15 @@ interface Doctor {
   profilePicUrl: string;
   licenseNumber: string;
   documents: string[]; // URLs or names
-  status: "pending" | "approved" | "rejected";
+  status: VerificationStatus;
+  userId: string;
 }
 
 export default function DoctorVerificationPage() {
   const { doctorId } = useParams() as { doctorId: string };
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<"pending" | "approved" | "rejected">("pending");
+  const [status, setStatus] = useState<VerificationStatus>(VerificationStatus.PENDING);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -38,9 +41,9 @@ export default function DoctorVerificationPage() {
     async function fetchVerification() {
       setLoading(true);
       try {
-        const data = await loadDoctorVerificationData(doctorId);
+        const data = await mockGetDoctorVerificationData(doctorId);
         setDoctor(data);
-        setStatus(data.status || "pending");
+        setStatus(data.status || VerificationStatus.PENDING);
       } catch {
         setDoctor(null);
       } finally {
@@ -54,14 +57,17 @@ export default function DoctorVerificationPage() {
     logValidation("admin-doctor-verification-ui", "success");
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    // Simulate save
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      await mockSetDoctorVerificationStatus({ doctorId, status, notes });
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 1200);
-    }, 1200);
+      setTimeout(() => setSuccess(false), 2000);
+    } catch {
+      // Optionally set error state
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -84,10 +90,10 @@ export default function DoctorVerificationPage() {
             <div className="md:w-1/3 flex flex-col items-center md:items-start">
               <img
                 src={doctor.profilePicUrl}
-                alt={doctor.name}
+                alt={doctor.firstName ?? doctor.name ?? doctor.userId}
                 className="w-20 h-20 rounded-full object-cover border mb-2"
               />
-              <div className="font-semibold text-lg">{doctor.name}</div>
+              <div className="font-semibold text-lg">{doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}</div>
               <div className="text-sm text-muted-foreground">{doctor.specialty}</div>
               <div className="text-xs text-muted-foreground">{doctor.experience} yrs experience</div>
               <div className="text-xs text-muted-foreground">{doctor.location}</div>
@@ -114,11 +120,11 @@ export default function DoctorVerificationPage() {
                 <select
                   className="input input-bordered w-full mt-1"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as "pending" | "approved" | "rejected")}
+                  onChange={(e) => setStatus(e.target.value as VerificationStatus)}
                 >
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
+                  <option value={VerificationStatus.PENDING}>Pending</option>
+                  <option value={VerificationStatus.VERIFIED}>Verified</option>
+                  <option value={VerificationStatus.REJECTED}>Rejected</option>
                 </select>
               </div>
               <div className="mb-4">

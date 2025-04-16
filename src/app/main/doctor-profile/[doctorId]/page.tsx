@@ -6,10 +6,13 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { logValidation } from "@/lib/logger";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface Doctor {
   id: string;
   name: string;
+  firstName: string;
+  lastName: string;
   specialty: string;
   experience: number;
   location: string;
@@ -21,6 +24,7 @@ interface Doctor {
   education: string;
   services: string[];
   reviews: { reviewer: string; comment: string; rating: number }[];
+  userId: string;
 }
 
 type TabKey = "bio" | "education" | "services" | "reviews";
@@ -60,7 +64,19 @@ export default function DoctorProfilePage() {
   }
 
   if (!doctor) {
-    return <div className="text-center text-muted-foreground">Doctor not found.</div>;
+    return (
+      <div className="flex justify-center items-center min-h-[300px]">
+        <EmptyState
+          title="Doctor not found."
+          message="The doctor profile you are looking for does not exist or is unavailable."
+          action={
+            <Button onClick={() => router.back()} variant="secondary">
+              Go Back
+            </Button>
+          }
+        />
+      </div>
+    );
   }
 
   return (
@@ -70,10 +86,10 @@ export default function DoctorProfilePage() {
           <div className="flex flex-col items-center md:items-start md:w-1/3">
             <img
               src={doctor.profilePicUrl}
-              alt={doctor.name}
+              alt={doctor.firstName ?? doctor.name ?? doctor.userId}
               className="w-28 h-28 rounded-full object-cover border mb-2"
             />
-            <div className="font-semibold text-xl">{doctor.name}</div>
+            <div className="font-semibold text-xl">{doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}</div>
             <div className="text-sm text-muted-foreground">{doctor.specialty}</div>
             <div className="text-xs text-muted-foreground">{doctor.experience} yrs experience</div>
             <div className="text-xs text-muted-foreground">{doctor.location}</div>

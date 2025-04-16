@@ -8,10 +8,13 @@ import { Card } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { logValidation } from "@/lib/logger";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface Doctor {
   id: string;
   name: string;
+  firstName: string;
+  lastName: string;
   specialty: string;
   experience: number;
   location: string;
@@ -19,6 +22,7 @@ interface Doctor {
   fee: number;
   available: boolean;
   profilePicUrl: string;
+  userId: string;
 }
 
 export default function FindDoctorsPage() {
@@ -27,31 +31,51 @@ export default function FindDoctorsPage() {
   const [specialty, setSpecialty] = useState("");
   const [location, setLocation] = useState("");
   const [language, setLanguage] = useState("");
+  const [hasMounted, setHasMounted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasMounted) return;
     async function fetchDoctors() {
       setLoading(true);
       try {
-        // Use the unified loader for dynamic data source
         let allDoctors = await loadDoctors();
-        // Filtering (for demo, only specialty filter is implemented)
+        // Filtering: specialty, location, language (case-insensitive)
         if (specialty) {
-          allDoctors = allDoctors.filter((doc: Doctor) => doc.specialty === specialty);
+          allDoctors = allDoctors.filter((doc: Doctor) => doc.specialty.toLowerCase() === specialty.toLowerCase());
+        }
+        if (location) {
+          allDoctors = allDoctors.filter((doc: Doctor) => doc.location && doc.location.toLowerCase().includes(location.toLowerCase()));
+        }
+        if (language) {
+          allDoctors = allDoctors.filter((doc: Doctor) => doc.languages && doc.languages.some(lang => lang.toLowerCase().includes(language.toLowerCase())));
         }
         setDoctors(allDoctors);
+        if (allDoctors.length === 0) {
+          logValidation("main-find-doctors-no-results", "warn");
+        }
       } catch (e) {
         setDoctors([]);
+        setError('Failed to load doctors.');
+        logValidation("main-find-doctors-error", e instanceof Error ? e.message : String(e));
       } finally {
         setLoading(false);
       }
     }
     fetchDoctors();
-  }, [specialty, location, language]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMounted, specialty, location, language]);
 
   useEffect(() => {
     logValidation("main-find-doctors-ui", "success");
   }, []);
+
+  if (!hasMounted) return null;
 
   return (
     <div className="min-h-screen bg-background text-foreground py-8 px-4 md:px-12 lg:px-32">
@@ -81,42 +105,50 @@ export default function FindDoctorsPage() {
           />
           <Button onClick={() => { setSpecialty(""); setLocation(""); setLanguage(""); }}>Clear</Button>
         </div>
+        {error && (
+          <div className="text-red-600 dark:text-red-400 my-6 text-center" role="alert">
+            {error}
+          </div>
+        )}
+        {!loading && !error && doctors.length === 0 && (
+          <EmptyState
+            title="No doctors found."
+            message="No doctors match your filters. Try adjusting your search criteria."
+            className="my-8"
+          />
+        )}
         {loading ? (
           <div className="flex justify-center items-center min-h-[200px]">
             <Spinner />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {doctors.length === 0 ? (
-              <div className="col-span-full text-center text-muted-foreground">No doctors found.</div>
-            ) : (
-              doctors.map((doctor) => (
-                <Card
-                  key={doctor.id}
-                  className="cursor-pointer hover:shadow-lg transition"
-                  onClick={() => router.push(`/main/doctor-profile/${doctor.id}`)}
-                >
-                  <div className="flex flex-col items-center p-4">
-                    <img
-                      src={doctor.profilePicUrl}
-                      alt={doctor.name}
-                      className="w-20 h-20 rounded-full mb-2 object-cover border"
-                    />
-                    <div className="font-semibold text-lg">{doctor.name}</div>
-                    <div className="text-sm text-muted-foreground">{doctor.specialty}</div>
-                    <div className="text-xs text-muted-foreground">{doctor.experience} yrs experience</div>
-                    <div className="text-xs text-muted-foreground">{doctor.location}</div>
-                    <div className="text-xs text-muted-foreground">Languages: {doctor.languages.join(", ")}</div>
-                    <div className="text-xs text-muted-foreground">Fee: ${doctor.fee}</div>
-                    <div className="mt-2">
-                      <span className={doctor.available ? "text-green-600" : "text-red-500"}>
-                        {doctor.available ? "Available" : "Unavailable"}
-                      </span>
-                    </div>
+            {doctors.map((doctor) => (
+              <Card
+                key={doctor.id}
+                className="cursor-pointer hover:shadow-lg transition"
+                onClick={() => router.push(`/main/doctor-profile/${doctor.id}`)}
+              >
+                <div className="flex flex-col items-center p-4">
+                  <img
+                    src={doctor.profilePicUrl}
+                    alt={doctor.firstName ?? doctor.name ?? doctor.userId}
+                    className="w-20 h-20 rounded-full mb-2 object-cover border"
+                  />
+                  <div className="font-semibold text-lg">{doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}</div>
+                  <div className="text-sm text-muted-foreground">{doctor.specialty}</div>
+                  <div className="text-xs text-muted-foreground">{doctor.experience} yrs experience</div>
+                  <div className="text-xs text-muted-foreground">{doctor.location}</div>
+                  <div className="text-xs text-muted-foreground">Languages: {doctor.languages.join(", ")}</div>
+                  <div className="text-xs text-muted-foreground">Fee: ${doctor.fee}</div>
+                  <div className="mt-2">
+                    <span className={doctor.available ? "text-green-600" : "text-red-500"}>
+                      {doctor.available ? "Available" : "Unavailable"}
+                    </span>
                   </div>
-                </Card>
-              ))
-            )}
+                </div>
+              </Card>
+            ))}
           </div>
         )}
       </div>

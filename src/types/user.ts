@@ -27,7 +27,7 @@ export interface UserProfile {
   /** Flag indicating if the user's phone number has been verified. */
   phoneVerified: boolean;
   /** Timestamp of when the user profile document was created. */
-  createdAt: Timestamp;
+  createdAt: Date | Timestamp;
   /** Timestamp of the last update to the user profile document. */
-  updatedAt: Timestamp;
+  updatedAt: Date | Timestamp;
 }

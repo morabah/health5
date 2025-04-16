@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import EmptyState from "@/components/ui/EmptyState";
 import { loadHomepageDoctors } from '@/data/doctorLoaders';
 
 interface Doctor {
@@ -12,12 +13,20 @@ interface Doctor {
   specialty: string;
   location: string;
   available: boolean;
+  experience?: number;
+  languages?: string[];
+  fee?: number;
 }
 
 export default function FindDoctorPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // --- FILTER STATE ---
+  const [specialtyFilter, setSpecialtyFilter] = useState<string>("");
+  const [locationFilter, setLocationFilter] = useState<string>("");
+  const [languageFilter, setLanguageFilter] = useState<string>("");
 
   useEffect(() => {
     async function fetchDoctors() {
@@ -35,55 +44,100 @@ export default function FindDoctorPage() {
     fetchDoctors();
   }, []);
 
+  // --- DYNAMIC FILTER OPTIONS ---
+  const specialties = Array.from(new Set(doctors.map(d => d.specialty).filter(Boolean)));
+  const locations = Array.from(new Set(doctors.map(d => d.location).filter(Boolean)));
+  const languages = Array.from(new Set(
+    doctors.flatMap(d => (Array.isArray((d as any).languages) ? (d as any).languages : ((d as any).languages ? [(d as any).languages] : [])))
+      .filter(Boolean)
+  ));
+
+  // --- FILTERED DOCTORS ---
+  const filteredDoctors = doctors.filter(doc =>
+    (!specialtyFilter || doc.specialty === specialtyFilter) &&
+    (!locationFilter || doc.location === locationFilter) &&
+    (!languageFilter || ((Array.isArray((doc as any).languages)
+      ? (doc as any).languages : ((doc as any).languages ? [(doc as any).languages] : [])).includes(languageFilter)))
+  );
+
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100">Find a Doctor</h1>
-      <Card className="w-full max-w-4xl mb-8 p-6">
-        <div className="flex justify-between items-center mb-4">
+      <Card className="w-full max-w-6xl mb-8 p-6">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
           <h2 className="text-xl font-semibold">Available Doctors</h2>
-          <Button asChild>
-            <Link href="/patient">Back to Dashboard</Link>
-          </Button>
+          {/* FILTER CONTROLS */}
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <label htmlFor="specialtyFilter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Specialty</label>
+              <select id="specialtyFilter" value={specialtyFilter} onChange={e => setSpecialtyFilter(e.target.value)} className="block w-36 px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                <option value="">All</option>
+                {specialties.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="locationFilter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Location</label>
+              <select id="locationFilter" value={locationFilter} onChange={e => setLocationFilter(e.target.value)} className="block w-36 px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                <option value="">All</option>
+                {locations.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="languageFilter" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Language</label>
+              <select id="languageFilter" value={languageFilter} onChange={e => setLanguageFilter(e.target.value)} className="block w-36 px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                <option value="">All</option>
+                {languages.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+          </div>
         </div>
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}
         {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
-        {!loading && !error && doctors.length === 0 && (
-          <div className="text-gray-600 dark:text-gray-300">No doctors found.</div>
+        {!loading && !error && filteredDoctors.length === 0 && (
+          <EmptyState
+            title="No doctors found."
+            message="No doctors match your filters. Try adjusting your search criteria."
+            className="my-8"
+          />
         )}
-        {!loading && doctors.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-gray-800">
-                  <th className="px-4 py-2 text-left">Name</th>
-                  <th className="px-4 py-2 text-left">Specialty</th>
-                  <th className="px-4 py-2 text-left">Location</th>
-                  <th className="px-4 py-2 text-left">Available</th>
-                  <th className="px-4 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {doctors.map(doc => (
-                  <tr key={doc.id} className="border-b border-gray-200 dark:border-gray-700">
-                    <td className="px-4 py-2">{doc.name}</td>
-                    <td className="px-4 py-2">{doc.specialty}</td>
-                    <td className="px-4 py-2">{doc.location}</td>
-                    <td className="px-4 py-2">
-                      {doc.available ? (
-                        <span className="text-green-600 dark:text-green-400">Yes</span>
-                      ) : (
-                        <span className="text-red-600 dark:text-red-400">No</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2">
-                      <Button size="sm" onClick={() => console.log('Book doctor', doc.id)} disabled={!doc.available}>
-                        Book
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* DOCTOR CARD GRID */}
+        {!loading && filteredDoctors.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredDoctors.map(doc => (
+              <div key={doc.id} className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 flex flex-col items-center border border-gray-200 dark:border-gray-700" tabIndex={0} aria-label={`Doctor card for ${doc.name}`}> 
+                {/* Profile Pic Placeholder */}
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-200 to-blue-200 dark:from-emerald-900 dark:to-blue-900 flex items-center justify-center mb-3">
+                  <span className="text-3xl text-blue-800 dark:text-emerald-200 font-bold">
+                    {(doc.firstName ?? doc.name ?? '').charAt(0)}
+                  </span>
+                </div>
+                <div className="font-bold text-lg mb-1 text-blue-900 dark:text-white">{doc.name ?? `${doc.firstName ?? ''} ${doc.lastName ?? ''}`.trim()}</div>
+                <div className="text-gray-700 dark:text-gray-300 mb-1">{doc.specialty}</div>
+                <div className="text-gray-500 dark:text-gray-400 mb-1 text-sm">{doc.location}</div>
+                {/* Experience, Languages, Fee if present */}
+                {('experience' in doc) && <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Experience: {(doc as any).experience} yrs</div>}
+                {('languages' in doc) && Array.isArray((doc as any).languages) && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Languages: {(doc as any).languages.join(', ')}</div>
+                )}
+                {('fee' in doc) && <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Fee: ${(doc as any).fee}</div>}
+                {/* Availability */}
+                <div className="mb-2">
+                  {doc.available ? (
+                    <span className="inline-block px-2 py-1 text-xs rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Available</span>
+                  ) : (
+                    <span className="inline-block px-2 py-1 text-xs rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">Unavailable</span>
+                  )}
+                </div>
+                <div className="flex gap-2 mt-3 w-full">
+                  <Button asChild className="w-1/2" aria-label={`View profile for ${doc.name}`}>
+                    <Link href={`/main/doctor-profile/${doc.id}`}>View Profile</Link>
+                  </Button>
+                  <Button asChild className="w-1/2" disabled={!doc.available} aria-label={`Book appointment with ${doc.name}`}>
+                    <Link href={`/book?doctorId=${doc.id}`}>Book</Link>
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>

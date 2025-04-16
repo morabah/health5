@@ -11,9 +11,12 @@ import { logValidation } from "@/lib/logger";
 interface Doctor {
   id: string;
   name: string;
+  firstName: string;
+  lastName: string;
   specialty: string;
   profilePicUrl: string;
   fee: number;
+  userId: string;
 }
 
 interface Slot {
@@ -93,10 +96,10 @@ export default function BookAppointmentPage() {
           <div className="md:w-1/3 flex flex-col items-center md:items-start">
             <img
               src={doctor.profilePicUrl}
-              alt={doctor.name}
+              alt={doctor.firstName ?? doctor.name ?? doctor.userId}
               className="w-20 h-20 rounded-full object-cover border mb-2"
             />
-            <div className="font-semibold text-lg">{doctor.name}</div>
+            <div className="font-semibold text-lg">{doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}</div>
             <div className="text-sm text-muted-foreground">{doctor.specialty}</div>
             <div className="text-xs text-muted-foreground">Fee: ${doctor.fee}</div>
           </div>

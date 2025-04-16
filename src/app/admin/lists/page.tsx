@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import EmptyState from "@/components/ui/EmptyState";
 import { loadAdminUsers } from '@/data/adminLoaders';
 
 interface User {
@@ -48,7 +49,11 @@ export default function AdminListsPage() {
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}
         {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
         {!loading && !error && users.length === 0 && (
-          <div className="text-gray-600 dark:text-gray-300">No users found.</div>
+          <EmptyState
+            title="No users found."
+            message="There are currently no users in the system. New users will appear here as they register."
+            className="my-8"
+          />
         )}
         {!loading && users.length > 0 && (
           <div className="overflow-x-auto">
@@ -70,7 +75,7 @@ export default function AdminListsPage() {
                     <td className="px-4 py-2">{user.role}</td>
                     <td className="px-4 py-2">{user.status}</td>
                     <td className="px-4 py-2 flex gap-2">
-                      <Button size="sm" onClick={() => console.log('View user', user.id)}>
+                      <Button size="sm" disabled title="User detail view coming soon">
                         View
                       </Button>
                     </td>

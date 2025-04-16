@@ -5,6 +5,8 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { mockSignIn } from "@/lib/mockApiService";
+import { UserType } from "@/types/enums";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -12,12 +14,19 @@ export default function LoginPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const { login, loading } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFeedback("Logging in...");
-    setTimeout(() => {
-      setFeedback("Login simulated. State: " + JSON.stringify({ email, password }));
-    }, 700);
+    try {
+      const { user, userProfile } = await mockSignIn(email, password);
+      // Optionally update auth context here if needed
+      setFeedback("Login successful. Redirecting...");
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 900);
+    } catch (err: any) {
+      setFeedback(err.message === "invalid-credential" ? "Invalid credentials." : "Login failed.");
+    }
   };
 
   return (
@@ -39,26 +48,35 @@ export default function LoginPage() {
             <Button
               type="button"
               className="w-full bg-blue-600 text-white hover:bg-blue-700"
-              onClick={() => login("admin" as any)}
+              onClick={() => {
+                setEmail("admin@example.com");
+                setPassword("adminpass");
+              }}
               disabled={loading}
             >
-              Log in as Admin
+              Fill Admin Credentials
             </Button>
             <Button
               type="button"
               className="w-full bg-green-600 text-white hover:bg-green-700"
-              onClick={() => login("patient")}
+              onClick={() => {
+                setEmail("jane@example.com");
+                setPassword("patientpass");
+              }}
               disabled={loading}
             >
-              Log in as Patient
+              Fill Patient Credentials
             </Button>
             <Button
               type="button"
               className="w-full bg-purple-600 text-white hover:bg-purple-700"
-              onClick={() => login("doctor")}
+              onClick={() => {
+                setEmail("johndoe@example.com");
+                setPassword("doctorpass");
+              }}
               disabled={loading}
             >
-              Log in as Doctor
+              Fill Doctor Credentials
             </Button>
           </div>
         </div>

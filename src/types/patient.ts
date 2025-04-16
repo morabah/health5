@@ -10,7 +10,7 @@ export interface PatientProfile {
   /** Foreign Key matching the UserProfile.id of the patient user. */
   userId: string;
   /** @PHI Patient's date of birth. */
-  dateOfBirth: Timestamp | null;
+  dateOfBirth: Date | Timestamp | null;
   /** @PHI Patient's self-identified gender. */
   gender: 'Male' | 'Female' | 'Other' | null;
   /** @PHI Patient's blood type (e.g., "A+", "O-"). Consider a specific enum later if needed. */

@@ -21,7 +21,7 @@ export interface Appointment {
   /** Denormalized doctor specialty for quick lookup (optional). */
   doctorSpecialty?: string;
   /** Date of the appointment (date only, no time component). */
-  appointmentDate: Timestamp;
+  appointmentDate: Date | Timestamp;
   /** Start time of the appointment in 24-hour format (e.g., "09:00"). */
   startTime: string;
   /** End time of the appointment in 24-hour format (e.g., "09:30"). */
@@ -33,9 +33,9 @@ export interface Appointment {
   /** @PHI Additional notes regarding the appointment (e.g., outcome, doctor notes). */
   notes: string;
   /** Timestamp of when the appointment was created. */
-  createdAt: Timestamp;
+  createdAt: Date | Timestamp;
   /** Timestamp of the last update to the appointment. */
-  updatedAt: Timestamp;
+  updatedAt: Date | Timestamp;
   /** Type of appointment (e.g., 'In-person', 'Video'). Optional. */
   appointmentType?: 'In-person' | 'Video';
 }

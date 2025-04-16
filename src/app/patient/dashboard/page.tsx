@@ -7,6 +7,7 @@ import Alert from "@/components/ui/Alert";
 import { UserProfile } from "@/types/user";
 import { PatientProfile } from "@/types/patient";
 import { Appointment } from "@/types/appointment";
+import { AppointmentStatus } from "@/types/enums";
 import { loadPatientProfile, loadPatientAppointments } from "@/data/patientLoaders";
 import { logInfo, logWarn, logError, logValidation } from "@/lib/logger";
 import { FaUserMd, FaCalendarCheck, FaUser, FaNotesMedical } from "react-icons/fa";
@@ -23,6 +24,7 @@ export default function PatientDashboardPage() {
     patientProfile: PatientProfile | null;
   }>({ userProfile: null, patientProfile: null });
   const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
+  const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -39,7 +41,10 @@ export default function PatientDashboardPage() {
           throw new Error("Profile not found for mockPatient123");
         }
         setProfileData(profile);
-        setUpcomingAppointments(appointments);
+        const upcoming = appointments.filter((appt) => appt.status === AppointmentStatus.PENDING || appt.status === AppointmentStatus.CONFIRMED);
+        const past = appointments.filter((appt) => appt.status === AppointmentStatus.COMPLETED || appt.status === AppointmentStatus.CANCELLED);
+        setUpcomingAppointments(upcoming);
+        setPastAppointments(past);
       } catch (err) {
         logError("[3.10] Failed to fetch patient profile", { error: err });
         setError("Failed to load dashboard data.");
@@ -53,6 +58,30 @@ export default function PatientDashboardPage() {
     }
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoadingAppointments(true);
+      setError(null);
+      try {
+        const userId = profileData.userProfile?.id;
+        console.log('[DEBUG] userId:', userId);
+        const appts = await loadPatientAppointments(userId!);
+        console.log('[DEBUG] fetched upcoming appointments:', appts);
+        setUpcomingAppointments(appts.filter(a => a.status === AppointmentStatus.PENDING || a.status === AppointmentStatus.CONFIRMED));
+        setPastAppointments(appts.filter(a => a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CANCELLED));
+      } catch (err) {
+        setError('Failed to load appointments.');
+        setUpcomingAppointments([]);
+        setPastAppointments([]);
+      } finally {
+        setLoadingAppointments(false);
+      }
+    }
+    if (profileData.userProfile) {
+      fetchData();
+    }
+  }, [profileData.userProfile]);
 
   // UI: Stats Cards
   const stats = [
@@ -86,6 +115,17 @@ export default function PatientDashboardPage() {
       </h1>
       <p className="text-gray-600 dark:text-gray-300 mb-6">This is your patient dashboard.</p>
 
+      {/* Quick Links */}
+      <div className="w-full flex flex-wrap gap-4 justify-end mb-6">
+        <Button asChild variant="secondary"><Link href="/patient/profile">Profile</Link></Button>
+        <Button asChild variant="secondary"><Link href="/notifications">Notifications</Link></Button>
+        <Button asChild variant="secondary"><Link href="/auth/logout">Logout</Link></Button>
+      </div>
+      {/* Book Appointment CTA */}
+      <div className="w-full flex justify-end mb-4">
+        <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"><Link href="/find">Book Appointment</Link></Button>
+      </div>
+
       {/* Stats Section */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {stats.map((stat) => (
@@ -112,24 +152,65 @@ export default function PatientDashboardPage() {
         ) : upcomingAppointments.length === 0 ? (
           <div className="text-gray-500 dark:text-gray-400">No upcoming appointments found.</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             {upcomingAppointments.map((appt) => (
-              <Card key={appt.id} className="dark:bg-gray-800">
-                <div className="font-semibold dark:text-white">{appt.doctorName || "Dr. Name"}</div>
-                <div className="text-gray-500 dark:text-gray-300 text-sm">
-                  {appt.appointmentDate &&
-                    appt.appointmentDate.toDate().toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  {" "}
-                  {appt.startTime} - {appt.endTime}
+              <div key={appt.id} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200 dark:border-gray-700">
+                <div className="flex-1">
+                  <div className="font-bold text-lg mb-1 text-blue-900 dark:text-white">
+                    <Link href={appt.doctorId ? `/main/doctor-profile/${appt.doctorId}` : '#'} className="hover:underline" aria-label={`View profile for ${appt.doctorName || 'Doctor'}`}>{appt.doctorName || 'Doctor'}</Link>
+                  </div>
+                  <div className="text-gray-700 dark:text-gray-300 mb-1">{appt.appointmentDate ? appt.appointmentDate.toDate().toLocaleString() : ''}</div>
+                  <div className="mb-1">
+                    <span className={
+                      appt.status === AppointmentStatus.PENDING ? "inline-block px-2 py-1 text-xs rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                      appt.status === AppointmentStatus.CONFIRMED ? "inline-block px-2 py-1 text-xs rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                      appt.status === AppointmentStatus.CANCELLED ? "inline-block px-2 py-1 text-xs rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                      "inline-block px-2 py-1 text-xs rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                    }>
+                      {appt.status === AppointmentStatus.PENDING ? "Pending" : appt.status === AppointmentStatus.CONFIRMED ? "Confirmed" : appt.status === AppointmentStatus.CANCELLED ? "Cancelled" : "Unknown"}
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-2 text-xs font-medium px-2 py-1 rounded bg-blue-100 dark:bg-blue-700 dark:text-white inline-block">
-                  {appt.status}
+                <div className="flex gap-2 mt-3 md:mt-0">
+                  <Button asChild size="sm" aria-label={`View appointment details`}><Link href={`/patient/appointments/${appt.id}`}>View</Link></Button>
+                  {appt.status === AppointmentStatus.PENDING && <Button size="sm" variant="secondary" disabled>Cancel</Button>}
+                  {appt.status === AppointmentStatus.PENDING && <Button size="sm" variant="secondary" disabled>Reschedule</Button>}
                 </div>
-              </Card>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Past Appointments Section */}
+      <div className="mb-8">
+        <h2 className="text-xl font-bold dark:text-white mb-2">Past Appointments</h2>
+        {!loadingAppointments && !error && upcomingAppointments.length === 0 && (
+          <div className="text-gray-500 dark:text-gray-400">No past appointments found.</div>
+        )}
+        {!loadingAppointments && upcomingAppointments.length > 0 && (
+          <div className="grid grid-cols-1 gap-4">
+            {pastAppointments.map((appt) => (
+              <div key={appt.id} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 flex flex-col md:flex-row md:items-center md:justify-between border border-gray-200 dark:border-gray-700">
+                <div className="flex-1">
+                  <div className="font-bold text-lg mb-1 text-blue-900 dark:text-white">
+                    <Link href={appt.doctorId ? `/main/doctor-profile/${appt.doctorId}` : '#'} className="hover:underline" aria-label={`View profile for ${appt.doctorName || 'Doctor'}`}>{appt.doctorName || 'Doctor'}</Link>
+                  </div>
+                  <div className="text-gray-700 dark:text-gray-300 mb-1">{appt.appointmentDate ? appt.appointmentDate.toDate().toLocaleString() : ''}</div>
+                  <div className="mb-1">
+                    <span className={
+                      appt.status === AppointmentStatus.COMPLETED ? "inline-block px-2 py-1 text-xs rounded bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200" :
+                      appt.status === AppointmentStatus.CANCELLED ? "inline-block px-2 py-1 text-xs rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                      "inline-block px-2 py-1 text-xs rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+                    }>
+                      {appt.status === AppointmentStatus.COMPLETED ? "Completed" : appt.status === AppointmentStatus.CANCELLED ? "Cancelled" : "Unknown"}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-3 md:mt-0">
+                  <Button asChild size="sm" aria-label={`View appointment details`}><Link href={`/patient/appointments/${appt.id}`}>View</Link></Button>
+                </div>
+              </div>
             ))}
           </div>
         )}

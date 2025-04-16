@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import EmptyState from "@/components/ui/EmptyState";
 import { loadDoctorAvailability } from '@/data/loadDoctorAvailability';
 
 interface AvailabilitySlot {
@@ -47,7 +48,11 @@ export default function DoctorAvailabilityPage() {
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}
         {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
         {!loading && !error && slots.length === 0 && (
-          <div className="text-gray-600 dark:text-gray-300">No availability slots found.</div>
+          <EmptyState
+            title="No availability slots found."
+            message="You have not set any availability. Use the scheduling tools to add slots."
+            className="my-8"
+          />
         )}
         {!loading && slots.length > 0 && (
           <div className="overflow-x-auto">
@@ -73,10 +78,10 @@ export default function DoctorAvailabilityPage() {
                       )}
                     </td>
                     <td className="px-4 py-2 flex gap-2">
-                      <Button size="sm" onClick={() => console.log('Edit slot', slot.id)}>
+                      <Button size="sm" disabled title="Edit slot feature coming soon">
                         Edit
                       </Button>
-                      <Button size="sm" onClick={() => console.log('Remove slot', slot.id)} variant="secondary">
+                      <Button size="sm" disabled variant="secondary" title="Remove slot feature coming soon">
                         Remove
                       </Button>
                     </td>

@@ -2,6 +2,7 @@ import { getPatientDataSource } from '@/config/appConfig';
 // import { db } from '@/lib/firebaseClient';
 // import { collection, query, where, orderBy, limit, Timestamp, getDocs } from 'firebase/firestore';
 import { Appointment } from '@/types/appointment';
+import { AppointmentStatus } from '@/types/enums';
 
 /**
  * Loads patient appointments from the configured data source (mock or Firestore).
@@ -11,8 +12,8 @@ export async function loadPatientAppointments(patientId: string, afterDate?: any
   if (dataSource === 'mock') {
     // Mock data for demo/testing
     return [
-      { id: 'a1', patientId, doctorId: 'd1', appointmentDate: '2025-04-18', status: 'upcoming' },
-      { id: 'a2', patientId, doctorId: 'd2', appointmentDate: '2025-04-20', status: 'completed' }
+      { id: 'a1', patientId, doctorId: 'd1', appointmentDate: '2025-04-18', status: AppointmentStatus.UPCOMING },
+      { id: 'a2', patientId, doctorId: 'd2', appointmentDate: '2025-04-20', status: AppointmentStatus.COMPLETED }
     ];
   }
   // Uncomment and implement Firestore logic as needed

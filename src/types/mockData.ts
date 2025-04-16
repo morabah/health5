@@ -2,7 +2,6 @@
  * Mock data generators for all core types.
  * Provides realistic sample data for UI population and Firestore seeding.
  */
-import { Timestamp } from 'firebase/firestore';
 import { UserType, VerificationStatus, AppointmentStatus } from './enums';
 import type { UserProfile } from './user';
 import type { PatientProfile } from './patient';
@@ -21,8 +20,8 @@ export const mockPatientUser: UserProfile = {
   isActive: true,
   emailVerified: true,
   phoneVerified: false,
-  createdAt: Timestamp.fromDate(new Date('2024-01-10T10:00:00Z')),
-  updatedAt: Timestamp.now(),
+  createdAt: new Date('2024-01-10T10:00:00Z'),
+  updatedAt: new Date(),
 };
 
 export const mockDoctorUser: UserProfile = {
@@ -35,8 +34,8 @@ export const mockDoctorUser: UserProfile = {
   isActive: true,
   emailVerified: true,
   phoneVerified: true,
-  createdAt: Timestamp.fromDate(new Date('2023-12-01T09:00:00Z')),
-  updatedAt: Timestamp.now(),
+  createdAt: new Date('2023-12-01T09:00:00Z'),
+  updatedAt: new Date(),
 };
 
 export const mockAdminUser: UserProfile = {
@@ -49,17 +48,33 @@ export const mockAdminUser: UserProfile = {
   isActive: true,
   emailVerified: true,
   phoneVerified: false,
-  createdAt: Timestamp.fromDate(new Date('2023-11-01T08:00:00Z')),
-  updatedAt: Timestamp.now(),
+  createdAt: new Date('2023-11-01T08:00:00Z'),
+  updatedAt: new Date(),
 };
 
-// --- Patient Profile Mock ---
-export const mockPatientProfileData: PatientProfile = {
+// --- Patient Profile Mocks ---
+export const mockPatientProfileData1: PatientProfile = {
   userId: mockPatientUser.id,
-  dateOfBirth: Timestamp.fromDate(new Date('1990-05-15T00:00:00Z')),
+  dateOfBirth: new Date('1990-05-15T00:00:00Z'),
   gender: 'Female',
   bloodType: 'A+',
   medicalHistory: 'Asthma, mild seasonal allergies.',
+};
+
+export const mockPatientProfileData2: PatientProfile = {
+  userId: 'user_patient_002',
+  dateOfBirth: new Date('1985-03-22T00:00:00Z'),
+  gender: 'Male',
+  bloodType: 'O-',
+  medicalHistory: 'Diabetes Type 2.',
+};
+
+export const mockPatientProfileData3: PatientProfile = {
+  userId: 'user_patient_003',
+  dateOfBirth: new Date('2000-09-10T00:00:00Z'),
+  gender: 'Other',
+  bloodType: 'B+',
+  medicalHistory: 'Hypertension.',
 };
 
 // --- Doctor Profile Mocks ---
@@ -134,10 +149,10 @@ export const mockDoctorProfileData5: DoctorProfile = {
   userId: 'user_doctor_005',
   specialty: 'Neurology',
   licenseNumber: 'DOC-11223',
-  yearsOfExperience: 10,
-  education: 'MD, Columbia University',
+  yearsOfExperience: 12,
+  education: 'MD, Harvard Medical School',
   bio: 'Neurologist passionate about brain health and research.',
-  verificationStatus: VerificationStatus.UNVERIFIED,
+  verificationStatus: VerificationStatus.PENDING,
   verificationNotes: 'Pending license review.',
   location: 'Miami, FL',
   languages: ['English', 'Portuguese'],
@@ -146,6 +161,14 @@ export const mockDoctorProfileData5: DoctorProfile = {
   licenseDocumentUrl: null,
   certificateUrl: null,
 };
+
+export const mockDoctorProfiles: DoctorProfile[] = [
+  mockDoctorProfileData1,
+  mockDoctorProfileData2,
+  mockDoctorProfileData3,
+  mockDoctorProfileData4,
+  mockDoctorProfileData5,
+];
 
 // --- Doctor Availability Slot Mock ---
 export const mockDoctorAvailabilitySlot: DoctorAvailabilitySlot = {
@@ -163,7 +186,7 @@ export const mockVerificationDocument: VerificationDocument = {
   doctorId: mockDoctorUser.id,
   documentType: 'License',
   fileUrl: 'https://example.com/docs/license1.pdf',
-  uploadedAt: Timestamp.fromDate(new Date('2023-12-02T10:00:00Z')),
+  uploadedAt: new Date('2023-12-02T10:00:00Z'),
 };
 
 // --- Appointments Mock Array ---
@@ -175,28 +198,28 @@ export const mockAppointmentsArray: Appointment[] = [
     doctorId: mockDoctorUser.id,
     doctorName: `${mockDoctorUser.firstName} ${mockDoctorUser.lastName}`,
     doctorSpecialty: mockDoctorProfileData1.specialty,
-    appointmentDate: Timestamp.fromDate(new Date('2025-05-01T00:00:00Z')),
+    appointmentDate: new Date('2025-05-01T00:00:00Z'),
     startTime: '10:00',
     endTime: '10:30',
     status: AppointmentStatus.CONFIRMED,
     reason: 'Routine check-up',
     notes: 'Patient is in good health.',
-    createdAt: Timestamp.fromDate(new Date('2025-04-01T10:00:00Z')),
-    updatedAt: Timestamp.now(),
+    createdAt: new Date('2025-04-01T10:00:00Z'),
+    updatedAt: new Date(),
     appointmentType: 'In-person',
   },
   {
     id: 'appt_002',
     patientId: mockPatientUser.id,
     doctorId: mockDoctorUser.id,
-    appointmentDate: Timestamp.fromDate(new Date('2025-05-10T00:00:00Z')),
+    appointmentDate: new Date('2025-05-10T00:00:00Z'),
     startTime: '11:00',
     endTime: '11:30',
     status: AppointmentStatus.PENDING,
     reason: 'Consultation for chest pain',
     notes: '',
-    createdAt: Timestamp.fromDate(new Date('2025-04-10T09:00:00Z')),
-    updatedAt: Timestamp.now(),
+    createdAt: new Date('2025-04-10T09:00:00Z'),
+    updatedAt: new Date(),
     appointmentType: 'Video',
   },
   {
@@ -204,14 +227,14 @@ export const mockAppointmentsArray: Appointment[] = [
     patientId: mockPatientUser.id,
     doctorId: 'user_doctor_002',
     doctorSpecialty: mockDoctorProfileData2.specialty,
-    appointmentDate: Timestamp.fromDate(new Date('2025-06-01T00:00:00Z')),
+    appointmentDate: new Date('2025-06-01T00:00:00Z'),
     startTime: '14:00',
     endTime: '14:30',
     status: AppointmentStatus.CANCELLED,
     reason: 'Follow-up for skin rash',
     notes: 'Patient cancelled due to travel.',
-    createdAt: Timestamp.fromDate(new Date('2025-05-01T10:00:00Z')),
-    updatedAt: Timestamp.now(),
+    createdAt: new Date('2025-05-01T10:00:00Z'),
+    updatedAt: new Date(),
     appointmentType: 'In-person',
   },
 ];
@@ -224,7 +247,7 @@ export const mockNotificationsArray: Notification[] = [
     title: 'Appointment Confirmed',
     message: 'Your appointment with Dr. Bob Johnson is confirmed for May 1, 2025 at 10:00.',
     isRead: false,
-    createdAt: Timestamp.now(),
+    createdAt: new Date(),
     type: 'appointment_booked',
     relatedId: 'appt_001',
   },
@@ -234,7 +257,7 @@ export const mockNotificationsArray: Notification[] = [
     title: 'New Appointment Request',
     message: 'You have a new appointment request from Alice Smith.',
     isRead: false,
-    createdAt: Timestamp.now(),
+    createdAt: new Date(),
     type: 'appointment_booked',
     relatedId: 'appt_002',
   },
@@ -244,7 +267,7 @@ export const mockNotificationsArray: Notification[] = [
     title: 'Verification Approved',
     message: 'Your account has been verified by the admin.',
     isRead: true,
-    createdAt: Timestamp.fromDate(new Date('2024-01-01T08:00:00Z')),
+    createdAt: new Date('2024-01-01T08:00:00Z'),
     type: 'verification_approved',
     relatedId: null,
   },

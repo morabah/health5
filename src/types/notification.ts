@@ -7,8 +7,8 @@ import { Timestamp } from 'firebase/firestore';
  * Notification defines the structure for user-facing system notifications.
  */
 export interface Notification {
-  /** Optional unique identifier for the notification (Firestore doc ID). */
-  id?: string;
+  /** Unique identifier for the notification (Firestore doc ID). */
+  id: string;
   /** Foreign Key matching the recipient user (UserProfile.id). */
   userId: string;
   /** Title of the notification (short, user-facing). */
@@ -18,7 +18,7 @@ export interface Notification {
   /** Whether the notification has been read by the user. */
   isRead: boolean;
   /** Timestamp of when the notification was created. */
-  createdAt: Timestamp;
+  createdAt: Date | Timestamp;
   /** Type of notification (e.g., appointment_booked, verification_approved, system, etc.). */
   type: 'appointment_booked' | 'verification_approved' | 'system' | string;
   /** Related entity ID (e.g., appointmentId, verificationId), if applicable. */

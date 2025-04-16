@@ -4,6 +4,8 @@ import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import { mockRegisterUser } from "@/lib/mockApiService";
+import { UserType } from "@/types/enums";
 
 export default function DoctorRegisterPage() {
   const [form, setForm] = useState({
@@ -27,12 +29,34 @@ export default function DoctorRegisterPage() {
     }
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFeedback("Registering doctor...");
-    setTimeout(() => {
-      setFeedback("Registration simulated. State: " + JSON.stringify({ ...form, licenseFile: licenseFile ? licenseFile.name : null }));
-    }, 700);
+    // Basic validation
+    if (!form.name || !form.email || !form.password || !form.confirmPassword || !form.license || !form.specialty) {
+      setFeedback("Please fill in all fields.");
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setFeedback("Passwords do not match.");
+      return;
+    }
+    try {
+      const result = await mockRegisterUser({
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        userType: UserType.DOCTOR,
+        specialty: form.specialty,
+        licenseNumber: form.license,
+      });
+      setFeedback("Registration successful! Redirecting to login...");
+      setTimeout(() => {
+        window.location.href = "/auth/login";
+      }, 1000);
+    } catch (err: any) {
+      setFeedback(err.message === "already-exists" ? "Email already registered." : "Registration failed.");
+    }
   }
 
   return (

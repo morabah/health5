@@ -11,21 +11,23 @@ import React, {
 } from "react";
 import type { UserProfile } from "../types/user";
 import { logInfo } from "@/lib/logger";
-import { mockPatientUser, mockDoctorUser } from "../types/mockData";
+import { mockPatientUser, mockDoctorUser, mockAdminUser } from "../types/mockData";
 
 /**
  * AuthContextState defines the shape of the authentication context.
  * @property user - The mock Firebase Auth user (minimal shape: { uid, email }) or null if not logged in.
  * @property userProfile - The mock Firestore user profile or null if not logged in.
  * @property loading - Whether the auth state is being initialized or changed.
- * @property login - Function to simulate login as a patient or doctor (mock only).
+ * @property role - The current mock user role ('patient', 'doctor', 'admin') or null if not logged in.
+ * @property login - Function to simulate login as a patient, doctor, or admin (mock only).
  * @property logout - Function to simulate logout.
  */
 export interface AuthContextState {
   user: any | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  login: (role: "patient" | "doctor") => void;
+  role: 'patient' | 'doctor' | 'admin' | null;
+  login: (role: 'patient' | 'doctor' | 'admin') => void;
   logout: () => void;
 }
 
@@ -40,6 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<any | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [role, setRole] = useState<'patient' | 'doctor' | 'admin' | null>(null);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
 
   // Simulate logout (must be declared before resetTimeout for closure safety)
@@ -47,6 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     logInfo("Mock logout called");
     setUser(null);
     setUserProfile(null);
+    setRole(null);
     setLoading(false);
     if (timeoutIdRef.current) {
       clearTimeout(timeoutIdRef.current);
@@ -66,21 +70,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [logout]);
 
   // Simulate async mock login
-  const login = useCallback((role: "patient" | "doctor") => {
+  const login = useCallback(async (role: 'patient' | 'doctor' | 'admin') => {
     logInfo("Mock login called", { role });
     setLoading(true);
-    setTimeout(() => {
-      if (role === "patient") {
-        setUser({ uid: mockPatientUser.id, email: mockPatientUser.email });
-        setUserProfile(mockPatientUser);
-      } else {
-        setUser({ uid: mockDoctorUser.id, email: mockDoctorUser.email });
-        setUserProfile(mockDoctorUser);
-      }
+    // Reset and seed all mock data stores for the selected role
+    await import("@/data/resetMockDataStoresForUser").then(mod => mod.resetMockDataStoresForUser(role));
+    let email = '';
+    if (role === 'patient') email = mockPatientUser.email;
+    else if (role === 'doctor') email = mockDoctorUser.email;
+    else if (role === 'admin') email = mockAdminUser.email;
+
+    try {
+      // Use the real mockSignIn to ensure all associated data is loaded
+      const { user, userProfile } = await import("@/lib/mockApiService").then(mod => mod.mockSignIn(email, 'mock'));
+      setUser({ uid: user.uid, email: user.email, userType: role });
+      setUserProfile(userProfile);
+      setRole(role);
       setLoading(false);
       logInfo("Mock login completed", { role });
+      console.log('[DEBUG][AuthContext] Login setUser:', { uid: user.uid, email: user.email, userType: role });
+      console.log('[DEBUG][AuthContext] Login setUserProfile:', userProfile);
       resetTimeout(); // Ensure session timer starts on login
-    }, 500);
+    } catch (error) {
+      setUser(null);
+      setUserProfile(null);
+      setRole(null);
+      setLoading(false);
+      logInfo("Mock login failed", { role, error });
+    }
   }, [resetTimeout]);
 
   useEffect(() => {
@@ -109,7 +126,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, userProfile, loading, role, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

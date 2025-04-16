@@ -1,11 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadPatientAppointments } from "@/data/patientLoaders";
+import { mockGetMyAppointments, mockCancelAppointment } from "@/lib/mockApiService";
+import { useAuth } from "@/context/AuthContext";
+import { UserType, AppointmentStatus } from "@/types/enums";
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { logValidation } from "@/lib/logger";
+import EmptyState from "@/components/ui/EmptyState";
 
 type TabKey = "upcoming" | "past" | "cancelled";
 
@@ -17,32 +20,62 @@ export default function PatientAppointmentsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    async function fetchAppointments() {
-      setLoading(true);
-      try {
-        const items = await loadPatientAppointments('mockPatientId');
-        setAppointments(items);
-      } catch {
-        setAppointments([]);
-      } finally {
-        setLoading(false);
-      }
+  async function fetchAppointments() {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('[DEBUG] user.uid:', user.uid, 'userType:', user.userType);
+      const items = await mockGetMyAppointments(user.uid, UserType.PATIENT);
+      console.log('[DEBUG] fetched appointments:', items);
+      setAppointments(items);
+    } catch (err: any) {
+      setError("Failed to load appointments.");
+      setAppointments([]);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     fetchAppointments();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   useEffect(() => {
     logValidation("patient-appointments-ui", "success");
   }, []);
 
-  const filtered = appointments.filter((a) => a.status === tab);
-  const getStatusLabel = (status: string) => {
-    if (status === "upcoming") return "Upcoming";
-    if (status === "past") return "Past";
-    return "Cancelled";
+  const filteredAppointments = appointments.filter(appt => {
+    if (tab === "upcoming") {
+      return appt.status === AppointmentStatus.PENDING || appt.status === AppointmentStatus.CONFIRMED;
+    }
+    if (tab === "past") {
+      return appt.status === AppointmentStatus.COMPLETED || appt.status === AppointmentStatus.CANCELLED;
+    }
+    if (tab === "cancelled") {
+      return appt.status === AppointmentStatus.CANCELLED;
+    }
+    return true;
+  });
+
+  const getStatusLabel = (status: AppointmentStatus) => {
+    switch (status) {
+      case AppointmentStatus.PENDING:
+        return "Pending";
+      case AppointmentStatus.CONFIRMED:
+        return "Confirmed";
+      case AppointmentStatus.COMPLETED:
+        return "Completed";
+      case AppointmentStatus.CANCELLED:
+        return "Cancelled";
+      default:
+        return status;
+    }
   };
 
   const handleCancel = (id: string) => {
@@ -51,21 +84,21 @@ export default function PatientAppointmentsPage() {
     setCancelSuccess(false);
   };
 
-  const confirmCancel = () => {
-    // Simulate cancel
-    setTimeout(() => {
-      setAppointments((prev) =>
-        prev.map((a) =>
-          a.id === cancellingId ? { ...a, status: "cancelled" } : a
-        )
-      );
+  const confirmCancel = async () => {
+    if (!cancellingId || !user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await mockCancelAppointment({ appointmentId: cancellingId, reason: cancelReason, userId: user.uid });
       setCancelSuccess(true);
-      setTimeout(() => {
-        setCancellingId(null);
-        setCancelReason("");
-        setCancelSuccess(false);
-      }, 1200);
-    }, 1200);
+      setCancellingId(null);
+      setCancelReason("");
+      await fetchAppointments();
+    } catch (err: any) {
+      setError("Failed to cancel appointment.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,7 +117,7 @@ export default function PatientAppointmentsPage() {
               className={`px-4 py-2 rounded font-medium border-b-2 transition-all ${tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
               onClick={() => setTab(key)}
             >
-              {getStatusLabel(key)}
+              {key.charAt(0).toUpperCase() + key.slice(1)}
             </button>
           ))}
         </div>
@@ -94,27 +127,34 @@ export default function PatientAppointmentsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filtered.length === 0 ? (
-              <div className="col-span-full text-center text-muted-foreground">No appointments.</div>
-            ) : (
-              filtered.map((appt) => (
-                <Card key={appt.id} className="p-4">
-                  <div className="flex flex-col gap-1">
-                    <div className="font-semibold text-lg">{appt.doctorName}</div>
-                    <div className="text-sm text-muted-foreground">{appt.specialty}</div>
-                    <div className="text-xs text-muted-foreground">{new Date(appt.date).toLocaleDateString()} {appt.time}</div>
-                    <div className="text-xs text-muted-foreground">Type: {appt.type}</div>
-                    <div className="flex gap-2 mt-2">
-                      <Button variant="secondary" onClick={() => setDetailId(appt.id)} size="sm">View Details</Button>
-                      {tab === "upcoming" && (
-                        <Button variant="destructive" onClick={() => handleCancel(appt.id)} size="sm">Cancel</Button>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              ))
+            {!loading && !error && filteredAppointments.length === 0 && (
+              <EmptyState
+                title="No appointments found."
+                message="You have no appointments in this category. Book an appointment to get started."
+                className="my-8"
+                action={<Button onClick={() => router.push('/find')}>Book Appointment</Button>}
+              />
             )}
+            {filteredAppointments.length > 0 && filteredAppointments.map((appt) => (
+              <Card key={appt.id} className="p-4">
+                <div className="flex flex-col gap-1">
+                  <div className="font-semibold text-lg">{appt.doctorName}</div>
+                  <div className="text-sm text-muted-foreground">{appt.specialty}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(appt.date).toLocaleDateString()} {appt.time}</div>
+                  <div className="text-xs text-muted-foreground">Type: {appt.type}</div>
+                  <div className="flex gap-2 mt-2">
+                    <Button variant="secondary" onClick={() => setDetailId(appt.id)} size="sm">View Details</Button>
+                    {tab === "upcoming" && (
+                      <Button variant="destructive" onClick={() => handleCancel(appt.id)} size="sm">Cancel</Button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
           </div>
+        )}
+        {error && (
+          <div className="text-red-600 mt-2">{error}</div>
         )}
         {/* Detail Modal */}
         {detailId && (

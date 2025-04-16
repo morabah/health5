@@ -65,3 +65,13 @@ export async function loadAdminUsers(): Promise<any[]> {
     logInfo(`[${label}] finished`, { duration: performance.now() - start });
   }
 }
+
+// Export a stub for loadAdminDashboardData if missing
+export async function loadAdminDashboardData() {
+  // TODO: Implement real dashboard data aggregation
+  return {
+    stats: {},
+    users: [],
+    verifications: [],
+  };
+}

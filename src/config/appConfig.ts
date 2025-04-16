@@ -31,6 +31,9 @@ const DEFAULTS: AppConfig = {
   featureXEnabled: false,
 };
 
+// Export API_MODE for legacy compatibility (deprecated, use getApiMode instead)
+export const API_MODE = DEFAULTS.apiMode;
+
 export const DATA_SOURCE: DataSource = 'mock'; // Change to 'crm' or 'firestore' as needed
 
 export const CRM_API_CONFIG = {
@@ -43,6 +46,11 @@ export function getApiMode(): ApiMode {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem(KEYS.apiMode);
     if (stored === 'live' || stored === 'mock') return stored;
+    if (stored !== null) {
+      // Invalid value found, clean up and log
+      console.warn(`[appConfig] Invalid apiMode in localStorage: '${stored}', resetting to default.`);
+      localStorage.removeItem(KEYS.apiMode);
+    }
     localStorage.setItem(KEYS.apiMode, DEFAULTS.apiMode);
     return DEFAULTS.apiMode;
   }

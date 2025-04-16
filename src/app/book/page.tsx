@@ -4,7 +4,8 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
-import { loadDoctorAvailability } from '@/data/doctorLoaders';
+import { mockGetAvailableSlots, mockBookAppointment } from "@/lib/mockApiService";
+import { useAuth } from "@/context/AuthContext";
 
 interface AppointmentSlot {
   id: string;
@@ -19,14 +20,24 @@ export default function BookAppointmentPage() {
   const [slots, setSlots] = useState<AppointmentSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     async function fetchSlots() {
       setLoading(true);
       setError(null);
       try {
-        const items = await loadDoctorAvailability('mockDoctorId');
-        setSlots(items);
+        const items = await mockGetAvailableSlots({ doctorId: "mockDoctorId", dateString: new Date().toISOString().slice(0, 10) });
+        setSlots(items.map((time: string, idx: number) => ({
+          id: `slot-${idx}`,
+          doctorName: "Dr. Demo",
+          specialty: "General",
+          time,
+          location: "Demo Clinic",
+          available: true,
+        })));
       } catch (err) {
         setError("Failed to load appointment slots.");
       } finally {
@@ -35,6 +46,29 @@ export default function BookAppointmentPage() {
     }
     fetchSlots();
   }, []);
+
+  const handleBook = async (slotId: string, slotTime: string) => {
+    if (!user) {
+      setFeedback("You must be logged in to book an appointment.");
+      return;
+    }
+    setBookingId(slotId);
+    setFeedback(null);
+    try {
+      await mockBookAppointment({
+        patientId: user.uid,
+        doctorId: "mockDoctorId",
+        appointmentDate: { toDate: () => new Date() },
+        startTime: slotTime,
+        endTime: slotTime,
+      });
+      setFeedback("Appointment booked successfully!");
+    } catch (err) {
+      setFeedback("Failed to book appointment.");
+    } finally {
+      setBookingId(null);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 flex flex-col items-center">
@@ -79,8 +113,8 @@ export default function BookAppointmentPage() {
                       )}
                     </td>
                     <td className="px-4 py-2">
-                      <Button size="sm" onClick={() => console.log('Book slot', slot.id)} disabled={!slot.available}>
-                        Book
+                      <Button size="sm" onClick={() => handleBook(slot.id, slot.time)} disabled={!slot.available || bookingId === slot.id}>
+                        {bookingId === slot.id ? "Booking..." : "Book"}
                       </Button>
                     </td>
                   </tr>
@@ -89,6 +123,7 @@ export default function BookAppointmentPage() {
             </table>
           </div>
         )}
+        {feedback && <div className="mt-4 text-center text-blue-600 dark:text-blue-400">{feedback}</div>}
       </Card>
     </main>
   );

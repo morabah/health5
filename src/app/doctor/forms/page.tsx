@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import EmptyState from "@/components/ui/EmptyState";
 import { loadDoctorForms } from '@/data/loadDoctorForms';
 
 interface FormSubmission {
@@ -48,7 +49,11 @@ export default function DoctorFormsPage() {
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}
         {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
         {!loading && !error && forms.length === 0 && (
-          <div className="text-gray-600 dark:text-gray-300">No forms submitted.</div>
+          <EmptyState
+            title="No forms submitted."
+            message="You have not received any patient forms yet. When a patient submits a form, it will appear here."
+            className="my-8"
+          />
         )}
         {!loading && forms.length > 0 && (
           <div className="overflow-x-auto">
@@ -70,10 +75,10 @@ export default function DoctorFormsPage() {
                     <td className="px-4 py-2">{form.submittedAt}</td>
                     <td className="px-4 py-2">{form.status}</td>
                     <td className="px-4 py-2 flex gap-2">
-                      <Button size="sm" onClick={() => console.log('View form', form.id)}>
+                      <Button size="sm" disabled title="Form detail view coming soon">
                         View
                       </Button>
-                      <Button size="sm" onClick={() => console.log('Mark as reviewed', form.id)} disabled={form.status === 'reviewed'} variant="secondary">
+                      <Button size="sm" disabled={form.status === 'reviewed'} variant="secondary" title="Mark as reviewed coming soon">
                         Mark as Reviewed
                       </Button>
                     </td>

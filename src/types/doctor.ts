@@ -36,6 +36,9 @@ export interface DoctorProfile {
   licenseDocumentUrl: string | null;
   /** Secure URL to the uploaded certificate document. */
   certificateUrl: string | null;
+  // Add createdAt and updatedAt for mock/real compatibility
+  createdAt?: Date | Timestamp;
+  updatedAt?: Date | Timestamp;
 }
 
 /**
