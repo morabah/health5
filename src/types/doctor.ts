@@ -106,3 +106,19 @@ export interface DoctorVerificationData {
   /** Optional notes from administrator regarding verification. */
   adminNotes?: string;
 }
+
+/**
+ * Simplified doctor verification data for admin listing
+ */
+export interface DoctorVerification {
+  /** ID of the doctor (matches UserProfile.id) */
+  id: string;
+  /** Doctor's full name */
+  name?: string;
+  /** Current verification status */
+  status: VerificationStatus;
+  /** When the doctor submitted their verification materials */
+  dateSubmitted: Date | string;
+  /** Doctor's specialty */
+  specialty?: string;
+}

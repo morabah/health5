@@ -33,12 +33,22 @@ export enum VerificationStatus {
  * Enumerates the lifecycle states of an appointment.
  * - PENDING: Awaiting confirmation by doctor.
  * - CONFIRMED: Accepted by doctor and scheduled.
- * - CANCELLED: Cancelled by patient, doctor, or admin.
+ * - SCHEDULED: Confirmed and added to calendar.
+ * - CANCELLED: Cancelled without specifying which party cancelled.
+ * - CANCELLED_BY_PATIENT: Explicitly cancelled by patient.
+ * - CANCELLED_BY_DOCTOR: Explicitly cancelled by doctor.
  * - COMPLETED: Appointment has taken place and is finished.
+ * - NO_SHOW: Patient did not attend the scheduled appointment.
+ * - RESCHEDULED: Appointment has been rescheduled to a new time.
  */
 export enum AppointmentStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
+  SCHEDULED = 'SCHEDULED',
   CANCELLED = 'CANCELLED',
+  CANCELLED_BY_PATIENT = 'CANCELLED_BY_PATIENT',
+  CANCELLED_BY_DOCTOR = 'CANCELLED_BY_DOCTOR',
   COMPLETED = 'COMPLETED',
+  NO_SHOW = 'NO_SHOW',
+  RESCHEDULED = 'RESCHEDULED',
 }

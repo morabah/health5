@@ -481,7 +481,8 @@ export function syncAppointmentUpdated(appointment: any) {
  * Sync an appointment cancellation across tabs
  */
 export function syncAppointmentCancelled(appointmentId: string, reason?: string) {
-  createAndBroadcastEvent(SyncEventType.APPOINTMENT_CANCELLED, { appointmentId, reason });
+  const payload = { appointmentId, reason: reason || '' };
+  createAndBroadcastEvent(SyncEventType.APPOINTMENT_CANCELLED, payload);
   persistAppointments();
 }
 

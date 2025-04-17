@@ -100,33 +100,38 @@ export function isPastDate(date: Date | Timestamp | string | undefined | null): 
 }
 
 /**
- * Gets a standardized Date object from various date formats
- * @param date Date, Timestamp, or ISO string
- * @returns Date object or null if invalid
+ * Utility to convert various date-like objects to standard Date objects.
  */
-export function getDateObject(date: Date | Timestamp | string | undefined | null): Date | null {
-  if (!date) return null;
-  
-  try {
-    if (typeof date === 'string') {
-      const dateObj = new Date(date);
-      return isNaN(dateObj.getTime()) ? null : dateObj;
-    } else if (
-      date && 
-      typeof date === 'object' && 
-      'toDate' in date && 
-      typeof date.toDate === 'function'
-    ) {
-      // Safer check for Timestamp objects
-      return date.toDate();
-    } else if (date instanceof Date) {
-      return isNaN(date.getTime()) ? null : date;
-    } else {
-      console.warn('Unknown date format in getDateObject:', date);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error converting date in getDateObject:', error, date);
-    return null;
+/**
+ * Converts a Timestamp, string, or Date to a standard Date object
+ * 
+ * @param dateInput - Input date (Date, Timestamp, or string)
+ * @returns A native JavaScript Date object
+ */
+export function getDateObject(dateInput: Date | Timestamp | any): Date {
+  if (!dateInput) return new Date();
+
+  if (dateInput instanceof Date) {
+    return dateInput;
   }
+
+  if (typeof dateInput === 'string') {
+    return new Date(dateInput);
+  }
+
+  // Handle Firestore Timestamp objects (which have toDate method)
+  if (typeof dateInput === 'object' && dateInput !== null) {
+    // Check if it's a Firestore Timestamp
+    if (typeof dateInput.toDate === 'function') {
+      return dateInput.toDate();
+    }
+    
+    // Special handling for serialized Timestamp or date objects
+    if ('seconds' in dateInput && 'nanoseconds' in dateInput) {
+      return new Date(dateInput.seconds * 1000);
+    }
+  }
+
+  // Default fallback
+  return new Date();
 } 
