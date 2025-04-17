@@ -21,6 +21,7 @@ import { useTheme } from "../../context/ThemeContext";
 import ApiModeLabel from "./ApiModeLabel";
 import { useAuth } from "../../context/AuthContext";
 import { UserType } from "@/types/enums";
+import NotificationBell from "../shared/NotificationBell";
 
 const Navbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -123,6 +124,10 @@ const Navbar: React.FC = () => {
           ) : user && userProfile ? (
             <>
               {renderRoleLinks()}
+              
+              {/* Notification Bell */}
+              <NotificationBell />
+              
               {/* User Dropdown Menu */}
               <Menu as="div" className="relative ml-4">
                 <Menu.Button className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary">
@@ -212,7 +217,7 @@ const Navbar: React.FC = () => {
           ) : (
             renderLoginButtons()
           )}
-          <Button variant="ghost" onClick={toggleTheme} aria-label="Toggle theme">
+          <Button variant="primary" onClick={toggleTheme} aria-label="Toggle theme" label="Toggle theme" pageName="Navbar">
             <FontAwesomeIcon icon={theme === "dark" ? faSun : faMoon} />
           </Button>
         </div>
@@ -233,6 +238,13 @@ const Navbar: React.FC = () => {
           ) : user && userProfile ? (
             <>
               {renderRoleLinks()}
+              
+              {/* Notification Bell (Mobile) */}
+              <div className="flex items-center gap-2 py-2">
+                <NotificationBell />
+                <span className="text-gray-700 dark:text-gray-300">Notifications</span>
+              </div>
+              
               {/* User Dropdown Menu (mobile) */}
               <Menu as="div" className="relative mt-2">
                 <Menu.Button className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary w-full">
@@ -321,7 +333,7 @@ const Navbar: React.FC = () => {
           ) : (
             renderLoginButtons()
           )}
-          <Button variant="ghost" onClick={toggleTheme} aria-label="Toggle theme">
+          <Button variant="primary" onClick={toggleTheme} aria-label="Toggle theme" label="Toggle theme" pageName="Navbar">
             <FontAwesomeIcon icon={theme === "dark" ? faSun : faMoon} />
           </Button>
         </div>

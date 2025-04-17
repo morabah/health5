@@ -13,6 +13,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Timestamp } from "firebase/firestore";
 import Alert from "@/components/ui/Alert";
 import { AppointmentStatus } from "@/types/enums";
+import { toast } from "react-hot-toast";
+import { parseISO } from "date-fns";
 
 interface AppointmentSlot {
   id: string;
@@ -23,22 +25,22 @@ interface AppointmentSlot {
   available: boolean;
 }
 
-export default function BookAppointmentPage() {
-  const [slots, setSlots] = useState<AppointmentSlot[]>([]);
+export default function BookPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+  const { user, userProfile } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [slots, setSlots] = useState<AppointmentSlot[]>([]);
+  const [dateString, setDateString] = useState<string>(new Date().toISOString().split('T')[0]);
   const [error, setError] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [appointmentReason, setAppointmentReason] = useState<string>("");
-  const [appointmentType, setAppointmentType] = useState<string>("In-person");
+  const [appointmentType, setAppointmentType] = useState<'In-person' | 'Video'>('In-person');
   const [success, setSuccess] = useState<boolean>(false);
   const [doctorInfo, setDoctorInfo] = useState<any>(null);
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const { user } = useAuth();
   
-  const doctorId = searchParams.get('doctorId') || "mockDoctorId";
+  // Safe access to searchParams - since searchParams is an object, not the URLSearchParams
+  const doctorId = typeof searchParams?.doctorId === 'string' ? searchParams.doctorId : "mockDoctorId";
 
   useEffect(() => {
     async function fetchDoctorProfile() {
@@ -58,7 +60,7 @@ export default function BookAppointmentPage() {
       setLoading(true);
       setError(null);
       try {
-        const items = await mockGetAvailableSlots({ doctorId, dateString: selectedDate });
+        const items = await mockGetAvailableSlots({ doctorId, dateString: dateString });
         setSlots(items.map((time: string, idx: number) => ({
           id: `slot-${idx}`,
           doctorName: doctorInfo?.name || "Dr. Demo",
@@ -74,65 +76,62 @@ export default function BookAppointmentPage() {
       }
     }
     
-    if (selectedDate) {
+    if (dateString) {
       fetchSlots();
     }
-  }, [selectedDate, doctorId, doctorInfo]);
+  }, [dateString, doctorId, doctorInfo]);
 
-  const handleBook = async (slotId: string, slotTime: string) => {
-    if (!user) {
-      setFeedback("You must be logged in to book an appointment.");
-      return;
-    }
-    
-    if (!appointmentReason.trim()) {
-      setFeedback("Please provide a reason for your appointment.");
-      return;
-    }
-    
+  const handleBookSlot = async (slotId: string) => {
     setBookingId(slotId);
-    setFeedback("Booking your appointment...");
+    
+    if (!user) {
+      setError("You must be logged in to book an appointment");
+      return;
+    }
+    
+    const selectedSlot = slots.find(s => s.id === slotId);
+    if (!selectedSlot) {
+      setError("Invalid slot selection");
+      return;
+    }
+    
+    const date = parseISO(dateString);
+    
     try {
-      const dateObj = new Date(selectedDate);
-      const appointmentTimestamp = Timestamp.fromDate(dateObj);
+      const timeparts = selectedSlot.time.split(':').map(t => parseInt(t));
+      const appointmentDate = new Date(date);
+      appointmentDate.setHours(timeparts[0], timeparts[1], 0);
       
-      // Calculate end time (30 minutes after start)
-      const [startHour, startMinute] = slotTime.split(':').map(Number);
-      let endHour = startHour;
-      let endMinute = startMinute + 30;
+      const startTime = selectedSlot.time;
+      const [hours, minutes] = startTime.split(':');
+      const endTimeDate = new Date(appointmentDate);
+      endTimeDate.setHours(parseInt(hours), parseInt(minutes) + 30);
+      const endTime = `${endTimeDate.getHours().toString().padStart(2, '0')}:${endTimeDate.getMinutes().toString().padStart(2, '0')}`;
       
-      if (endMinute >= 60) {
-        endMinute -= 60;
-        endHour += 1;
-      }
+      // Create a Timestamp for Firestore
+      const timestamp = Timestamp.fromDate(appointmentDate);
       
-      const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
-      
-      const response = await mockBookAppointment({
+      // Book the appointment
+      const result = await mockBookAppointment({
         patientId: user.uid,
-        doctorId: doctorId,
-        appointmentDate: appointmentTimestamp,
-        startTime: slotTime,
-        endTime: endTime,
+        doctorId,
+        appointmentDate: timestamp,
+        startTime,
+        endTime,
         reason: appointmentReason,
-        status: AppointmentStatus.PENDING,
         appointmentType: appointmentType,
-        patientName: user.displayName || 'Patient',
-        doctorName: doctorInfo?.name || 'Doctor',
-        doctorSpecialty: doctorInfo?.specialty || 'Specialty',
       });
       
-      setSuccess(true);
-      setFeedback("Appointment booked successfully!");
-      
-      // After 2 seconds, redirect to appointments page
-      setTimeout(() => {
+      if (result.success) {
+        toast.success(`Appointment booked successfully!`);
         router.push('/patient/appointments');
-      }, 2000);
-      
+      } else {
+        setError("Failed to book appointment");
+        setBookingId(null);
+      }
     } catch (err) {
-      setFeedback("Failed to book appointment. Please try again.");
-    } finally {
+      console.error("[BookPage] Error booking appointment:", err);
+      setError("An error occurred while booking the appointment");
       setBookingId(null);
     }
   };
@@ -221,8 +220,8 @@ export default function BookAppointmentPage() {
               </label>
               <Input 
                 type="date" 
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={dateString} 
+                onChange={(e) => setDateString(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
               />
             </div>
@@ -235,10 +234,9 @@ export default function BookAppointmentPage() {
                 options={[
                   { value: "In-person", label: "In-person" },
                   { value: "Video", label: "Video" },
-                  { value: "Phone", label: "Phone" }
                 ]}
                 value={appointmentType}
-                onChange={(e) => setAppointmentType(e.target.value)}
+                onChange={(e) => setAppointmentType(e.target.value as 'In-person' | 'Video')}
               />
             </div>
           </div>
@@ -276,10 +274,10 @@ export default function BookAppointmentPage() {
                       ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 dark:text-emerald-300'
                       : 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
                   }`}
-                  onClick={() => slot.available && handleBook(slot.id, slot.time)}
+                  onClick={() => slot.available && handleBookSlot(slot.id)}
                   disabled={!slot.available || !!bookingId || !appointmentReason.trim()}
                 >
-                  {bookingId === slot.id ? <Spinner size="small" /> : slot.time}
+                  {bookingId === slot.id ? <Spinner size="sm" /> : slot.time}
                 </button>
               ))}
             </div>

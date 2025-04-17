@@ -642,6 +642,16 @@ export async function mockMarkNotificationAsRead(notificationId: string): Promis
 }
 
 /**
+ * Alternative version of marking a notification as read
+ * (with a different parameter structure)
+ */
+export async function mockMarkNotificationRead({ notificationId, userId }: { notificationId: string; userId: string }): Promise<boolean> {
+  logApiCall('mockMarkNotificationRead', { notificationId, userId });
+  // Simply delegate to the existing implementation
+  return mockMarkNotificationAsRead(notificationId);
+}
+
+/**
  * Marks all notifications as read for a user.
  */
 export async function mockMarkAllNotificationsAsRead(userId: string): Promise<boolean> {
@@ -1610,7 +1620,10 @@ export async function mockCancelAppointmentDetails(
   };
   
   getAppointmentsStore()[appointmentIndex] = updatedAppointment;
-  syncAppointmentCancelled(updatedAppointment.id, cancelReason || '');
+  
+  // Fix the issue with potentially undefined cancelReason parameter
+  const reason = cancelReason || '';
+  syncAppointmentCancelled(updatedAppointment.id, reason);
   
   // Create notifications for both parties
   const doctor = getUsersStore().find(u => u.id === appointment.doctorId);
@@ -1820,7 +1833,7 @@ export async function mockBlockDoctorDate(
   getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
   
   // Sync blocked dates changes
-  syncDoctorBlockedDates(doctorId, updatedBlockedDates);
+  syncDoctorProfileUpdated(updatedProfile);
   
   console.log(`Date blocked for doctor ${doctorId}:`, date);
   return true;
@@ -1864,7 +1877,7 @@ export async function mockUnblockDoctorDate(
   getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
   
   // Sync blocked dates changes
-  syncDoctorBlockedDates(doctorId, updatedBlockedDates);
+  syncDoctorProfileUpdated(updatedProfile);
   
   console.log(`Date unblocked for doctor ${doctorId}:`, date);
   return true;
@@ -1902,3 +1915,21 @@ export async function mockGetDoctorBlockedDates(doctorId: string): Promise<Date[
     return [];
   }
 }
+
+/**
+ * Gets count of unread notifications for a user
+ */
+export const mockGetUnreadNotificationCount = async (userId: string): Promise<number> => {
+  logInfo("[mockApiService] Getting unread notification count", { userId });
+  
+  // Simulate network delay
+  await delay();
+  
+  try {
+    const notifications = await mockGetNotifications(userId);
+    return notifications.filter(notification => !notification.isRead).length;
+  } catch (error) {
+    logError("[mockApiService] Error getting unread notification count", { userId, error });
+    throw error;
+  }
+};

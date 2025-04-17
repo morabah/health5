@@ -52,7 +52,10 @@ export default function NotificationsPage() {
     if (!user) return;
     setMarkingId(id);
     try {
-      await mockMarkNotificationRead({ notificationId: id, userId: user.uid });
+      await mockMarkNotificationRead({ 
+        notificationId: id, 
+        userId: user.uid 
+      });
       await fetchNotifications();
     } catch {}
     setMarkingId(null);
