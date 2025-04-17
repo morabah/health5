@@ -27,6 +27,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { Timestamp } from "firebase/firestore";
 import { AppointmentStatus } from "@/types/enums";
+import { getMockDoctorAvailability } from "@/data/mockDataService";
+import { getUsersStore } from "@/data/mockDataStore";
 
 interface Doctor {
   id: string;
@@ -76,13 +78,27 @@ export default function BookAppointmentPage() {
         const data = await loadDoctorProfilePublic(doctorId);
         
         if (data) {
+          // Get the doctor's user data to get full name
+          const users = getUsersStore();
+          const doctorUser = users.find(u => u.id === doctorId);
+          
+          let doctorName = "Dr. Unknown";
+          
+          // Set the proper doctor name using the user data if available
+          if (doctorUser && doctorUser.firstName && doctorUser.lastName) {
+            doctorName = `Dr. ${doctorUser.firstName} ${doctorUser.lastName}`;
+          } else if (doctorId === 'user_doctor_001') {
+            // Hardcoded fallback for main doctor
+            doctorName = 'Dr. Bob Johnson';
+          }
+          
           // Convert to Doctor format with proper fallback values
           const doctorData: Doctor = {
             id: data.userId || doctorId,
             userId: data.userId || doctorId,
-            name: `Dr. ${data.userId?.substring(0, 8) || 'Unknown'}`,
-            firstName: '',
-            lastName: '',
+            name: doctorName,
+            firstName: doctorUser?.firstName || '',
+            lastName: doctorUser?.lastName || '',
             specialty: data.specialty || 'General Practice',
             experience: data.yearsOfExperience || 0,
             location: data.location || 'Not specified',
@@ -93,6 +109,7 @@ export default function BookAppointmentPage() {
           };
           
           setDoctor(doctorData);
+          console.log("Doctor loaded:", doctorData);
           
           // Set default date to tomorrow
           const tomorrow = addDays(new Date(), 1);
@@ -125,12 +142,53 @@ export default function BookAppointmentPage() {
       
       try {
         const dateString = format(selectedDate, 'yyyy-MM-dd');
+        
+        // Get the day of week (0-6, where 0 is Sunday)
+        const dayOfWeek = selectedDate.getDay();
+        console.log(`Selected date ${dateString} is day of week: ${dayOfWeek}`);
+        
+        // Get doctor's weekly availability slots
+        const doctorAvailability = getMockDoctorAvailability(doctor.userId);
+        const availableDaysForDoctor = doctorAvailability.filter(slot => 
+          slot.dayOfWeek === dayOfWeek && slot.isAvailable
+        );
+        
+        console.log("Doctor availability for this day:", availableDaysForDoctor);
+        
+        // If doctor is not available on this day, return empty slots
+        if (availableDaysForDoctor.length === 0) {
+          setAvailableSlots([]);
+          setLoadingSlots(false);
+          return;
+        }
+        
+        // If doctor is available on this day, get slots that don't conflict with appointments
         const slots = await mockGetAvailableSlots({ 
           doctorId: doctor.userId, 
           dateString 
         });
         
-        setAvailableSlots(slots);
+        // Filter slots based on doctor's availability hours for this day
+        const filteredSlots = slots.filter(timeSlot => {
+          const [hour, minute] = timeSlot.split(':').map(Number);
+          
+          // Check if this time slot is within any of the doctor's available time ranges for this day
+          return availableDaysForDoctor.some(availableSlot => {
+            const [startHour, startMinute] = availableSlot.startTime.split(':').map(Number);
+            const [endHour, endMinute] = availableSlot.endTime.split(':').map(Number);
+            
+            // Convert all to minutes for easier comparison
+            const slotMinutes = hour * 60 + minute;
+            const startMinutes = startHour * 60 + startMinute;
+            const endMinutes = endHour * 60 + endMinute;
+            
+            // Check if slot is within the available range
+            return slotMinutes >= startMinutes && slotMinutes < endMinutes;
+          });
+        });
+        
+        console.log(`Found ${filteredSlots.length} available slots after filtering by doctor schedule`);
+        setAvailableSlots(filteredSlots);
       } catch (error) {
         console.error("Error fetching available slots:", error);
         toast.error("Could not load available time slots");

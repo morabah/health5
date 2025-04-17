@@ -1,5 +1,5 @@
 import { UserType } from "@/types/enums";
-import { mockPatientUser, mockDoctorUser, mockAdminUser, mockPatientProfileData1, mockDoctorProfileData1, mockDoctorProfileData2, mockDoctorProfileData3, mockDoctorProfileData4, mockDoctorProfileData5, mockAppointmentsArray } from "@/types/mockData";
+import { mockPatientUser, mockDoctorUser, mockAdminUser, mockPatientProfileData1, mockDoctorProfileData1, mockDoctorProfileData2, mockDoctorProfileData3, mockDoctorProfileData4, mockDoctorProfileData5, mockAppointmentsArray, mockNotificationsArray } from "@/types/mockData";
 import type { UserProfile } from "@/types/user";
 import type { DoctorProfile } from "@/types/doctor";
 import type { PatientProfile } from "@/types/patient";
@@ -128,9 +128,66 @@ export function resetMockDataStoresForUser(role: UserType | 'patient' | 'doctor'
 
   if (role === 'patient') {
     appointmentsStore.push(...mockAppointmentsArray.filter(a => a.patientId === mockPatientUser.id || a.doctorId === mockDoctorUser.id));
+    // Add notifications for the patient
+    notificationsStore.push(...mockNotificationsArray.filter(n => n.userId === mockPatientUser.id));
+    
+    // Add test notifications
+    notificationsStore.push(
+      {
+        id: 'notif_test_001',
+        userId: mockPatientUser.id,
+        title: 'Welcome to Health Appointments',
+        message: 'Thank you for joining our platform. We\'re here to help you manage your healthcare needs effectively.',
+        isRead: false,
+        createdAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
+        type: 'system',
+        relatedId: null
+      },
+      {
+        id: 'notif_test_002',
+        userId: mockPatientUser.id,
+        title: 'Doctor Available',
+        message: 'Dr. Bob Johnson has new appointment slots available for next week.',
+        isRead: false,
+        createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
+        type: 'availability',
+        relatedId: 'user_doctor_001'
+      }
+    );
   } else if (role === 'doctor') {
     appointmentsStore.push(...mockAppointmentsArray.filter(a => a.doctorId === mockDoctorUser.id || a.patientId === mockPatientUser.id));
+    // Add notifications for the doctor
+    notificationsStore.push(...mockNotificationsArray.filter(n => n.userId === mockDoctorUser.id));
+    
+    // Add test notifications
+    notificationsStore.push(
+      {
+        id: 'notif_test_doc_001',
+        userId: mockDoctorUser.id,
+        title: 'Welcome to Health Appointments',
+        message: 'Thank you for joining our platform. We\'re here to help you manage your practice effectively.',
+        isRead: false,
+        createdAt: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
+        type: 'system',
+        relatedId: null
+      },
+      {
+        id: 'notif_test_doc_002',
+        userId: mockDoctorUser.id,
+        title: 'New Patient',
+        message: 'Alice Smith has scheduled an appointment with you.',
+        isRead: false,
+        createdAt: new Date(Date.now() - 45 * 60 * 1000), // 45 minutes ago
+        type: 'appointment',
+        relatedId: 'appt_001'
+      }
+    );
   } else if (role === 'admin') {
     appointmentsStore.push(...mockAppointmentsArray);
+    // Add all notifications for admin
+    notificationsStore.push(...mockNotificationsArray);
   }
+  
+  console.log(`[resetMockDataStoresForUser] Reset complete for role: ${role}`);
+  console.log(`[resetMockDataStoresForUser] Notifications count: ${notificationsStore.length}`);
 }

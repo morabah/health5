@@ -1,69 +1,154 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
-import { loadHomepageDoctors } from '@/data/doctorLoaders';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from "next/navigation";
+import { loadDoctors } from '@/data/loadDoctors';
+import { mockFindDoctors } from '@/lib/mockApiService';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { FaStar, FaMapMarkerAlt, FaSearch, FaFilter, FaStethoscope, FaLanguage, FaDollarSign, FaCalendarCheck } from 'react-icons/fa';
-import Link from 'next/link';
-import Image from 'next/image';
+import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import EmptyState from '@/components/ui/EmptyState';
 import ApiModeIndicator from '@/components/ui/ApiModeIndicator';
+import { useAuth } from "@/context/AuthContext";
+import { toast } from "react-hot-toast";
+import { debounce } from "@/utils/helpers";
+import { 
+  MagnifyingGlassIcon, 
+  AdjustmentsHorizontalIcon,
+  MapPinIcon,
+  UserIcon,
+  GlobeAltIcon,
+  CurrencyDollarIcon,
+  BriefcaseIcon,
+  ClockIcon,
+  CheckCircleIcon
+} from "@heroicons/react/24/outline";
 
-// Doctor interface definition
 interface Doctor {
   id: string;
+  userId: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   specialty: string;
-  profilePicture?: string;
-  location: string;
-  available: boolean;
-  rating: number;
   experience: number;
+  location: string;
   languages: string[];
   fee: number;
+  available: boolean;
+  profilePicUrl: string;
   nextAvailable?: string;
-  acceptingNewPatients?: boolean;
+  bio?: string;
+  rating?: number;
 }
 
+const specialtyOptions = [
+  { value: "", label: "All Specialties" },
+  { value: "Cardiology", label: "Cardiology" },
+  { value: "Dermatology", label: "Dermatology" },
+  { value: "Pediatrics", label: "Pediatrics" },
+  { value: "Neurology", label: "Neurology" },
+  { value: "Orthopedics", label: "Orthopedics" },
+  { value: "Psychiatry", label: "Psychiatry" },
+  { value: "General", label: "General Practice" },
+];
+
+const locationOptions = [
+  { value: "", label: "All Locations" },
+  { value: "New York", label: "New York" },
+  { value: "Los Angeles", label: "Los Angeles" },
+  { value: "Chicago", label: "Chicago" },
+  { value: "Boston", label: "Boston" },
+  { value: "San Francisco", label: "San Francisco" },
+];
+
+const languageOptions = [
+  { value: "", label: "All Languages" },
+  { value: "English", label: "English" },
+  { value: "Spanish", label: "Spanish" },
+  { value: "French", label: "French" },
+  { value: "Mandarin", label: "Mandarin" },
+  { value: "Hindi", label: "Hindi" },
+  { value: "Portuguese", label: "Portuguese" },
+];
+
 export default function FindDoctorPage() {
+  const { user } = useAuth();
+  const router = useRouter();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
-
-  // Filter states
-  const [selectedSpecialty, setSelectedSpecialty] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [selectedLanguage, setSelectedLanguage] = useState('');
+  const [specialty, setSpecialty] = useState('');
+  const [location, setLocation] = useState('');
+  const [language, setLanguage] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [availableOnly, setAvailableOnly] = useState(false);
 
-  // Fetch doctors data
+  // Process doctor data to ensure names are properly formatted
+  const processDoctorData = (doctorData: Doctor[]) => {
+    return doctorData.map(doctor => {
+      // Ensure proper name format
+      let displayName = doctor.name;
+      
+      if (!displayName || displayName.trim() === '') {
+        if (doctor.firstName || doctor.lastName) {
+          displayName = `Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim();
+        } else {
+          displayName = `Doctor (ID: ${doctor.id.substring(0, 8)})`;
+        }
+      }
+      
+      // Add next available time if not present
+      const nextAvailable = doctor.nextAvailable || getRandomTimeSlot();
+      
+      return {
+        ...doctor,
+        name: displayName,
+        nextAvailable
+      };
+    });
+  };
+
+  // Generate a random time slot for demonstration
+  const getRandomTimeSlot = () => {
+    const hours = Math.floor(Math.random() * 8) + 9; // 9 AM to 5 PM
+    const minutes = Math.random() > 0.5 ? '00' : '30';
+    const daysAhead = Math.floor(Math.random() * 5) + 1; // 1-5 days ahead
+    
+    const date = new Date();
+    date.setDate(date.getDate() + daysAhead);
+    
+    const month = date.toLocaleString('default', { month: 'short' });
+    const day = date.getDate();
+    
+    return `${month} ${day}, ${hours}:${minutes}`;
+  };
+
+  // Fetch doctors based on filters
   const fetchDoctors = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await loadHomepageDoctors();
-      console.log('Loaded doctors:', data);
-
-      const formattedData = data.map(doctor => ({
-        id: doctor.userId,
-        name: doctor.bio ? doctor.bio.split('.')[0] : 'Unknown Doctor',
-        specialty: doctor.specialty || 'General Practitioner',
-        profilePicture: undefined,
-        location: doctor.location || 'Remote',
-        available: Math.random() > 0.3,
-        rating: parseFloat((Math.random() * 2 + 3).toFixed(1)),
-        experience: doctor.yearsOfExperience || Math.floor(Math.random() * 15) + 1,
-        languages: doctor.languages || ['English'],
-        fee: doctor.consultationFee || Math.floor(Math.random() * 150) + 50,
-        nextAvailable: getRandomFutureDate(),
-        acceptingNewPatients: Math.random() > 0.2,
-      }));
-
-      setDoctors(formattedData);
+      let results;
+      
+      // Use mockFindDoctors with filters if provided
+      if (specialty || location) {
+        results = await mockFindDoctors({ 
+          specialty: specialty || undefined, 
+          location: location || undefined 
+        });
+      } else {
+        // Otherwise use general loadDoctors function
+        results = await loadDoctors();
+      }
+      
+      // Process and set doctor data
+      const processedResults = processDoctorData(results);
+      setDoctors(processedResults);
+      applyFilters(processedResults, searchQuery, specialty, location, language, availableOnly);
     } catch (err) {
       console.error('Error fetching doctors:', err);
       setError('Failed to load doctors. Please try again later.');
@@ -72,288 +157,377 @@ export default function FindDoctorPage() {
     }
   };
 
+  // Initial fetch on mount and when filters change
   useEffect(() => {
     fetchDoctors();
+  }, [specialty, location]);
+
+  // Apply all filters to the doctor list
+  const applyFilters = useCallback((
+    doctorList: Doctor[], 
+    query: string, 
+    specialty: string, 
+    location: string, 
+    language: string,
+    availableOnly: boolean
+  ) => {
+    let filtered = [...doctorList];
+    
+    // Filter by search query
+    if (query) {
+      const lowerQuery = query.toLowerCase();
+      filtered = filtered.filter(doctor => {
+        const fullName = doctor.name.toLowerCase();
+        return fullName.includes(lowerQuery) || 
+              (doctor.specialty && doctor.specialty.toLowerCase().includes(lowerQuery));
+      });
+    }
+    
+    // Filter by language (client-side filter)
+    if (language) {
+      filtered = filtered.filter(doctor => 
+        doctor.languages && doctor.languages.some(lang => 
+          lang.toLowerCase().includes(language.toLowerCase())
+        )
+      );
+    }
+    
+    // Filter by availability
+    if (availableOnly) {
+      filtered = filtered.filter(doctor => doctor.available);
+    }
+    
+    setFilteredDoctors(filtered);
   }, []);
 
-  // Helper function to generate random future date
-  function getRandomFutureDate() {
-    const today = new Date();
-    const futureDate = new Date(today);
-    futureDate.setDate(today.getDate() + Math.floor(Math.random() * 7) + 1);
-    return futureDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  }
+  // Debounce search to avoid too many re-renders
+  const debouncedSearch = useCallback(
+    debounce((query: string) => {
+      applyFilters(doctors, query, specialty, location, language, availableOnly);
+    }, 300),
+    [doctors, specialty, location, language, availableOnly, applyFilters]
+  );
 
-  // Computed filter options
-  const specialties = useMemo(() => {
-    const specialtySet = new Set(doctors.map(doc => doc.specialty));
-    return Array.from(specialtySet);
-  }, [doctors]);
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    debouncedSearch(query);
+  };
 
-  const locations = useMemo(() => {
-    const locationSet = new Set(doctors.map(doc => doc.location));
-    return Array.from(locationSet);
-  }, [doctors]);
+  // Update filters when any filter changes
+  useEffect(() => {
+    applyFilters(doctors, searchQuery, specialty, location, language, availableOnly);
+  }, [doctors, searchQuery, specialty, location, language, availableOnly, applyFilters]);
 
-  const languages = useMemo(() => {
-    const languageSet = new Set();
-    doctors.forEach(doc => doc.languages.forEach(lang => languageSet.add(lang)));
-    return Array.from(languageSet) as string[];
-  }, [doctors]);
-
-  // Filtered doctors
-  const filteredDoctors = useMemo(() => {
-    return doctors.filter(doctor => {
-      const matchesSearch = doctor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           doctor.specialty.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesSpecialty = selectedSpecialty ? doctor.specialty === selectedSpecialty : true;
-      const matchesLocation = selectedLocation ? doctor.location === selectedLocation : true;
-      const matchesLanguage = selectedLanguage ? doctor.languages.includes(selectedLanguage) : true;
-      const matchesAvailability = availableOnly ? doctor.available : true;
-
-      return matchesSearch && matchesSpecialty && matchesLocation && matchesLanguage && matchesAvailability;
-    });
-  }, [doctors, searchQuery, selectedSpecialty, selectedLocation, selectedLanguage, availableOnly]);
-
-  // Reset filters function
-  const resetFilters = () => {
+  // Reset all filters
+  const handleResetFilters = () => {
     setSearchQuery('');
-    setSelectedSpecialty('');
-    setSelectedLocation('');
-    setSelectedLanguage('');
+    setSpecialty('');
+    setLocation('');
+    setLanguage('');
     setAvailableOnly(false);
   };
 
-  return (
-    <main className="flex-1 container py-4 md:py-8">
-      <div className="mb-6 flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Find a Doctor</h1>
-        <ApiModeIndicator />
-      </div>
-      
-      <div className="mb-8">
-        <div className="bg-card rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-2xl font-semibold mb-4">Find Your Healthcare Provider</h2>
-          <p className="text-muted-foreground mb-6">
-            Search for specialists by name, condition, or location
-          </p>
-          
-          {/* Search and Filters */}
-          <div className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <FaSearch className="absolute left-3 top-3 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, specialty or condition..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div className="w-full md:w-48">
-                <Select
-                  value={selectedSpecialty}
-                  onChange={(e) => setSelectedSpecialty(e.target.value)}
-                  options={[
-                    { value: "", label: "Any specialty" },
-                    ...specialties.map(specialty => ({ 
-                      value: specialty, 
-                      label: specialty 
-                    }))
-                  ]}
-                />
-              </div>
-              <div className="w-full md:w-48">
-                <Select
-                  value={selectedLocation}
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                  options={[
-                    { value: "", label: "Any location" },
-                    ...locations.map(location => ({ 
-                      value: location, 
-                      label: location 
-                    }))
-                  ]}
-                />
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              <label className="inline-flex items-center bg-muted px-3 py-1 rounded-full text-sm">
-                <input
-                  type="checkbox"
-                  checked={availableOnly}
-                  onChange={(e) => setAvailableOnly(e.target.checked)}
-                  className="mr-2"
-                />
-                Available now
-              </label>
-              
-              {(selectedSpecialty || selectedLocation || selectedLanguage || availableOnly || searchQuery) && (
-                <button 
-                  onClick={resetFilters}
-                  className="text-sm text-muted-foreground hover:text-primary flex items-center px-3 py-1 rounded-full"
-                >
-                  Clear all filters
-                  <span className="ml-1">×</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Results Count */}
-      {!loading && !error && (
-        <div className="mb-4 flex justify-between items-center">
-          <p className="text-muted-foreground">
-            Found <span className="font-semibold text-foreground">{filteredDoctors.length}</span> doctors
-            {filteredDoctors.length !== doctors.length && ` (filtered from ${doctors.length})`}
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Sort by:</span>
-            <select 
-              className="text-sm border rounded-md px-2 py-1"
-              onChange={(e) => {
-                // Sort functionality would be implemented here
-                console.log("Sorting by:", e.target.value);
-              }}
-            >
-              <option value="relevance">Relevance</option>
-              <option value="rating">Highest rated</option>
-              <option value="availability">Soonest available</option>
-            </select>
-          </div>
-        </div>
-      )}
+  // Navigate to doctor profile
+  const viewDoctorProfile = (doctorId: string) => {
+    router.push(`/main/doctor-profile/${doctorId}`);
+  };
 
-      {/* Error Message */}
-      {error && (
-        <Card className="mb-8 border-destructive">
-          <div className="p-4 text-center text-destructive">
+  // Navigate to booking page
+  const bookAppointment = (event: React.MouseEvent, doctorId: string) => {
+    event.stopPropagation();
+    
+    // Check if user is logged in
+    if (!user) {
+      toast.error("Please log in to book an appointment");
+      router.push('/auth/login');
+      return;
+    }
+    
+    // Navigate to booking page
+    router.push(`/main/book-appointment/${doctorId}`);
+    toast.success("Navigating to booking page...");
+  };
+
+  // Toggle filters visibility
+  const toggleFilters = () => {
+    setShowFilters(!showFilters);
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Find a Doctor</h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Search for healthcare specialists matching your needs
+            </p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <ApiModeIndicator />
+          </div>
+        </div>
+        
+        {/* Search and Filters */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                </div>
+                <Input
+                  id="search"
+                  type="text"
+                  placeholder="Search by doctor name or specialty..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="pl-10 w-full"
+                />
+              </div>
+            </div>
+            <div className="w-full md:w-48">
+              <Select
+                value={specialty}
+                onChange={(e) => setSpecialty(e.target.value)}
+                options={specialtyOptions}
+              />
+            </div>
+            <div className="w-full md:w-48">
+              <Select
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                options={locationOptions}
+              />
+            </div>
+            <div>
+              <Button 
+                onClick={toggleFilters}
+                variant="secondary"
+                className="w-full md:w-auto flex items-center justify-center gap-2"
+                label={showFilters ? "Hide Filters" : "More Filters"}
+                pageName="FindDoctorPage"
+              >
+                <AdjustmentsHorizontalIcon className="h-5 w-5" />
+                {showFilters ? "Hide Filters" : "More Filters"}
+              </Button>
+            </div>
+          </div>
+          
+          {/* Advanced Filters */}
+          {showFilters && (
+            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="language" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Language
+                  </label>
+                  <Select
+                    id="language"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    options={languageOptions}
+                  />
+                </div>
+                <div className="flex items-center">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={availableOnly}
+                      onChange={(e) => setAvailableOnly(e.target.checked)}
+                      className="mr-2 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-gray-700 dark:text-gray-300">Available doctors only</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div className="flex justify-end mt-6">
+                <Button 
+                  onClick={handleResetFilters}
+                  variant="secondary"
+                  label="Reset Filters"
+                  pageName="FindDoctorPage"
+                >
+                  Reset Filters
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-4 rounded-lg mb-6" role="alert">
             <p>{error}</p>
-            <button 
-              className="mt-4 px-4 py-2 border border-destructive text-destructive rounded hover:bg-destructive/10 transition-colors"
+            <Button
+              variant="secondary"
               onClick={fetchDoctors}
+              className="mt-2"
+              label="Try Again"
+              pageName="FindDoctorPage"
             >
               Try Again
-            </button>
+            </Button>
           </div>
-        </Card>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="flex justify-center py-12">
-          <Spinner size="lg" />
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!loading && !error && filteredDoctors.length === 0 && (
-        <EmptyState
-          title="No doctors found"
-          message="Try adjusting your filters or search query"
-          action={
-            <button 
-              className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-              onClick={resetFilters}
-            >
-              Reset all filters
-            </button>
-          }
-        />
-      )}
-
-      {/* Doctors Grid */}
-      {!loading && !error && filteredDoctors.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-          {filteredDoctors.map(doctor => (
-            <Card key={doctor.id} className="h-full hover:shadow-lg transition-shadow overflow-hidden">
-              <div className="flex flex-col h-full">
-                <div className="p-4 flex items-start gap-4">
-                  <div className="relative h-20 w-20 rounded-full overflow-hidden bg-muted">
-                    <div className="h-full w-full flex items-center justify-center bg-primary-foreground text-primary text-xl font-semibold">
-                      {doctor.name.charAt(0)}
-                    </div>
-                    {doctor.available && (
-                      <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full" title="Available for appointments" />
-                    )}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-semibold text-lg">{doctor.name}</h3>
-                        <p className="text-sm text-muted-foreground">{doctor.specialty}</p>
-                      </div>
-                      <div className="flex items-center">
-                        <FaStar className="text-yellow-400 mr-1" />
-                        <span className="font-medium">{doctor.rating}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-2">
-                      <div className="flex items-start gap-2 mb-1.5">
-                        <FaMapMarkerAlt className="text-muted-foreground mt-1 flex-shrink-0" size={12} />
-                        <p className="text-sm">{doctor.location}</p>
+        )}
+        
+        {/* Loading State */}
+        {loading ? (
+          <div className="flex flex-col justify-center items-center min-h-[400px]">
+            <Spinner size="lg" />
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading doctors...</p>
+          </div>
+        ) : (
+          <>
+            {/* Results Count */}
+            {!error && filteredDoctors.length > 0 && (
+              <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 flex items-center">
+                <div className="mr-3 bg-blue-100 dark:bg-blue-800 rounded-full p-2">
+                  <CheckCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <p className="text-blue-700 dark:text-blue-300">
+                  Found <span className="font-semibold">{filteredDoctors.length}</span> {filteredDoctors.length === 1 ? 'doctor' : 'doctors'} matching your criteria
+                </p>
+              </div>
+            )}
+            
+            {/* Empty State */}
+            {!error && filteredDoctors.length === 0 && (
+              <EmptyState
+                title="No doctors found"
+                message="Try adjusting your filters or search query"
+                action={
+                  <Button 
+                    onClick={handleResetFilters}
+                    variant="primary"
+                    label="Reset Filters"
+                    pageName="FindDoctorPage"
+                  >
+                    Reset Filters
+                  </Button>
+                }
+              />
+            )}
+            
+            {/* Doctors Grid */}
+            {!error && filteredDoctors.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                {filteredDoctors.map((doctor) => (
+                  <div 
+                    key={doctor.id}
+                    className="cursor-pointer transform transition-all duration-300 hover:scale-105 hover:shadow-xl"
+                    onClick={() => viewDoctorProfile(doctor.id)}
+                  >
+                    <Card className="h-full overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+                      {/* Header with gradient background */}
+                      <div className="relative">
+                        <div className="h-24 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
+                        <div className="absolute top-4 right-4">
+                          {doctor.available ? (
+                            <span className="bg-green-100 text-green-800 text-xs font-medium px-3 py-1.5 rounded-full border border-green-200 shadow-sm">
+                              Available
+                            </span>
+                          ) : (
+                            <span className="bg-red-100 text-red-800 text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 shadow-sm">
+                              Unavailable
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Doctor Image */}
+                        <div className="absolute -bottom-12 left-6">
+                          <img
+                            src={doctor.profilePicUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name)}&background=0D8ABC&color=fff&size=128`}
+                            alt={doctor.name}
+                            className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.onerror = null;
+                              target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.name)}&background=0D8ABC&color=fff&size=128`;
+                            }}
+                          />
+                        </div>
                       </div>
                       
-                      <div className="flex items-start gap-2">
-                        <FaStethoscope className="text-muted-foreground mt-1 flex-shrink-0" size={12} />
-                        <p className="text-sm">{doctor.experience} years experience</p>
+                      {/* Doctor Details */}
+                      <div className="p-6 pt-16">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                          {doctor.name}
+                        </h2>
+                        
+                        <div className="flex items-center text-blue-600 dark:text-blue-400 mb-4">
+                          <BriefcaseIcon className="w-4 h-4 mr-2" />
+                          <span className="font-medium">{doctor.specialty || 'General Practice'}</span>
+                        </div>
+                        
+                        <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                          <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                            <MapPinIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                            <span>{doctor.location || 'Location not specified'}</span>
+                          </div>
+                          
+                          <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                            <UserIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                            <span>{doctor.experience || 0} years of experience</span>
+                          </div>
+                          
+                          <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                            <GlobeAltIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                            <span>{doctor.languages?.join(', ') || 'English'}</span>
+                          </div>
+                          
+                          <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                            <CurrencyDollarIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
+                            <span>Consultation fee: ${doctor.fee}</span>
+                          </div>
+                        </div>
+                        
+                        {doctor.nextAvailable && doctor.available && (
+                          <div className="mt-4 py-2 px-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <div className="flex items-center text-sm text-blue-700 dark:text-blue-300">
+                              <ClockIcon className="w-5 h-5 mr-2 flex-shrink-0" />
+                              <span>Next Available: {doctor.nextAvailable}</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center gap-4 mt-6">
+                          <Button
+                            variant="secondary"
+                            className="flex-1 py-2.5"
+                            label="View Profile"
+                            pageName="FindDoctorPage"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewDoctorProfile(doctor.id);
+                            }}
+                          >
+                            View Profile
+                          </Button>
+                          
+                          <Button
+                            onClick={(e) => bookAppointment(e, doctor.id)}
+                            variant="primary"
+                            className="flex-1 py-2.5"
+                            disabled={!doctor.available}
+                            label={doctor.available ? "Book Appointment" : "Unavailable"}
+                            pageName="FindDoctorPage"
+                          >
+                            {doctor.available ? "Book Appointment" : "Unavailable"}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    </Card>
                   </div>
-                </div>
-                
-                <div className="px-4 pb-3 mt-2">
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    {doctor.languages.map(lang => (
-                      <span key={lang} className="text-xs px-2 py-0.5 rounded-full bg-muted">
-                        {lang}
-                      </span>
-                    ))}
-                  </div>
-                  
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="flex items-center">
-                      <FaDollarSign className="text-muted-foreground" size={12} />
-                      <span className="text-sm font-medium">${doctor.fee}</span>
-                      <span className="text-xs text-muted-foreground ml-1">per visit</span>
-                    </div>
-                    
-                    {doctor.acceptingNewPatients ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800">
-                        Accepting new patients
-                      </span>
-                    ) : (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                        Limited availability
-                      </span>
-                    )}
-                  </div>
-                  
-                  {doctor.available && (
-                    <div className="mb-3 bg-blue-50 text-blue-700 px-3 py-2 rounded-md text-sm flex items-center">
-                      <FaCalendarCheck className="mr-2" size={14} />
-                      Next available: {doctor.nextAvailable}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="p-4 border-t mt-auto">
-                  <Link href={`/doctor/${doctor.id}`} passHref>
-                    <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-md transition-colors">
-                      View Profile
-                    </button>
-                  </Link>
-                </div>
+                ))}
               </div>
-            </Card>
-          ))}
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </main>
   );
 }

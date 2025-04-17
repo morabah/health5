@@ -200,6 +200,41 @@ export default function DoctorAvailabilityPage() {
     });
   };
 
+  // Function to add a preset schedule (e.g., 9-5 for weekdays)
+  const applyPresetSchedule = (preset: string) => {
+    let newSchedule = {...weeklySchedule};
+    
+    if (preset === 'weekdays-9-5') {
+      // Create 9-5 schedule for Monday-Friday
+      [1, 2, 3, 4, 5].forEach(day => {
+        const daySlots = [];
+        for (let hour = 9; hour < 17; hour++) {
+          for (let minute of ['00', '30']) {
+            const startTime = `${hour.toString().padStart(2, '0')}:${minute}`;
+            const endTimeMinutes = (parseInt(minute) + 30) % 60;
+            const endTimeHours = hour + (endTimeMinutes === 0 ? 1 : 0);
+            const endTime = `${endTimeHours.toString().padStart(2, '0')}:${endTimeMinutes.toString().padStart(2, '0')}`;
+            daySlots.push({ startTime, endTime });
+          }
+        }
+        newSchedule[day] = daySlots;
+      });
+      
+      // Clear weekend slots
+      newSchedule[0] = [];
+      newSchedule[6] = [];
+    } else if (preset === 'clear-all') {
+      // Clear all slots
+      for (let day = 0; day <= 6; day++) {
+        newSchedule[day] = [];
+      }
+    }
+    
+    setWeeklySchedule(newSchedule);
+    setDataChanged(true);
+    toast.success(`Applied ${preset === 'clear-all' ? 'cleared schedule' : 'weekday 9-5 schedule'}`);
+  };
+
   const handleSaveAvailability = async () => {
     if (!user) {
       toast.error('You must be logged in to save availability settings');
@@ -289,6 +324,29 @@ export default function DoctorAvailabilityPage() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Presets Section */}
+            <Card className="md:col-span-12 p-6 mb-4">
+              <h2 className="text-xl font-semibold mb-4">Quick Settings</h2>
+              <div className="flex flex-wrap gap-3">
+                <Button 
+                  variant="secondary" 
+                  onClick={() => applyPresetSchedule('weekdays-9-5')} 
+                  label="Apply 9-5 Weekday Schedule"
+                  pageName="DoctorAvailabilityPage"
+                >
+                  Apply 9-5 Weekday Schedule
+                </Button>
+                <Button 
+                  variant="danger" 
+                  onClick={() => applyPresetSchedule('clear-all')} 
+                  label="Clear All Slots"
+                  pageName="DoctorAvailabilityPage"
+                >
+                  Clear All Slots
+                </Button>
+              </div>
+            </Card>
+            
             {/* Weekly Schedule Section */}
             <Card className="md:col-span-8 p-6">
               <h2 className="text-xl font-semibold mb-4">Weekly Schedule</h2>
@@ -303,7 +361,7 @@ export default function DoctorAvailabilityPage() {
                   <thead>
                     <tr className="bg-gray-100 dark:bg-gray-800">
                       <th className="py-2 px-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Time</th>
-                      {[1, 2, 3, 4, 5].map((day) => (
+                      {[0, 1, 2, 3, 4, 5, 6].map((day) => (
                         <th key={day} className="py-2 px-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
                           {getDayName(day)}
                         </th>
@@ -316,7 +374,7 @@ export default function DoctorAvailabilityPage() {
                         <td className="py-2 px-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
                           {time}
                         </td>
-                        {[1, 2, 3, 4, 5].map((day) => (
+                        {[0, 1, 2, 3, 4, 5, 6].map((day) => (
                           <td key={day} className="py-2 px-3 text-center">
                             <button
                               onClick={() => toggleTimeSlot(day, time)}

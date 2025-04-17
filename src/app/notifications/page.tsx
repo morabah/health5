@@ -25,13 +25,17 @@ export default function NotificationsPage() {
   const { user } = useAuth();
 
   async function fetchNotifications() {
+    console.log("[DEBUG] fetchNotifications - Current user:", user);
     if (!user) return;
     setLoading(true);
     setError(null);
     try {
+      console.log("[DEBUG] Calling mockGetNotifications with userId:", user.uid);
       const items = await mockGetNotifications(user.uid);
+      console.log("[DEBUG] Received notifications:", items);
       setNotifications(items);
     } catch (err) {
+      console.error("[DEBUG] Error fetching notifications:", err);
       setError("Failed to load notifications.");
     } finally {
       setLoading(false);
@@ -39,6 +43,7 @@ export default function NotificationsPage() {
   }
 
   useEffect(() => {
+    console.log("[DEBUG] Notifications page mounted, user:", user);
     fetchNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -69,11 +74,16 @@ export default function NotificationsPage() {
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}
         {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
         {!loading && !error && notifications.length === 0 && (
-          <EmptyState
-            title="No notifications."
-            message="You have no notifications at this time. Important updates will appear here."
-            className="my-8"
-          />
+          <div>
+            <EmptyState
+              title="No notifications."
+              message="You have no notifications at this time. Important updates will appear here."
+              className="my-8"
+            />
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Debug info: User ID: {user ? user.uid : 'not logged in'}
+            </div>
+          </div>
         )}
         {!loading && notifications.length > 0 && (
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">

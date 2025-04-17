@@ -4,32 +4,19 @@ import { useParams, useRouter } from "next/navigation";
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Textarea } from "@/components/ui/Textarea";
+import Input from "@/components/ui/Input";
+import Textarea from "@/components/ui/Textarea";
 import { logValidation } from "@/lib/logger";
 import { mockGetDoctorVerificationData, mockSetDoctorVerificationStatus } from "@/lib/mockApiService";
 import { VerificationStatus } from "@/types/enums";
 
-interface Doctor {
-  id: string;
-  name: string;
-  firstName: string;
-  lastName: string;
-  specialty: string;
-  experience: number;
-  location: string;
-  languages: string[];
-  fee: number;
-  profilePicUrl: string;
-  licenseNumber: string;
-  documents: string[]; // URLs or names
-  status: VerificationStatus;
-  userId: string;
-}
-
 export default function DoctorVerificationPage() {
-  const { doctorId } = useParams() as { doctorId: string };
-  const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const params = useParams();
+  const doctorId = params?.doctorId as string;
+  console.log("Doctor verification page - params:", params);
+  console.log("Doctor verification page - doctorId:", doctorId);
+  
+  const [doctor, setDoctor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<VerificationStatus>(VerificationStatus.PENDING);
   const [notes, setNotes] = useState("");
@@ -39,12 +26,27 @@ export default function DoctorVerificationPage() {
 
   useEffect(() => {
     async function fetchVerification() {
+      if (!doctorId) {
+        console.error("No doctorId provided");
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
       try {
+        console.log("Fetching verification data for doctorId:", doctorId);
+        console.log("DoctorId type:", typeof doctorId);
+        console.log("Request URL would be: /api/admin/doctors/verification/" + doctorId);
         const data = await mockGetDoctorVerificationData(doctorId);
-        setDoctor(data);
-        setStatus(data.status || VerificationStatus.PENDING);
-      } catch {
+        console.log("Received verification data:", data);
+        if (data) {
+          setDoctor(data);
+          setStatus(data.status || VerificationStatus.PENDING);
+        } else {
+          console.error("No data returned from mockGetDoctorVerificationData");
+        }
+      } catch (error) {
+        console.error("Error fetching verification data:", error);
         setDoctor(null);
       } finally {
         setLoading(false);
@@ -60,7 +62,7 @@ export default function DoctorVerificationPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await mockSetDoctorVerificationStatus({ doctorId, status, notes });
+      await mockSetDoctorVerificationStatus(doctorId, status, notes);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);
     } catch {
@@ -82,6 +84,16 @@ export default function DoctorVerificationPage() {
     return <div className="text-center text-muted-foreground">Doctor not found.</div>;
   }
 
+  // Helper to safely render doctor name
+  const getDoctorName = () => {
+    if (doctor.name) return doctor.name;
+    if (doctor.fullName) return doctor.fullName;
+    const firstName = doctor.firstName || '';
+    const lastName = doctor.lastName || '';
+    if (firstName || lastName) return `${firstName} ${lastName}`.trim();
+    return doctor.doctorId || doctor.userId;
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground py-8 px-4 md:px-12 lg:px-32">
       <div className="max-w-2xl mx-auto">
@@ -89,28 +101,38 @@ export default function DoctorVerificationPage() {
           <div className="flex flex-col md:flex-row gap-6">
             <div className="md:w-1/3 flex flex-col items-center md:items-start">
               <img
-                src={doctor.profilePicUrl}
-                alt={doctor.firstName ?? doctor.name ?? doctor.userId}
+                src={doctor.profilePicUrl || "https://via.placeholder.com/150?text=Doctor"}
+                alt={getDoctorName()}
                 className="w-20 h-20 rounded-full object-cover border mb-2"
               />
-              <div className="font-semibold text-lg">{doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}</div>
+              <div className="font-semibold text-lg">{getDoctorName()}</div>
               <div className="text-sm text-muted-foreground">{doctor.specialty}</div>
               <div className="text-xs text-muted-foreground">{doctor.experience} yrs experience</div>
               <div className="text-xs text-muted-foreground">{doctor.location}</div>
-              <div className="text-xs text-muted-foreground">Languages: {doctor.languages.join(", ")}</div>
-              <div className="text-xs text-muted-foreground">Fee: ${doctor.fee}</div>
+              <div className="text-xs text-muted-foreground">Languages: {Array.isArray(doctor.languages) ? doctor.languages.join(", ") : "None specified"}</div>
+              <div className="text-xs text-muted-foreground">Fee: ${doctor.fee || 0}</div>
               <div className="text-xs text-muted-foreground">License #: {doctor.licenseNumber}</div>
             </div>
             <div className="md:w-2/3">
               <h2 className="font-bold text-lg mb-2">Verification Documents</h2>
               <ul className="list-disc pl-5 mb-4">
-                {doctor.documents && doctor.documents.length > 0 ? (
-                  doctor.documents.map((doc, idx) => (
+                {Array.isArray(doctor.documents) && doctor.documents.length > 0 ? (
+                  doctor.documents.map((doc: string, idx: number) => (
                     <li key={idx} className="text-sm">
                       {/* Placeholder: In real app, link to/view doc */}
                       <span className="underline cursor-pointer">{doc}</span>
                     </li>
                   ))
+                ) : doctor.documents && typeof doctor.documents === 'object' ? (
+                  Object.entries(doctor.documents)
+                    .filter(([_, url]) => url)
+                    .map(([key, url], idx) => (
+                      <li key={idx} className="text-sm">
+                        <span className="underline cursor-pointer">
+                          {key.replace('Url', '').replace(/([A-Z])/g, ' $1').trim()}
+                        </span>
+                      </li>
+                    ))
                 ) : (
                   <li>No documents uploaded.</li>
                 )}
@@ -123,8 +145,9 @@ export default function DoctorVerificationPage() {
                   onChange={(e) => setStatus(e.target.value as VerificationStatus)}
                 >
                   <option value={VerificationStatus.PENDING}>Pending</option>
-                  <option value={VerificationStatus.VERIFIED}>Verified</option>
+                  <option value={VerificationStatus.APPROVED}>Approved</option>
                   <option value={VerificationStatus.REJECTED}>Rejected</option>
+                  <option value={VerificationStatus.MORE_INFO_REQUIRED}>More Info Required</option>
                 </select>
               </div>
               <div className="mb-4">
@@ -136,7 +159,14 @@ export default function DoctorVerificationPage() {
                   rows={3}
                 />
               </div>
-              <Button className="w-full" onClick={handleSave} disabled={saving}>
+              <Button 
+                label="Save Decision"
+                pageName="doctor-verification"
+                className="w-full" 
+                onClick={handleSave} 
+                disabled={saving}
+                isLoading={saving}
+              >
                 {saving ? "Saving..." : "Save Decision"}
               </Button>
               {success && <div className="text-green-600 mt-2 text-center">Decision saved.</div>}

@@ -11,7 +11,7 @@ import { VerificationStatus } from "@/types/enums";
 
 interface DoctorVerification {
   id: string;
-  name: string;
+  name?: string;
   firstName: string;
   lastName: string;
   specialty: string;
@@ -98,7 +98,7 @@ const DoctorVerificationListPage: React.FC = () => {
               <tbody>
                 {filtered.map(doctor => (
                   <tr key={doctor.id} className="hover:bg-gray-100 dark:hover:bg-gray-800">
-                    <td className="px-4 py-2 whitespace-nowrap">{doctor.name ?? `${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{doctor.name ?? (`${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId)}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{doctor.specialty}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{doctor.experience} yrs</td>
                     <td className="px-4 py-2 whitespace-nowrap">{doctor.location}</td>
@@ -113,7 +113,13 @@ const DoctorVerificationListPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-2 text-right">
                       <Link href={`/admin/doctor-verification/${doctor.id}`}>
-                        <Button size="sm">View</Button>
+                        <Button 
+                          size="sm" 
+                          label="Review" 
+                          pageName="DoctorVerificationListPage"
+                        >
+                          Review
+                        </Button>
                       </Link>
                     </td>
                   </tr>
