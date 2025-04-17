@@ -7,7 +7,21 @@
 import * as dataStore from "@/data/mockDataStore";
 import { v4 as uuidv4 } from "uuid";
 import { logInfo } from "@/lib/logger";
-import { AppointmentStatus } from "@/types/enums";
+import { AppointmentStatus, UserType } from "@/types/enums";
+import type { UserProfile } from "@/types/user";
+import type { DoctorProfile } from "@/types/doctor";
+import type { PatientProfile } from "@/types/patient";
+import type { Appointment } from "@/types/appointment";
+import type { Notification } from "@/types/notification";
+
+// Storage keys for localStorage
+const STORAGE_KEYS = {
+  USERS: 'health_app_data_users',
+  DOCTOR_PROFILES: 'health_app_data_doctor_profiles',
+  PATIENT_PROFILES: 'health_app_data_patient_profiles',
+  APPOINTMENTS: 'health_app_data_appointments',
+  NOTIFICATIONS: 'health_app_data_notifications'
+};
 
 // Unique channel name for broadcasts
 const CHANNEL_NAME = 'health-appointment-system-data-sync';
@@ -22,6 +36,9 @@ export enum SyncEventType {
   NOTIFICATION_ADDED = 'notification_added',
   NOTIFICATION_MARKED_READ = 'notification_marked_read',
   AVAILABILITY_UPDATED = 'availability_updated',
+  USER_ADDED = 'user_added',
+  USER_UPDATED = 'user_updated',
+  USER_DEACTIVATED = 'user_deactivated',
 }
 
 // Interface for sync events
@@ -41,39 +58,41 @@ let broadcastChannel: BroadcastChannel | null = null;
 /**
  * Initialize the data persistence mechanism
  */
-export function initDataPersistence() {
-  if (typeof window === 'undefined') {
-    return; // Skip on server-side
-  }
+export function initDataPersistence(): void {
+  if (typeof window === 'undefined') return;
 
-  try {
-    // Create a broadcast channel
-    broadcastChannel = new BroadcastChannel(CHANNEL_NAME);
-    
-    // Listen for events from other tabs
-    broadcastChannel.onmessage = (event: MessageEvent<SyncEvent>) => {
-      handleSyncEvent(event.data);
-    };
-    
-    // Load persisted data on startup
-    loadPersistedData();
-    
-    logInfo("[mockDataPersistence] Initialized data persistence with tab ID", { tabId: TAB_ID });
-  } catch (error) {
-    console.error("[mockDataPersistence] Error initializing persistence:", error);
-  }
+  logInfo('[mockDataPersistence] Initializing data persistence');
   
-  // Reload when storage changes (fallback for browsers without BroadcastChannel)
-  window.addEventListener('storage', (event) => {
-    if (event.key?.startsWith('health_app_data_')) {
-      try {
-        const data = JSON.parse(event.newValue || '{}');
-        handleSyncEvent(data);
-      } catch (error) {
-        console.error("[mockDataPersistence] Error handling storage event:", error);
-      }
+  try {
+    // Initialize broadcast channel
+    if (typeof BroadcastChannel !== 'undefined') {
+      broadcastChannel = new BroadcastChannel(CHANNEL_NAME);
+      broadcastChannel.onmessage = (event) => {
+        if (event.data) {
+          handleSyncEvent(event.data);
+        }
+      };
+      logInfo('[mockDataPersistence] BroadcastChannel initialized');
+    } else {
+      logInfo('[mockDataPersistence] BroadcastChannel not supported in this browser');
     }
-  });
+    
+    // Load persisted user data
+    loadUsers();
+    loadDoctorProfiles();
+    loadPatientProfiles();
+    
+    // Load other persisted data
+    loadAppointments();
+    loadNotifications();
+    
+    // Set up listener for sync events across tabs
+    window.addEventListener('storage', handleStorageChange);
+    
+    logInfo('[mockDataPersistence] Data persistence initialized successfully');
+  } catch (error) {
+    console.error('[mockDataPersistence] Error initializing data persistence:', error);
+  }
 }
 
 /**
@@ -89,36 +108,144 @@ export function cleanupDataPersistence() {
 /**
  * Load persisted data from localStorage
  */
-function loadPersistedData() {
+function loadUsers(): void {
   try {
-    // Load appointments
-    const appointmentsJson = localStorage.getItem('health_app_data_appointments');
-    if (appointmentsJson) {
-      const appointments = JSON.parse(appointmentsJson);
-      if (Array.isArray(appointments) && appointments.length > 0) {
-        // Clear existing appointments and add stored ones
-        dataStore.appointmentsStore.splice(0, dataStore.appointmentsStore.length, ...appointments);
-        logInfo("[mockDataPersistence] Loaded persisted appointments", { count: appointments.length });
-      }
-    }
-    
-    // Load notifications
-    const notificationsJson = localStorage.getItem('health_app_data_notifications');
-    if (notificationsJson) {
-      const notifications = JSON.parse(notificationsJson);
-      if (Array.isArray(notifications) && notifications.length > 0) {
-        // Only add notifications that don't already exist
-        const existingIds = new Set(dataStore.notificationsStore.map(n => n.id));
-        const newNotifications = notifications.filter(n => !existingIds.has(n.id));
-        
-        if (newNotifications.length > 0) {
-          dataStore.notificationsStore.push(...newNotifications);
-          logInfo("[mockDataPersistence] Loaded persisted notifications", { count: newNotifications.length });
-        }
+    const persistedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
+    if (persistedUsers) {
+      const parsedUsers = JSON.parse(persistedUsers) as UserProfile[];
+      // Only replace the store if we have data
+      if (parsedUsers.length > 0) {
+        // Clear the current store
+        dataStore.usersStore.length = 0;
+        // Add all persisted users
+        parsedUsers.forEach(user => dataStore.usersStore.push(user));
+        logInfo(`[mockDataPersistence] Loaded ${parsedUsers.length} persisted users`);
       }
     }
   } catch (error) {
-    console.error("[mockDataPersistence] Error loading persisted data:", error);
+    console.error('[mockDataPersistence] Error loading persisted users:', error);
+  }
+}
+
+function loadDoctorProfiles(): void {
+  try {
+    const persistedProfiles = localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES);
+    if (persistedProfiles) {
+      const parsedProfiles = JSON.parse(persistedProfiles) as DoctorProfile[];
+      // Only replace the store if we have data
+      if (parsedProfiles.length > 0) {
+        // Clear the current store
+        dataStore.doctorProfilesStore.length = 0;
+        // Add all persisted profiles
+        parsedProfiles.forEach(profile => dataStore.doctorProfilesStore.push(profile));
+        logInfo(`[mockDataPersistence] Loaded ${parsedProfiles.length} persisted doctor profiles`);
+      }
+    }
+  } catch (error) {
+    console.error('[mockDataPersistence] Error loading persisted doctor profiles:', error);
+  }
+}
+
+function loadPatientProfiles(): void {
+  try {
+    const persistedProfiles = localStorage.getItem(STORAGE_KEYS.PATIENT_PROFILES);
+    if (persistedProfiles) {
+      const parsedProfiles = JSON.parse(persistedProfiles) as PatientProfile[];
+      // Only replace the store if we have data
+      if (parsedProfiles.length > 0) {
+        // Clear the current store
+        dataStore.patientProfilesStore.length = 0;
+        // Add all persisted profiles
+        parsedProfiles.forEach(profile => dataStore.patientProfilesStore.push(profile));
+        logInfo(`[mockDataPersistence] Loaded ${parsedProfiles.length} persisted patient profiles`);
+      }
+    }
+  } catch (error) {
+    console.error('[mockDataPersistence] Error loading persisted patient profiles:', error);
+  }
+}
+
+/**
+ * Load persisted appointments from localStorage
+ */
+function loadAppointments(): void {
+  try {
+    const persistedAppointments = localStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
+    if (persistedAppointments) {
+      const parsedAppointments = JSON.parse(persistedAppointments) as Appointment[];
+      // Only replace the store if we have data
+      if (parsedAppointments.length > 0) {
+        // Clear the current store
+        dataStore.appointmentsStore.length = 0;
+        // Add all persisted appointments
+        parsedAppointments.forEach(appointment => dataStore.appointmentsStore.push(appointment));
+        logInfo(`[mockDataPersistence] Loaded ${parsedAppointments.length} persisted appointments`);
+      }
+    }
+  } catch (error) {
+    console.error('[mockDataPersistence] Error loading persisted appointments:', error);
+  }
+}
+
+/**
+ * Load persisted notifications from localStorage
+ */
+function loadNotifications(): void {
+  try {
+    const persistedNotifications = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+    if (persistedNotifications) {
+      const parsedNotifications = JSON.parse(persistedNotifications) as Notification[];
+      // Only replace the store if we have data
+      if (parsedNotifications.length > 0) {
+        // Clear the current store
+        dataStore.notificationsStore.length = 0;
+        // Add all persisted notifications
+        parsedNotifications.forEach(notification => dataStore.notificationsStore.push(notification));
+        logInfo(`[mockDataPersistence] Loaded ${parsedNotifications.length} persisted notifications`);
+      }
+    }
+  } catch (error) {
+    console.error('[mockDataPersistence] Error loading persisted notifications:', error);
+  }
+}
+
+/**
+ * Handle the storage event from another tab
+ */
+function handleStorageChange(event: StorageEvent): void {
+  // Skip if we don't care about this key or if it's empty
+  if (!event.key || !event.newValue) {
+    return;
+  }
+  
+  // Check if this is a sync event (keys starting with 'health_app_data_event_')
+  if (event.key.startsWith('health_app_data_event_')) {
+    try {
+      const syncEvent = JSON.parse(event.newValue) as SyncEvent;
+      handleSyncEvent(syncEvent);
+    } catch (error) {
+      console.error('[mockDataPersistence] Error handling storage event:', error);
+    }
+    return;
+  }
+  
+  // Otherwise, it might be direct data updates
+  switch(event.key) {
+    case STORAGE_KEYS.USERS:
+      loadUsers();
+      break;
+    case STORAGE_KEYS.DOCTOR_PROFILES:
+      loadDoctorProfiles();
+      break;
+    case STORAGE_KEYS.PATIENT_PROFILES:
+      loadPatientProfiles();
+      break;
+    case STORAGE_KEYS.APPOINTMENTS:
+      loadAppointments();
+      break;
+    case STORAGE_KEYS.NOTIFICATIONS:
+      loadNotifications();
+      break;
   }
 }
 
@@ -152,6 +279,15 @@ function handleSyncEvent(event: SyncEvent) {
       break;
     case SyncEventType.NOTIFICATION_MARKED_READ:
       handleNotificationMarkedRead(event.payload);
+      break;
+    case SyncEventType.USER_ADDED:
+      handleUserAdded(event.payload);
+      break;
+    case SyncEventType.USER_UPDATED:
+      handleUserUpdated(event.payload);
+      break;
+    case SyncEventType.USER_DEACTIVATED:
+      handleUserDeactivated(event.payload);
       break;
     // Add more cases as needed
   }
@@ -188,6 +324,45 @@ function createAndBroadcastEvent(type: SyncEventType, payload: any) {
 }
 
 /**
+ * Persist users to localStorage
+ */
+export function persistUsers() {
+  try {
+    const users = dataStore.getUsersStore();
+    localStorage.setItem('health_app_data_users', JSON.stringify(users));
+    logInfo("[mockDataPersistence] Persisted users", { count: users.length });
+  } catch (error) {
+    console.error("[mockDataPersistence] Error persisting users:", error);
+  }
+}
+
+/**
+ * Persist doctor profiles to localStorage
+ */
+export function persistDoctorProfiles() {
+  try {
+    const profiles = dataStore.getDoctorProfilesStore();
+    localStorage.setItem('health_app_data_doctor_profiles', JSON.stringify(profiles));
+    logInfo("[mockDataPersistence] Persisted doctor profiles", { count: profiles.length });
+  } catch (error) {
+    console.error("[mockDataPersistence] Error persisting doctor profiles:", error);
+  }
+}
+
+/**
+ * Persist patient profiles to localStorage
+ */
+export function persistPatientProfiles() {
+  try {
+    const profiles = dataStore.getPatientProfilesStore();
+    localStorage.setItem('health_app_data_patient_profiles', JSON.stringify(profiles));
+    logInfo("[mockDataPersistence] Persisted patient profiles", { count: profiles.length });
+  } catch (error) {
+    console.error("[mockDataPersistence] Error persisting patient profiles:", error);
+  }
+}
+
+/**
  * Persist current appointments to localStorage
  */
 export function persistAppointments() {
@@ -211,6 +386,46 @@ export function persistNotifications() {
   } catch (error) {
     console.error("[mockDataPersistence] Error persisting notifications:", error);
   }
+}
+
+/**
+ * Sync a user addition across tabs
+ */
+export function syncUserAdded(user: any, profile?: any) {
+  createAndBroadcastEvent(SyncEventType.USER_ADDED, { user, profile });
+  persistUsers();
+  
+  if (profile) {
+    if (user.userType === UserType.DOCTOR) {
+      persistDoctorProfiles();
+    } else if (user.userType === UserType.PATIENT) {
+      persistPatientProfiles();
+    }
+  }
+}
+
+/**
+ * Sync a user update across tabs
+ */
+export function syncUserUpdated(user: any, profile?: any) {
+  createAndBroadcastEvent(SyncEventType.USER_UPDATED, { user, profile });
+  persistUsers();
+  
+  if (profile) {
+    if (user.userType === UserType.DOCTOR) {
+      persistDoctorProfiles();
+    } else if (user.userType === UserType.PATIENT) {
+      persistPatientProfiles();
+    }
+  }
+}
+
+/**
+ * Sync a user deactivation across tabs
+ */
+export function syncUserDeactivated(userId: string, isActive: boolean) {
+  createAndBroadcastEvent(SyncEventType.USER_DEACTIVATED, { userId, isActive });
+  persistUsers();
 }
 
 /**
@@ -253,56 +468,167 @@ export function syncNotificationMarkedRead(notificationId: string, userId: strin
   persistNotifications();
 }
 
-// Event handlers for sync events
+/**
+ * Sync a notification update across tabs
+ */
+export function syncNotificationUpdated(notification: any) {
+  createAndBroadcastEvent(SyncEventType.NOTIFICATION_MARKED_READ, { notificationId: notification.id, userId: notification.userId });
+  persistNotifications();
+}
 
-function handleAppointmentCreated(appointment: any) {
-  // Add the appointment to the store if it doesn't exist
-  if (!dataStore.appointmentsStore.some(a => a.id === appointment.id)) {
-    dataStore.appointmentsStore.push(appointment);
-    logInfo("[mockDataPersistence] Added synchronized appointment", { id: appointment.id });
+/**
+ * Handle a user addition event from another tab
+ */
+function handleUserAdded(data: { user: any, profile?: any }) {
+  if (!data.user || !data.user.id) return;
+  
+  // Check if user already exists
+  const existingIndex = dataStore.usersStore.findIndex(u => u.id === data.user.id);
+  if (existingIndex >= 0) {
+    // If it exists, just update it
+    dataStore.usersStore[existingIndex] = data.user;
+  } else {
+    // Otherwise add it
+    dataStore.usersStore.push(data.user);
+  }
+  
+  // Handle profile if present
+  if (data.profile) {
+    if (data.user.userType === UserType.DOCTOR) {
+      const existingProfileIndex = dataStore.doctorProfilesStore.findIndex(p => p.userId === data.user.id);
+      if (existingProfileIndex >= 0) {
+        dataStore.doctorProfilesStore[existingProfileIndex] = data.profile;
+      } else {
+        dataStore.doctorProfilesStore.push(data.profile);
+      }
+    } else if (data.user.userType === UserType.PATIENT) {
+      const existingProfileIndex = dataStore.patientProfilesStore.findIndex(p => p.userId === data.user.id);
+      if (existingProfileIndex >= 0) {
+        dataStore.patientProfilesStore[existingProfileIndex] = data.profile;
+      } else {
+        dataStore.patientProfilesStore.push(data.profile);
+      }
+    }
   }
 }
 
+/**
+ * Handle a user update event from another tab
+ */
+function handleUserUpdated(data: { user: any, profile?: any }) {
+  if (!data.user || !data.user.id) return;
+  
+  // Find and update the user
+  const userIndex = dataStore.usersStore.findIndex(u => u.id === data.user.id);
+  if (userIndex >= 0) {
+    dataStore.usersStore[userIndex] = {
+      ...dataStore.usersStore[userIndex],
+      ...data.user
+    };
+  }
+  
+  // Handle profile if present
+  if (data.profile) {
+    if (data.user.userType === UserType.DOCTOR) {
+      const profileIndex = dataStore.doctorProfilesStore.findIndex(p => p.userId === data.user.id);
+      if (profileIndex >= 0) {
+        dataStore.doctorProfilesStore[profileIndex] = {
+          ...dataStore.doctorProfilesStore[profileIndex],
+          ...data.profile
+        };
+      }
+    } else if (data.user.userType === UserType.PATIENT) {
+      const profileIndex = dataStore.patientProfilesStore.findIndex(p => p.userId === data.user.id);
+      if (profileIndex >= 0) {
+        dataStore.patientProfilesStore[profileIndex] = {
+          ...dataStore.patientProfilesStore[profileIndex],
+          ...data.profile
+        };
+      }
+    }
+  }
+}
+
+/**
+ * Handle a user deactivation event from another tab
+ */
+function handleUserDeactivated(data: { userId: string, isActive: boolean }) {
+  if (!data.userId) return;
+  
+  // Find and update the user's active status
+  const userIndex = dataStore.usersStore.findIndex(u => u.id === data.userId);
+  if (userIndex >= 0) {
+    dataStore.usersStore[userIndex].isActive = data.isActive;
+  }
+}
+
+/**
+ * Handle an appointment creation event from another tab
+ */
+function handleAppointmentCreated(appointment: any) {
+  if (!appointment || !appointment.id) return;
+  
+  // Check if the appointment already exists to avoid duplicates
+  const exists = dataStore.appointmentsStore.some(a => a.id === appointment.id);
+  if (!exists) {
+    dataStore.appointmentsStore.push(appointment);
+  }
+}
+
+/**
+ * Handle an appointment update event from another tab
+ */
 function handleAppointmentUpdated(appointment: any) {
+  if (!appointment || !appointment.id) return;
+  
   // Find and update the appointment
   const index = dataStore.appointmentsStore.findIndex(a => a.id === appointment.id);
   if (index !== -1) {
-    dataStore.appointmentsStore[index] = {
-      ...dataStore.appointmentsStore[index],
-      ...appointment
-    };
-    logInfo("[mockDataPersistence] Updated synchronized appointment", { id: appointment.id });
+    dataStore.appointmentsStore[index] = appointment;
   }
 }
 
+/**
+ * Handle an appointment cancellation event from another tab
+ */
 function handleAppointmentCancelled(data: { appointmentId: string, reason?: string }) {
-  // Find and update the appointment
-  const appointment = dataStore.appointmentsStore.find(a => a.id === data.appointmentId);
-  if (appointment) {
-    appointment.status = AppointmentStatus.CANCELLED;
+  if (!data.appointmentId) return;
+  
+  // Find and update the appointment status
+  const index = dataStore.appointmentsStore.findIndex(a => a.id === data.appointmentId);
+  if (index !== -1) {
+    dataStore.appointmentsStore[index].status = AppointmentStatus.CANCELLED;
     if (data.reason) {
-      appointment.notes = data.reason;
+      dataStore.appointmentsStore[index].notes = data.reason;
     }
-    logInfo("[mockDataPersistence] Cancelled synchronized appointment", { id: data.appointmentId });
   }
 }
 
+/**
+ * Handle a notification addition event from another tab
+ */
 function handleNotificationAdded(notification: any) {
-  // Add the notification to the store if it doesn't exist
-  if (!dataStore.notificationsStore.some(n => n.id === notification.id)) {
+  if (!notification || !notification.id) return;
+  
+  // Check if the notification already exists
+  const exists = dataStore.notificationsStore.some(n => n.id === notification.id);
+  if (!exists) {
     dataStore.notificationsStore.push(notification);
-    logInfo("[mockDataPersistence] Added synchronized notification", { id: notification.id });
   }
 }
 
+/**
+ * Handle a notification marked read event from another tab
+ */
 function handleNotificationMarkedRead(data: { notificationId: string, userId: string }) {
-  // Find and update the notification
+  if (!data.notificationId || !data.userId) return;
+  
+  // Find and update the notification read status
   const notification = dataStore.notificationsStore.find(
     n => n.id === data.notificationId && n.userId === data.userId
   );
   
   if (notification) {
     notification.isRead = true;
-    logInfo("[mockDataPersistence] Marked synchronized notification as read", { id: data.notificationId });
   }
 } 
