@@ -176,9 +176,21 @@ export async function mockRegisterUser(data: Partial<UserProfile> & {
 export async function mockSignIn(email: string, password: string): Promise<{ user: { uid: string; email: string }; userProfile: UserProfile }> {
   logInfo("[mockApiService] mockSignIn", { email });
   await simulateDelay();
+  
+  // Find user by email
   const user = dataStore.getUsersStore().find(u => u.email === email);
   if (!user) throw new Error("invalid-credential");
-  return { user: { uid: user.id, email: user.email! }, userProfile: user };
+  
+  // Check if user is active
+  if (user.isActive === false) throw new Error("user-disabled");
+  
+  // For demo, we don't actually check the password
+  // In a real app, we would validate the password here
+  
+  return { 
+    user: { uid: user.id, email: user.email! }, 
+    userProfile: user 
+  };
 }
 
 /**
@@ -990,7 +1002,36 @@ export async function mockDeactivateUser(userId: string): Promise<boolean> {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 800));
   
-  // In a real implementation, this would update the user's status in the database
+  // Find the user in the data store
+  const userIndex = dataStore.usersStore.findIndex(u => u.id === userId);
+  if (userIndex === -1) {
+    return false;
+  }
+  
+  // Toggle the user's active status
+  const user = dataStore.usersStore[userIndex];
+  user.isActive = !user.isActive;
+  user.updatedAt = new Date();
+  
+  // Update localStorage if it's the current user
+  try {
+    const storedUser = localStorage.getItem('auth_user');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      if (parsedUser.uid === userId) {
+        // If this is the current user, update their status
+        const storedProfile = localStorage.getItem('auth_profile');
+        if (storedProfile) {
+          const parsedProfile = JSON.parse(storedProfile);
+          parsedProfile.isActive = user.isActive;
+          localStorage.setItem('auth_profile', JSON.stringify(parsedProfile));
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[MOCK API] Error updating user status in localStorage', error);
+  }
+  
   return true;
 }
 
@@ -1051,67 +1092,63 @@ export async function mockGetUserProfile(userId: string): Promise<any> {
   logInfo("[mockApiService] mockGetUserProfile", { userId });
   await simulateDelay();
   
-  // In a real implementation, we'd fetch from Firestore
-  // For mock, return data based on the userId
-  const mockUsers: Record<string, any> = {
-    'user1': {
-      id: 'user1',
-      firstName: 'John',
-      lastName: 'Smith',
-      email: 'john.smith@example.com',
-      userType: 'patient',
-      isActive: true,
-      emailVerified: true,
-      createdAt: '2023-05-15T08:20:00'
-    },
-    'user2': {
-      id: 'user2',
-      firstName: 'Sarah',
-      lastName: 'Johnson',
-      email: 'sarah.johnson@example.com',
-      userType: 'doctor',
-      isActive: true,
-      emailVerified: true,
-      createdAt: '2023-05-10T14:30:00'
-    },
-    'user3': {
-      id: 'user3',
-      firstName: 'Michael',
-      lastName: 'Lee',
-      email: 'michael.lee@example.com',
-      userType: 'doctor',
-      isActive: true,
-      emailVerified: true,
-      createdAt: '2023-05-08T11:15:00'
-    },
-    'user4': {
-      id: 'user4',
-      firstName: 'Emily',
-      lastName: 'Chen',
-      email: 'emily.chen@example.com',
-      userType: 'patient',
-      isActive: false,
-      emailVerified: true,
-      createdAt: '2023-05-05T09:45:00'
-    },
-    'user5': {
-      id: 'user5',
-      firstName: 'Admin',
-      lastName: 'User',
-      email: 'admin@example.com',
-      userType: 'admin',
-      isActive: true,
-      emailVerified: true,
-      createdAt: '2023-04-01T10:00:00'
-    }
-  };
-  
-  // Return the user profile if found, otherwise throw an error
-  if (mockUsers[userId]) {
-    return mockUsers[userId];
-  } else {
+  // Find the user in the data store
+  const user = dataStore.getUsersStore().find(u => u.id === userId);
+  if (!user) {
     throw new Error('User not found');
   }
+  
+  // Get additional profile data based on user type
+  let additionalData = {};
+  if (user.userType === UserType.PATIENT) {
+    const patientProfile = dataStore.getPatientProfilesStore().find(p => p.userId === userId);
+    if (patientProfile) {
+      additionalData = {
+        dateOfBirth: patientProfile.dateOfBirth,
+        gender: patientProfile.gender,
+        bloodType: patientProfile.bloodType,
+        medicalHistory: patientProfile.medicalHistory
+      };
+    }
+  } else if (user.userType === UserType.DOCTOR) {
+    const doctorProfile = dataStore.getDoctorProfilesStore().find(d => d.userId === userId);
+    if (doctorProfile) {
+      additionalData = {
+        specialty: doctorProfile.specialty,
+        licenseNumber: doctorProfile.licenseNumber,
+        yearsOfExperience: doctorProfile.yearsOfExperience,
+        education: doctorProfile.education,
+        bio: doctorProfile.bio,
+        location: doctorProfile.location,
+        languages: doctorProfile.languages,
+        consultationFee: doctorProfile.consultationFee,
+        profilePictureUrl: doctorProfile.profilePictureUrl,
+        verificationStatus: doctorProfile.verificationStatus
+      };
+    }
+  }
+  
+  // Format date fields
+  const createdAt = user.createdAt instanceof Date 
+    ? user.createdAt.toISOString() 
+    : typeof user.createdAt === 'object' && user.createdAt !== null && 'toDate' in user.createdAt 
+      ? user.createdAt.toDate().toISOString() 
+      : String(user.createdAt);
+  
+  // Return combined data
+  return {
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    phone: user.phone,
+    userType: user.userType,
+    isActive: user.isActive ?? true,
+    emailVerified: user.emailVerified ?? false,
+    phoneVerified: user.phoneVerified ?? false,
+    createdAt,
+    ...additionalData
+  };
 }
 
 /**
@@ -1124,6 +1161,58 @@ export async function mockUpdateUserProfile(userId: string, updates: any): Promi
   logInfo("[mockApiService] mockUpdateUserProfile", { userId, updates });
   await simulateDelay();
   
-  // In a real implementation, this would update the database
+  // Find the user in the data store
+  const userIndex = dataStore.usersStore.findIndex(u => u.id === userId);
+  if (userIndex === -1) {
+    return { success: false };
+  }
+  
+  // Update basic user fields
+  const user = dataStore.usersStore[userIndex];
+  if (updates.firstName) user.firstName = updates.firstName;
+  if (updates.lastName) user.lastName = updates.lastName;
+  if (updates.email) user.email = updates.email;
+  if (updates.phone !== undefined) user.phone = updates.phone;
+  user.updatedAt = new Date();
+  
+  // Update profile-specific fields if needed
+  if (user.userType === UserType.PATIENT) {
+    const patientProfile = dataStore.patientProfilesStore.find(p => p.userId === userId);
+    if (patientProfile) {
+      if (updates.dateOfBirth !== undefined) patientProfile.dateOfBirth = updates.dateOfBirth;
+      if (updates.gender !== undefined) patientProfile.gender = updates.gender;
+      if (updates.bloodType !== undefined) patientProfile.bloodType = updates.bloodType;
+      if (updates.medicalHistory !== undefined) patientProfile.medicalHistory = updates.medicalHistory;
+    }
+  } else if (user.userType === UserType.DOCTOR) {
+    const doctorProfile = dataStore.doctorProfilesStore.find(d => d.userId === userId);
+    if (doctorProfile) {
+      if (updates.specialty !== undefined) doctorProfile.specialty = updates.specialty;
+      if (updates.licenseNumber !== undefined) doctorProfile.licenseNumber = updates.licenseNumber;
+      if (updates.yearsOfExperience !== undefined) doctorProfile.yearsOfExperience = updates.yearsOfExperience;
+      if (updates.education !== undefined) doctorProfile.education = updates.education;
+      if (updates.bio !== undefined) doctorProfile.bio = updates.bio;
+      if (updates.location !== undefined) doctorProfile.location = updates.location;
+      if (updates.languages !== undefined) doctorProfile.languages = updates.languages;
+      if (updates.consultationFee !== undefined) doctorProfile.consultationFee = updates.consultationFee;
+    }
+  }
+  
+  // Store auth data in localStorage for persistence if it's the logged-in user
+  try {
+    const storedUser = localStorage.getItem('auth_user');
+    const storedProfile = localStorage.getItem('auth_profile');
+    if (storedUser && storedProfile) {
+      const parsedUser = JSON.parse(storedUser);
+      if (parsedUser.uid === userId) {
+        const parsedProfile = JSON.parse(storedProfile);
+        const updatedProfile = { ...parsedProfile, ...updates };
+        localStorage.setItem('auth_profile', JSON.stringify(updatedProfile));
+      }
+    }
+  } catch (error) {
+    console.error('[MOCK API] Error persisting profile data to localStorage', error);
+  }
+  
   return { success: true };
 }

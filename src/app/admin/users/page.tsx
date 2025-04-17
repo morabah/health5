@@ -6,8 +6,10 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
-import { mockGetAllUsers, mockDeactivateUser, mockResetUserPassword } from "@/lib/mockApiService";
+import { mockGetAllUsers, mockDeactivateUser, mockResetUserPassword, mockAddUser } from "@/lib/mockApiService";
 import { UserType } from "@/types/enums";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
 
 interface User {
   id: string;
@@ -28,6 +30,19 @@ const UserListPage: React.FC = () => {
   const [search, setSearch] = useState("");
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // State for Add User modal
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    userType: "patient",
+    phone: ""
+  });
+  const [addingUser, setAddingUser] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -108,13 +123,82 @@ const UserListPage: React.FC = () => {
       router.push(`/admin/users/${userId}`);
     }
   };
+  
+  const handleAddUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setNewUser(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddingUser(true);
+    setAddError(null);
+    
+    try {
+      // Basic validation
+      if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.userType) {
+        throw new Error("Please fill all required fields");
+      }
+      
+      // Email validation
+      if (!/^\S+@\S+\.\S+$/.test(newUser.email)) {
+        throw new Error("Please enter a valid email address");
+      }
+      
+      // Submit to API
+      const addedUser = await mockAddUser({
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        userType: newUser.userType,
+        phone: newUser.phone || undefined
+      });
+      
+      // Update the user list with the new user
+      setUsers(prev => [...prev, addedUser]);
+      
+      // Show success message
+      showSuccess(`User ${newUser.firstName} ${newUser.lastName} added successfully`);
+      
+      // Reset form
+      setNewUser({
+        firstName: "",
+        lastName: "",
+        email: "",
+        userType: "patient",
+        phone: ""
+      });
+      
+      // Close modal
+      setShowAddUserModal(false);
+      
+    } catch (err: any) {
+      if (err.message === "email-already-exists") {
+        setAddError("A user with this email already exists");
+      } else {
+        setAddError(err.message || "Failed to add user");
+      }
+    } finally {
+      setAddingUser(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 flex flex-col items-center">
       <h1 className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100">User Management</h1>
       <Card className="w-full max-w-5xl mb-8 p-6">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4 gap-4">
-          <h2 className="text-xl font-semibold">User List</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">User List</h2>
+            <Button
+              label="Add User"
+              pageName="admin-users"
+              size="sm"
+              onClick={() => setShowAddUserModal(true)}
+            >
+              + Add User
+            </Button>
+          </div>
           
           <div className="flex flex-col md:flex-row gap-3">
             {/* Search box */}
@@ -244,6 +328,87 @@ const UserListPage: React.FC = () => {
           </div>
         )}
       </Card>
+      
+      {/* Add User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md p-6">
+            <h2 className="text-xl font-semibold mb-4">Add New User</h2>
+            <form onSubmit={handleAddUserSubmit}>
+              <div className="space-y-4">
+                <Input
+                  label="First Name *"
+                  name="firstName"
+                  value={newUser.firstName}
+                  onChange={handleAddUserChange}
+                  required
+                />
+                <Input
+                  label="Last Name *"
+                  name="lastName"
+                  value={newUser.lastName}
+                  onChange={handleAddUserChange}
+                  required
+                />
+                <Input
+                  label="Email *"
+                  name="email"
+                  type="email"
+                  value={newUser.email}
+                  onChange={handleAddUserChange}
+                  required
+                />
+                <Input
+                  label="Phone"
+                  name="phone"
+                  type="tel"
+                  value={newUser.phone}
+                  onChange={handleAddUserChange}
+                />
+                <Select
+                  label="User Type *"
+                  name="userType"
+                  value={newUser.userType}
+                  onChange={handleAddUserChange}
+                  options={[
+                    { value: "patient", label: "Patient" },
+                    { value: "doctor", label: "Doctor" },
+                    { value: "admin", label: "Admin" }
+                  ]}
+                  required
+                />
+                
+                {addError && (
+                  <div className="text-red-600 dark:text-red-400 text-sm">{addError}</div>
+                )}
+                
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setShowAddUserModal(false)}
+                    label="Cancel"
+                    pageName="admin-users"
+                    disabled={addingUser}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    isLoading={addingUser}
+                    label="Add User"
+                    pageName="admin-users"
+                    disabled={addingUser}
+                  >
+                    {addingUser ? "Adding..." : "Add User"}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </main>
   );
 };
