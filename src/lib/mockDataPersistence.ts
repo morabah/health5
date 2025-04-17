@@ -39,6 +39,7 @@ export enum SyncEventType {
   USER_ADDED = 'user_added',
   USER_UPDATED = 'user_updated',
   USER_DEACTIVATED = 'user_deactivated',
+  NOTIFICATION_UPDATED = 'notification_updated',
 }
 
 // Interface for sync events
@@ -88,6 +89,11 @@ export function initDataPersistence(): void {
     
     // Set up listener for sync events across tabs
     window.addEventListener('storage', handleStorageChange);
+    
+    // Set up a timer to automatically save all data every 30 seconds
+    const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
+    setInterval(persistAllData, AUTO_SAVE_INTERVAL);
+    logInfo('[mockDataPersistence] Auto-save timer set up');
     
     logInfo('[mockDataPersistence] Data persistence initialized successfully');
   } catch (error) {
@@ -289,6 +295,9 @@ function handleSyncEvent(event: SyncEvent) {
     case SyncEventType.USER_DEACTIVATED:
       handleUserDeactivated(event.payload);
       break;
+    case SyncEventType.NOTIFICATION_UPDATED:
+      handleNotificationUpdated(event.payload);
+      break;
     // Add more cases as needed
   }
 }
@@ -329,7 +338,7 @@ function createAndBroadcastEvent(type: SyncEventType, payload: any) {
 export function persistUsers() {
   try {
     const users = dataStore.getUsersStore();
-    localStorage.setItem('health_app_data_users', JSON.stringify(users));
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
     logInfo("[mockDataPersistence] Persisted users", { count: users.length });
   } catch (error) {
     console.error("[mockDataPersistence] Error persisting users:", error);
@@ -342,7 +351,7 @@ export function persistUsers() {
 export function persistDoctorProfiles() {
   try {
     const profiles = dataStore.getDoctorProfilesStore();
-    localStorage.setItem('health_app_data_doctor_profiles', JSON.stringify(profiles));
+    localStorage.setItem(STORAGE_KEYS.DOCTOR_PROFILES, JSON.stringify(profiles));
     logInfo("[mockDataPersistence] Persisted doctor profiles", { count: profiles.length });
   } catch (error) {
     console.error("[mockDataPersistence] Error persisting doctor profiles:", error);
@@ -355,7 +364,7 @@ export function persistDoctorProfiles() {
 export function persistPatientProfiles() {
   try {
     const profiles = dataStore.getPatientProfilesStore();
-    localStorage.setItem('health_app_data_patient_profiles', JSON.stringify(profiles));
+    localStorage.setItem(STORAGE_KEYS.PATIENT_PROFILES, JSON.stringify(profiles));
     logInfo("[mockDataPersistence] Persisted patient profiles", { count: profiles.length });
   } catch (error) {
     console.error("[mockDataPersistence] Error persisting patient profiles:", error);
@@ -368,7 +377,7 @@ export function persistPatientProfiles() {
 export function persistAppointments() {
   try {
     const appointments = dataStore.getAppointmentsStore();
-    localStorage.setItem('health_app_data_appointments', JSON.stringify(appointments));
+    localStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(appointments));
     logInfo("[mockDataPersistence] Persisted appointments", { count: appointments.length });
   } catch (error) {
     console.error("[mockDataPersistence] Error persisting appointments:", error);
@@ -381,10 +390,26 @@ export function persistAppointments() {
 export function persistNotifications() {
   try {
     const notifications = dataStore.getNotificationsStore();
-    localStorage.setItem('health_app_data_notifications', JSON.stringify(notifications));
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
     logInfo("[mockDataPersistence] Persisted notifications", { count: notifications.length });
   } catch (error) {
     console.error("[mockDataPersistence] Error persisting notifications:", error);
+  }
+}
+
+/**
+ * Persist all data to localStorage at once
+ */
+export function persistAllData() {
+  try {
+    persistUsers();
+    persistDoctorProfiles();
+    persistPatientProfiles();
+    persistAppointments();
+    persistNotifications();
+    logInfo("[mockDataPersistence] All data persisted to localStorage");
+  } catch (error) {
+    console.error("[mockDataPersistence] Error persisting all data:", error);
   }
 }
 
@@ -418,6 +443,14 @@ export function syncUserUpdated(user: any, profile?: any) {
       persistPatientProfiles();
     }
   }
+}
+
+/**
+ * Sync a doctor profile update across tabs
+ */
+export function syncDoctorProfileUpdated(profile: any) {
+  createAndBroadcastEvent(SyncEventType.DOCTOR_PROFILE_UPDATED, profile);
+  persistDoctorProfiles();
 }
 
 /**
@@ -472,7 +505,7 @@ export function syncNotificationMarkedRead(notificationId: string, userId: strin
  * Sync a notification update across tabs
  */
 export function syncNotificationUpdated(notification: any) {
-  createAndBroadcastEvent(SyncEventType.NOTIFICATION_MARKED_READ, { notificationId: notification.id, userId: notification.userId });
+  createAndBroadcastEvent(SyncEventType.NOTIFICATION_UPDATED, notification);
   persistNotifications();
 }
 
@@ -630,5 +663,18 @@ function handleNotificationMarkedRead(data: { notificationId: string, userId: st
   
   if (notification) {
     notification.isRead = true;
+  }
+}
+
+/**
+ * Handle a notification update event from another tab
+ */
+function handleNotificationUpdated(notification: any) {
+  if (!notification || !notification.id) return;
+  
+  // Find and update the notification
+  const index = dataStore.notificationsStore.findIndex(n => n.id === notification.id);
+  if (index !== -1) {
+    dataStore.notificationsStore[index] = notification;
   }
 } 

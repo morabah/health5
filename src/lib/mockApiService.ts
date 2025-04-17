@@ -21,14 +21,24 @@ import {
   syncAppointmentCancelled,
   syncNotificationAdded,
   syncNotificationMarkedRead,
+  syncNotificationUpdated,
   syncUserAdded,
   syncUserDeactivated,
   syncUserUpdated,
+  syncDoctorProfileUpdated,
+  persistAllData,
   initDataPersistence
 } from "./mockDataPersistence";
 
 // Mutable stores (for direct mutation)
 import * as dataStore from "@/data/mockDataStore";
+
+// Helper utilities for consistent API mocking
+const logApiCall = (functionName: string, params: any) => {
+  logInfo(`[mockApiService] ${functionName}`, params);
+};
+
+const delay = () => simulateDelay();
 
 // Initialize data persistence if we're in the browser
 if (typeof window !== 'undefined') {
@@ -485,9 +495,20 @@ export async function mockGetNotifications(userId: string): Promise<Notification
   // Simulate network delay
   await simulateDelay();
   
-  return notificationsStore
+  const notifications = dataStore.getNotificationsStore();
+  return notifications
     .filter(notification => notification.userId === userId)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    .sort((a, b) => {
+      // Handle different date formats - Date object, Timestamp object, or ISO string
+      const getTime = (date: any) => {
+        if (date instanceof Date) return date.getTime();
+        if (date && typeof date === 'object' && 'toDate' in date) return date.toDate().getTime();
+        if (typeof date === 'string') return new Date(date).getTime();
+        return 0;
+      };
+      
+      return getTime(b.createdAt) - getTime(a.createdAt);
+    });
 }
 
 /**
@@ -499,18 +520,19 @@ export async function mockMarkNotificationAsRead(notificationId: string): Promis
   // Simulate network delay
   await simulateDelay();
   
-  const notificationIndex = notificationsStore.findIndex(n => n.id === notificationId);
+  const notifications = dataStore.getNotificationsStore();
+  const notificationIndex = notifications.findIndex(n => n.id === notificationId);
   if (notificationIndex === -1) {
     return false;
   }
   
   const updatedNotification = {
-    ...notificationsStore[notificationIndex],
+    ...notifications[notificationIndex],
     isRead: true,
     updatedAt: new Date()
   };
   
-  notificationsStore[notificationIndex] = updatedNotification;
+  dataStore.notificationsStore[notificationIndex] = updatedNotification;
   syncNotificationUpdated(updatedNotification);
   
   return true;
@@ -526,8 +548,9 @@ export async function mockMarkAllNotificationsAsRead(userId: string): Promise<bo
   await simulateDelay();
   
   let updatedCount = 0;
+  const notifications = dataStore.getNotificationsStore();
   
-  notificationsStore.forEach((notification, index) => {
+  notifications.forEach((notification, index) => {
     if (notification.userId === userId && !notification.isRead) {
       const updatedNotification = {
         ...notification,
@@ -535,7 +558,7 @@ export async function mockMarkAllNotificationsAsRead(userId: string): Promise<bo
         updatedAt: new Date()
       };
       
-      notificationsStore[index] = updatedNotification;
+      dataStore.notificationsStore[index] = updatedNotification;
       syncNotificationUpdated(updatedNotification);
       updatedCount++;
     }
@@ -570,7 +593,7 @@ export async function mockCreateNotification(
     relatedId
   };
   
-  notificationsStore.push(newNotification);
+  dataStore.notificationsStore.push(newNotification);
   syncNotificationAdded(newNotification);
   
   return newNotification;
