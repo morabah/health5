@@ -272,14 +272,14 @@ export default function DoctorAppointmentsPage() {
             <div className="text-red-600 dark:text-red-400">{error}</div>
           </Card>
         ) : filteredAppointments.length === 0 ? (
-          <EmptyState
+        <EmptyState
             title={searchQuery ? "No matching appointments found" : "No appointments scheduled"}
             message={
               searchQuery 
                 ? "Try adjusting your search or filters to find what you're looking for."
                 : "You have no appointments scheduled. When patients book appointments, they will appear here."
             }
-            className="my-8"
+          className="my-8"
             action={
               <Button 
                 asChild
@@ -398,11 +398,11 @@ export default function DoctorAppointmentsPage() {
                       </>
                     )}
                   </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
         
         {/* Appointment Details Modal */}
         {detailsOpen && (

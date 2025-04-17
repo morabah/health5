@@ -277,7 +277,7 @@ export default function BookAppointmentPage() {
               <p className="mt-4 text-gray-600 dark:text-gray-400">Loading doctor information...</p>
             </div>
           </div>
-        </div>
+      </div>
       </main>
     );
   }
@@ -316,7 +316,7 @@ export default function BookAppointmentPage() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Book Appointment</h1>
           </div>
           <ApiModeIndicator />
-        </div>
+              </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
           {/* Doctor Information Sidebar */}
@@ -464,23 +464,23 @@ export default function BookAppointmentPage() {
                         <VideoCameraIcon className="w-5 h-5" />
                         <span className="font-medium">Video Consultation</span>
                       </button>
-                    </div>
-                  </div>
-                )}
+                </div>
+              </div>
+            )}
                 
                 {/* Step 4: Reason for Visit */}
                 {selectedTime && (
                   <div className="mb-8">
                     <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">4. Reason for Visit (Optional)</h4>
-                    <Input
-                      type="text"
+                <Input
+                  type="text"
                       placeholder="Brief description of your symptoms or reason for visit"
-                      value={reason}
+                  value={reason}
                       onChange={(e) => setReason(e.target.value)}
                       className="w-full"
-                    />
-                  </div>
-                )}
+                />
+              </div>
+            )}
                 
                 {/* Appointment Summary & Confirm Button */}
                 {selectedDate && selectedTime && (
@@ -511,7 +511,7 @@ export default function BookAppointmentPage() {
                       </div>
                     </div>
                     
-                    <Button
+              <Button
                       variant="primary"
                       size="lg"
                       className="w-full justify-center"
@@ -522,13 +522,13 @@ export default function BookAppointmentPage() {
                       pageName="BookAppointmentPage"
                     >
                       Confirm Appointment
-                    </Button>
+              </Button>
                   </div>
-                )}
-              </div>
-            </Card>
+            )}
           </div>
-        </div>
+        </Card>
+      </div>
+    </div>
       </div>
     </main>
   );

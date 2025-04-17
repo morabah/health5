@@ -263,9 +263,9 @@ export default function FindDoctorsPage() {
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
                 </div>
-                <Input
+          <Input
                   id="search"
-                  type="text"
+            type="text"
                   placeholder="Search by doctor name or specialty..."
                   value={searchQuery}
                   onChange={handleSearchChange}
@@ -297,7 +297,7 @@ export default function FindDoctorsPage() {
                   </label>
                   <Select
                     id="specialty"
-                    value={specialty}
+            value={specialty}
                     onChange={(e) => setSpecialty(e.target.value)}
                     options={specialtyOptions}
                   />
@@ -308,7 +308,7 @@ export default function FindDoctorsPage() {
                   </label>
                   <Select
                     id="location"
-                    value={location}
+            value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     options={locationOptions}
                   />
@@ -319,7 +319,7 @@ export default function FindDoctorsPage() {
                   </label>
                   <Select
                     id="language"
-                    value={language}
+            value={language}
                     onChange={(e) => setLanguage(e.target.value)}
                     options={languageOptions}
                   />
@@ -475,12 +475,12 @@ export default function FindDoctorsPage() {
                             >
                               {doctor.available ? "Book Appointment" : "Unavailable"}
                             </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    </div>
-                  ))}
+                  </div>
                 </div>
+              </Card>
+                    </div>
+            ))}
+          </div>
               </>
             )}
           </>

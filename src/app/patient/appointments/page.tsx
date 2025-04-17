@@ -49,7 +49,7 @@ export default function PatientAppointmentsPage() {
 
   useEffect(() => {
     if (user) {
-      fetchAppointments();
+    fetchAppointments();
     } else {
       setError("Please log in to view your appointments");
       setLoading(false);
@@ -187,7 +187,7 @@ export default function PatientAppointmentsPage() {
               <Link href="/patient/dashboard" className="flex items-center gap-2">
                 <span>Dashboard</span>
               </Link>
-            </Button>
+          </Button>
           </div>
         </div>
         
@@ -538,8 +538,8 @@ export default function PatientAppointmentsPage() {
                       className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       placeholder="Please provide a reason for cancelling..."
                       rows={3}
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
                       disabled={loading}
                     />
                   </div>
@@ -565,7 +565,7 @@ export default function PatientAppointmentsPage() {
                     >
                       {loading ? <Spinner size="sm" /> : 'Confirm Cancel'}
                     </Button>
-                  </div>
+              </div>
                 </>
               )}
             </div>

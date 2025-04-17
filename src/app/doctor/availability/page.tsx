@@ -69,7 +69,29 @@ export default function DoctorAvailabilityPage() {
       setError(null);
       try {
         // Get current doctor's availability settings
-        const availabilityData = await getMockDoctorAvailability(user.uid);
+        let availabilityData = await getMockDoctorAvailability(user.uid);
+        
+        // Fallback: Try to load directly from localStorage if no data was returned
+        if (!availabilityData || !Array.isArray(availabilityData) || availabilityData.length === 0) {
+          console.log('No availability data returned from API, trying localStorage directly');
+          
+          try {
+            const STORAGE_KEY = 'health_app_data_doctor_profiles';
+            const storedProfilesStr = localStorage.getItem(STORAGE_KEY);
+            
+            if (storedProfilesStr) {
+              const storedProfiles = JSON.parse(storedProfilesStr);
+              const profile = storedProfiles.find((p: any) => p.userId === user.uid);
+              
+              if (profile && profile.mockAvailability && profile.mockAvailability.slots) {
+                console.log('Found availability data in localStorage:', profile.mockAvailability.slots.length, 'slots');
+                availabilityData = profile.mockAvailability.slots;
+              }
+            }
+          } catch (localStorageErr) {
+            console.error('Error reading from localStorage:', localStorageErr);
+          }
+        }
         
         // Initialize schedule based on doctor's availability
         const schedule: WeeklySchedule = {
@@ -84,6 +106,8 @@ export default function DoctorAvailabilityPage() {
         
         // Process availability data
         if (availabilityData && Array.isArray(availabilityData) && availabilityData.length > 0) {
+          console.log(`Found ${availabilityData.length} availability slots for doctor ${user.uid}`);
+          
           // It's an array of slots
           availabilityData.forEach((slot: AvailabilitySlot) => {
             if (slot.dayOfWeek >= 0 && slot.dayOfWeek <= 6 && slot.isAvailable) {
@@ -96,7 +120,28 @@ export default function DoctorAvailabilityPage() {
           
           setWeeklySchedule(schedule);
           
-          // We might get blockedDates from the API in a future implementation
+          // Check for blocked dates in localStorage
+          try {
+            const STORAGE_KEY = 'health_app_data_doctor_profiles';
+            const storedProfilesStr = localStorage.getItem(STORAGE_KEY);
+            
+            if (storedProfilesStr) {
+              const storedProfiles = JSON.parse(storedProfilesStr);
+              const profile = storedProfiles.find((p: any) => p.userId === user.uid);
+              
+              if (profile && profile.mockAvailability && profile.mockAvailability.blockedDates) {
+                const blockDates = profile.mockAvailability.blockedDates
+                  .map((dateStr: string) => new Date(dateStr));
+                
+                if (blockDates.length > 0) {
+                  console.log(`Found ${blockDates.length} blocked dates in localStorage`);
+                  setBlockedDates(blockDates);
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error loading blocked dates:', err);
+          }
         } else {
           // Set default schedule if no availability data
           const defaultSchedule: WeeklySchedule = {
@@ -275,6 +320,38 @@ export default function DoctorAvailabilityPage() {
       });
       
       if (result.success) {
+        // Force direct localStorage update as a fallback in case the mockSetDoctorAvailability
+        // is not persisting properly to localStorage
+        try {
+          const STORAGE_KEY = 'health_app_data_doctor_profiles';
+          const storedProfilesStr = localStorage.getItem(STORAGE_KEY);
+          
+          if (storedProfilesStr) {
+            const storedProfiles = JSON.parse(storedProfilesStr);
+            const profileIndex = storedProfiles.findIndex((p: any) => p.userId === user.uid);
+            
+            if (profileIndex !== -1) {
+              // Update the profile with availability data
+              storedProfiles[profileIndex] = {
+                ...storedProfiles[profileIndex],
+                mockAvailability: {
+                  slots: formattedSlots,
+                  blockedDates: formattedBlockedDates
+                },
+                updatedAt: new Date()
+              };
+              
+              // Save back to localStorage
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(storedProfiles));
+              console.log('Direct localStorage update successful');
+            } else {
+              console.warn('Doctor profile not found in localStorage');
+            }
+          }
+        } catch (localStorageErr) {
+          console.error('Error with direct localStorage update:', localStorageErr);
+        }
+        
         toast.success('Availability settings saved successfully');
         console.log('Availability saved successfully');
         setDataChanged(false); // Reset the change tracker after saving
@@ -308,7 +385,7 @@ export default function DoctorAvailabilityPage() {
                 pageName="DoctorAvailabilityPage"
               >
                 Back to Dashboard
-              </Button>
+          </Button>
             </Link>
             <ApiModeIndicator />
           </div>
@@ -358,22 +435,22 @@ export default function DoctorAvailabilityPage() {
               {/* Weekly Schedule Grid */}
               <div className="mb-6 overflow-x-auto">
                 <table className="min-w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100 dark:bg-gray-800">
+              <thead>
+                <tr className="bg-gray-100 dark:bg-gray-800">
                       <th className="py-2 px-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Time</th>
                       {[0, 1, 2, 3, 4, 5, 6].map((day) => (
                         <th key={day} className="py-2 px-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
                           {getDayName(day)}
                         </th>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                </tr>
+              </thead>
+              <tbody>
                     {availableTimes.map(time => (
                       <tr key={time} className="border-t border-gray-200 dark:border-gray-700">
                         <td className="py-2 px-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
                           {time}
-                        </td>
+                    </td>
                         {[0, 1, 2, 3, 4, 5, 6].map((day) => (
                           <td key={day} className="py-2 px-3 text-center">
                             <button
@@ -387,12 +464,12 @@ export default function DoctorAvailabilityPage() {
                             >
                               {isTimeSlotSelected(day, time) ? 'Available' : 'Unavailable'}
                             </button>
-                          </td>
+                    </td>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
               </div>
             </Card>
             

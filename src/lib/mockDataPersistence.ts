@@ -143,7 +143,15 @@ function loadDoctorProfiles(): void {
         // Clear the current store
         dataStore.doctorProfilesStore.length = 0;
         // Add all persisted profiles
-        parsedProfiles.forEach(profile => dataStore.doctorProfilesStore.push(profile));
+        parsedProfiles.forEach(profile => {
+          // Make sure any mockAvailability property is properly maintained
+          const profileWithAvailability = { 
+            ...profile,
+            // Ensure mockAvailability is properly typed as any
+            mockAvailability: (profile as any).mockAvailability || undefined
+          };
+          dataStore.doctorProfilesStore.push(profileWithAvailability);
+        });
         logInfo(`[mockDataPersistence] Loaded ${parsedProfiles.length} persisted doctor profiles`);
       }
     }
@@ -298,6 +306,15 @@ function handleSyncEvent(event: SyncEvent) {
     case SyncEventType.NOTIFICATION_UPDATED:
       handleNotificationUpdated(event.payload);
       break;
+    case SyncEventType.DOCTOR_PROFILE_UPDATED:
+      handleDoctorProfileUpdated(event.payload);
+      break;
+    case SyncEventType.PATIENT_PROFILE_UPDATED:
+      handlePatientProfileUpdated(event.payload);
+      break;
+    case SyncEventType.AVAILABILITY_UPDATED:
+      handleAvailabilityUpdated(event.payload);
+      break;
     // Add more cases as needed
   }
 }
@@ -351,8 +368,27 @@ export function persistUsers() {
 export function persistDoctorProfiles() {
   try {
     const profiles = dataStore.getDoctorProfilesStore();
+    
+    // Log doctor profiles that have mockAvailability for debugging
+    const profilesWithAvailability = profiles.filter(p => (p as any).mockAvailability);
+    if (profilesWithAvailability.length > 0) {
+      console.log(`[mockDataPersistence] Persisting ${profilesWithAvailability.length} doctor profiles with availability data`);
+      profilesWithAvailability.forEach(p => {
+        console.log(`[mockDataPersistence] Doctor ${p.userId} has ${(p as any).mockAvailability?.slots?.length || 0} availability slots`);
+      });
+    }
+    
+    // Ensure we stringify the entire profile including the mockAvailability property
     localStorage.setItem(STORAGE_KEYS.DOCTOR_PROFILES, JSON.stringify(profiles));
     logInfo("[mockDataPersistence] Persisted doctor profiles", { count: profiles.length });
+    
+    // Double-check that the data was stored correctly
+    const storedData = localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES);
+    if (storedData) {
+      const parsed = JSON.parse(storedData);
+      const availabilityCount = parsed.filter((p: any) => p.mockAvailability).length;
+      console.log(`[mockDataPersistence] Verified storage: ${availabilityCount} doctor profiles with availability data`);
+    }
   } catch (error) {
     console.error("[mockDataPersistence] Error persisting doctor profiles:", error);
   }
@@ -450,6 +486,25 @@ export function syncUserUpdated(user: any, profile?: any) {
  */
 export function syncDoctorProfileUpdated(profile: any) {
   createAndBroadcastEvent(SyncEventType.DOCTOR_PROFILE_UPDATED, profile);
+  persistDoctorProfiles();
+}
+
+/**
+ * Sync doctor availability changes across tabs
+ */
+export function syncAvailabilityUpdated(doctorId: string, data: { weeklySchedule?: any, blockedDates?: string[] }) {
+  createAndBroadcastEvent(SyncEventType.AVAILABILITY_UPDATED, { doctorId, ...data });
+  persistDoctorProfiles();
+}
+
+/**
+ * Sync doctor blocked dates changes across tabs
+ */
+export function syncDoctorBlockedDates(doctorId: string, blockedDates: string[] | Date[]) {
+  createAndBroadcastEvent(SyncEventType.AVAILABILITY_UPDATED, { 
+    doctorId, 
+    blockedDates
+  });
   persistDoctorProfiles();
 }
 
@@ -678,4 +733,83 @@ function handleNotificationUpdated(notification: any) {
   if (index !== -1) {
     dataStore.notificationsStore[index] = notification;
   }
+}
+
+/**
+ * Handle a doctor profile update event from another tab
+ */
+function handleDoctorProfileUpdated(profile: any) {
+  if (!profile || !profile.userId) return;
+  
+  // Find and update the doctor profile
+  const profileIndex = dataStore.doctorProfilesStore.findIndex(p => p.userId === profile.userId);
+  if (profileIndex !== -1) {
+    dataStore.doctorProfilesStore[profileIndex] = {
+      ...dataStore.doctorProfilesStore[profileIndex],
+      ...profile
+    };
+  }
+}
+
+/**
+ * Handle a patient profile update event from another tab
+ */
+function handlePatientProfileUpdated(profile: any) {
+  if (!profile || !profile.userId) return;
+  
+  // Find and update the patient profile
+  const profileIndex = dataStore.patientProfilesStore.findIndex(p => p.userId === profile.userId);
+  if (profileIndex !== -1) {
+    dataStore.patientProfilesStore[profileIndex] = {
+      ...dataStore.patientProfilesStore[profileIndex],
+      ...profile
+    };
+  }
+}
+
+/**
+ * Handle an availability update event from another tab
+ */
+function handleAvailabilityUpdated(data: { doctorId: string, weeklySchedule?: any, blockedDates?: string[] }) {
+  if (!data || !data.doctorId) return;
+  
+  // Find the doctor profile
+  const profileIndex = dataStore.doctorProfilesStore.findIndex(p => p.userId === data.doctorId);
+  if (profileIndex !== -1) {
+    // Ensure the mockAvailability property exists
+    if (!dataStore.doctorProfilesStore[profileIndex].mockAvailability) {
+      dataStore.doctorProfilesStore[profileIndex].mockAvailability = {
+        slots: [],
+        blockedDates: []
+      };
+    }
+    
+    // Update slots if weeklySchedule is provided
+    if (data.weeklySchedule) {
+      dataStore.doctorProfilesStore[profileIndex].mockAvailability.slots = data.weeklySchedule;
+    }
+    
+    // Update blocked dates if provided
+    if (data.blockedDates) {
+      dataStore.doctorProfilesStore[profileIndex].mockAvailability.blockedDates = data.blockedDates;
+    }
+    
+    // Update the timestamps
+    dataStore.doctorProfilesStore[profileIndex].updatedAt = new Date();
+    
+    console.log(`[mockDataPersistence] Updated availability for doctor ${data.doctorId}`, {
+      slots: dataStore.doctorProfilesStore[profileIndex].mockAvailability.slots.length,
+      blockedDates: dataStore.doctorProfilesStore[profileIndex].mockAvailability.blockedDates.length
+    });
+  } else {
+    console.error(`[mockDataPersistence] Doctor profile not found for ID: ${data.doctorId}`);
+  }
+}
+
+/**
+ * Sync a patient profile update across tabs
+ */
+export function syncPatientProfileUpdated(profile: any) {
+  createAndBroadcastEvent(SyncEventType.PATIENT_PROFILE_UPDATED, profile);
+  persistPatientProfiles();
 } 

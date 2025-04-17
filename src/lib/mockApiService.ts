@@ -5,6 +5,7 @@
 import { logInfo, logError } from "@/lib/logger";
 import type { UserProfile } from "@/types/user";
 import type { DoctorProfile, DoctorVerificationData } from "@/types/doctor";
+import { WeeklySchedule, isValidWeeklySchedule } from "@/types/doctor";
 import type { PatientProfile } from "@/types/patient";
 import type { Appointment } from "@/types/appointment";
 import type { Notification } from "@/types/notification";
@@ -15,6 +16,7 @@ import { Timestamp } from "firebase/firestore";
 import { getDateObject } from "@/utils/dateUtils";
 import { generateId, generateUuid } from "@/utils/idGenerator";
 import { formatDate, formatDateTime } from "@/utils/dateFormatter";
+import { getMockDoctorUser, getMockPatientUser } from "@/data/mockDataService";
 
 // Import persistence module
 import { 
@@ -28,6 +30,8 @@ import {
   syncUserDeactivated,
   syncUserUpdated,
   syncDoctorProfileUpdated,
+  syncPatientProfileUpdated,
+  syncAvailabilityUpdated,
   persistAllData,
   initDataPersistence
 } from "./mockDataPersistence";
@@ -341,11 +345,43 @@ export async function mockUpdateAppointment(appointment: Appointment): Promise<{
 export async function mockSetDoctorAvailability({ doctorId, slots, blockedDates }: { doctorId: string; slots: any[]; blockedDates: string[] }): Promise<{ success: boolean }> {
   logInfo("[mockApiService] mockSetDoctorAvailability", { doctorId, slots, blockedDates });
   await simulateDelay();
-  // For demo, attach to doctor profile as .mockAvailability
-  const doctor = (dataStore as any).doctorProfilesStore.find((d: any) => d.userId === doctorId);
-  if (!doctor) throw new Error("not-found");
-  doctor.mockAvailability = { slots, blockedDates };
-  return { success: true };
+  
+  try {
+    const doctorProfileIndex = getDoctorProfilesStore().findIndex(profile => profile.userId === doctorId);
+    if (doctorProfileIndex === -1) {
+      console.error(`Doctor profile not found for ID: ${doctorId}`);
+      return { success: false };
+    }
+    
+    // Get the current doctor profile
+    const doctorProfile = getDoctorProfilesStore()[doctorProfileIndex];
+    
+    // Create updated profile object with availability data
+    const updatedProfile = {
+      ...doctorProfile,
+      mockAvailability: { slots, blockedDates },
+      updatedAt: new Date()
+    } as any; // Use type assertion to avoid TypeScript errors
+    
+    // Update store
+    getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
+    
+    // Sync changes using the availability-specific sync function
+    syncAvailabilityUpdated(doctorId, { 
+      weeklySchedule: slots, 
+      blockedDates 
+    });
+    
+    console.log(`[mockApiService] Successfully updated availability for doctor ${doctorId}`, {
+      slotsCount: slots.length,
+      blockedDatesCount: blockedDates.length
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error(`[mockApiService] Error updating doctor availability: ${error}`);
+    return { success: false };
+  }
 }
 
 /**
@@ -394,36 +430,47 @@ export async function mockGetDoctorPublicProfile({ doctorId }: { doctorId: strin
 export async function mockGetAvailableSlots({ doctorId, dateString }: { doctorId: string; dateString: string }): Promise<string[]> {
   logInfo("[mockApiService] mockGetAvailableSlots", { doctorId, dateString });
   await simulateDelay();
-  const doctor = (dataStore as any).doctorProfilesStore.find((d: any) => d.userId === doctorId);
   
-  // If doctor has no availability data, initialize with default slots
-  if (!doctor || !doctor.mockAvailability) {
-    if (doctor) {
-      // Create default availability if needed
-      const defaultTimeSlots = [
-        { startTime: '09:00', endTime: '09:30' },
-        { startTime: '10:00', endTime: '10:30' },
-        { startTime: '11:00', endTime: '11:30' },
-        { startTime: '13:00', endTime: '13:30' },
-        { startTime: '14:00', endTime: '14:30' },
-        { startTime: '15:00', endTime: '15:30' },
-      ];
-      
-      doctor.mockAvailability = {
-        slots: defaultTimeSlots,
-        blockedDates: []
-      };
-      
-      logInfo(`[mockApiService] Created default availability for doctor ${doctorId}`);
-    } else {
-      return [];
-    }
+  // Use type assertion to avoid linter errors with the mockAvailability property
+  const doctor = (dataStore.getDoctorProfilesStore().find(d => d.userId === doctorId) as any);
+  
+  if (!doctor) {
+    console.error(`[mockApiService] Doctor not found for ID: ${doctorId}`);
+    return [];
   }
   
-  // For demo, just return all slots not blocked
-  return doctor.mockAvailability.slots
-    .filter((slot: any) => !doctor.mockAvailability.blockedDates.includes(dateString))
-    .map((slot: any) => slot.startTime);
+  // If doctor has no availability data, initialize with default slots
+  if (!doctor.mockAvailability) {
+    // Create default availability if needed
+    const defaultTimeSlots = [
+      { startTime: '09:00', endTime: '09:30' },
+      { startTime: '10:00', endTime: '10:30' },
+      { startTime: '11:00', endTime: '11:30' },
+      { startTime: '13:00', endTime: '13:30' },
+      { startTime: '14:00', endTime: '14:30' },
+      { startTime: '15:00', endTime: '15:30' },
+    ];
+    
+    doctor.mockAvailability = {
+      slots: defaultTimeSlots,
+      blockedDates: []
+    };
+    
+    logInfo(`[mockApiService] Created default availability for doctor ${doctorId}`);
+  }
+  
+  // Check if the date is blocked
+  if (doctor.mockAvailability.blockedDates && doctor.mockAvailability.blockedDates.includes(dateString)) {
+    console.log(`[mockApiService] Date ${dateString} is blocked for doctor ${doctorId}`);
+    return [];
+  }
+  
+  console.log(`[mockApiService] Returning available slots for doctor ${doctorId} on ${dateString}`, {
+    slotCount: doctor.mockAvailability.slots.length
+  });
+  
+  // Return all available slot start times
+  return doctor.mockAvailability.slots.map((slot: any) => slot.startTime);
 }
 
 /**
@@ -488,13 +535,58 @@ export async function mockBookAppointment(appointmentData: Partial<Appointment> 
 export async function mockCompleteAppointment({ appointmentId, notes, doctorId }: { appointmentId: string; notes: string; doctorId: string }): Promise<{ success: boolean }> {
   logInfo("[mockApiService] mockCompleteAppointment", { appointmentId, notes, doctorId });
   await simulateDelay();
-  const appt = (dataStore as any).appointmentsStore.find((a: any) => a.id === appointmentId);
-  if (!appt) throw new Error("not-found");
-  if (appt.doctorId !== doctorId) throw new Error("permission-denied");
-  appt.status = AppointmentStatus.COMPLETED; // Fix: Use AppointmentStatus enum for appointment logic
-  appt.notes = notes;
-  appt.updatedAt = new Date();
-  return { success: true };
+  
+  try {
+    const appointmentIndex = getAppointmentsStore().findIndex(a => a.id === appointmentId);
+    
+    if (appointmentIndex === -1) {
+      throw new Error("not-found");
+    }
+    
+    const appointment = getAppointmentsStore()[appointmentIndex];
+    
+    if (appointment.doctorId !== doctorId) {
+      throw new Error("permission-denied");
+    }
+    
+    // Create updated appointment object
+    const updatedAppointment = {
+      ...appointment,
+      status: AppointmentStatus.COMPLETED,
+      notes: notes,
+      updatedAt: new Date()
+    };
+    
+    // Update store
+    getAppointmentsStore()[appointmentIndex] = updatedAppointment;
+    
+    // Sync changes
+    syncAppointmentUpdated(updatedAppointment);
+    
+    // Create notification for the patient
+    const patient = getUsersStore().find(u => u.id === appointment.patientId);
+    if (patient) {
+      const doctor = getUsersStore().find(u => u.id === doctorId);
+      const patientNotification = {
+        id: generateId('notification'),
+        userId: appointment.patientId,
+        title: 'Appointment Completed',
+        message: `Your appointment with Dr. ${doctor?.firstName || ''} ${doctor?.lastName || ''} has been marked as completed.`,
+        isRead: false,
+        createdAt: new Date(),
+        type: 'appointment_completed',
+        relatedId: appointmentId
+      };
+      
+      getNotificationsStore().push(patientNotification);
+      syncNotificationAdded(patientNotification);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error(`Error completing appointment ${appointmentId}:`, error);
+    return { success: false };
+  }
 }
 
 /**
@@ -616,10 +708,59 @@ export async function mockCreateNotification(
 export async function mockAdminVerifyDoctor({ doctorId, status, notes }: { doctorId: string; status: VerificationStatus; notes: string }): Promise<{ success: boolean }> {
   logInfo("[mockApiService] mockAdminVerifyDoctor", { doctorId, status, notes });
   await simulateDelay();
-  const doc = (dataStore as any).doctorProfilesStore.find((d: any) => d.userId === doctorId);
-  if (!doc) throw new Error("not-found");
-  doc.verificationStatus = status;
-  doc.verificationNotes = notes;
+  
+  const doctorProfileIndex = getDoctorProfilesStore().findIndex(profile => profile.userId === doctorId);
+  if (doctorProfileIndex === -1) {
+    throw new Error("not-found");
+  }
+  
+  // Create updated profile object
+  const updatedProfile = {
+    ...getDoctorProfilesStore()[doctorProfileIndex],
+    verificationStatus: status,
+    verificationNotes: notes,
+    updatedAt: new Date()
+  };
+  
+  // Update store
+  getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
+  
+  // Sync changes
+  syncDoctorProfileUpdated(updatedProfile);
+  
+  // Create a notification for the doctor
+  let notificationTitle = 'Verification Status Update';
+  let notificationMessage = '';
+  
+  switch (status) {
+    case VerificationStatus.APPROVED:
+      notificationTitle = 'Account Verification Approved';
+      notificationMessage = 'Congratulations! Your account has been verified. You can now start accepting appointments.';
+      break;
+    case VerificationStatus.REJECTED:
+      notificationTitle = 'Account Verification Rejected';
+      notificationMessage = 'Your account verification has been rejected. Please review the admin notes for more information.';
+      break;
+    case VerificationStatus.MORE_INFO_REQUIRED:
+      notificationTitle = 'Additional Information Required';
+      notificationMessage = 'Please provide additional information for your account verification.';
+      break;
+    default:
+      notificationMessage = `Your verification status has been updated to ${status}.`;
+  }
+  
+  if (notes) {
+    notificationMessage += ` Admin Notes: ${notes}`;
+  }
+  
+  await mockCreateNotification(
+    doctorId,
+    notificationTitle,
+    notificationMessage,
+    'VERIFICATION_UPDATE',
+    doctorId
+  );
+  
   return { success: true };
 }
 
@@ -788,11 +929,63 @@ export async function mockGetSystemLogs() {
  */
 export async function mockUpdateDoctorProfile(profileData: any): Promise<any> {
   console.log('[MOCK API] Updating doctor profile', profileData);
+  logApiCall('mockUpdateDoctorProfile', profileData);
   
   // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await simulateDelay();
   
-  // Save data to localStorage for persistence in mock environment
+  // First find the doctor profile in the data store
+  const doctorProfileIndex = getDoctorProfilesStore().findIndex(profile => profile.userId === profileData.id);
+  if (doctorProfileIndex === -1) {
+    console.error(`Doctor profile not found for ID: ${profileData.id}`);
+    return { success: false };
+  }
+  
+  // Find the user record as well
+  const userIndex = getUsersStore().findIndex(user => user.id === profileData.id);
+  if (userIndex === -1) {
+    console.error(`User not found for ID: ${profileData.id}`);
+    return { success: false };
+  }
+  
+  // Extract first name and last name from the name field
+  const firstName = profileData.name ? profileData.name.replace('Dr. ', '').split(' ')[0] : undefined;
+  const lastName = profileData.name ? profileData.name.replace('Dr. ', '').split(' ').slice(1).join(' ') : undefined;
+  
+  // Update user record if we have name information
+  if (firstName || lastName) {
+    const updatedUser = {
+      ...getUsersStore()[userIndex],
+      firstName: firstName || getUsersStore()[userIndex].firstName,
+      lastName: lastName || getUsersStore()[userIndex].lastName,
+      email: profileData.email || getUsersStore()[userIndex].email,
+      phone: profileData.phone !== undefined ? profileData.phone : getUsersStore()[userIndex].phone,
+      updatedAt: new Date()
+    };
+    
+    // Update user store
+    getUsersStore()[userIndex] = updatedUser;
+    
+    // Sync user changes
+    syncUserUpdated(updatedUser);
+  }
+  
+  // Update the doctor profile
+  const updatedProfile = {
+    ...getDoctorProfilesStore()[doctorProfileIndex],
+    specialty: profileData.specialty || getDoctorProfilesStore()[doctorProfileIndex].specialty,
+    bio: profileData.bio || getDoctorProfilesStore()[doctorProfileIndex].bio,
+    location: profileData.location || getDoctorProfilesStore()[doctorProfileIndex].location,
+    updatedAt: new Date()
+  };
+  
+  // Update doctor profile store
+  getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
+  
+  // Sync doctor profile changes
+  syncDoctorProfileUpdated(updatedProfile);
+  
+  // Maintain localStorage update for backward compatibility
   try {
     const storedUser = localStorage.getItem('auth_user');
     const storedProfile = localStorage.getItem('auth_profile');
@@ -804,29 +997,30 @@ export async function mockUpdateDoctorProfile(profileData: any): Promise<any> {
       // Check if stored profile is for the same user
       if (parsedUser.uid === profileData.id || parsedUser.userType === 'doctor') {
         // Update the stored profile with new data
-        const updatedProfile = {
+        const updatedLocalProfile = {
           ...parsedProfile,
-          firstName: profileData.name.replace('Dr. ', '').split(' ')[0],
-          lastName: profileData.name.replace('Dr. ', '').split(' ').slice(1).join(' '),
-          email: profileData.email,
-          phone: profileData.phone,
-          specialty: profileData.specialty,
-          location: profileData.location,
-          bio: profileData.bio,
+          firstName: firstName || parsedProfile.firstName,
+          lastName: lastName || parsedProfile.lastName,
+          email: profileData.email || parsedProfile.email,
+          phone: profileData.phone !== undefined ? profileData.phone : parsedProfile.phone,
+          specialty: profileData.specialty || parsedProfile.specialty,
+          location: profileData.location || parsedProfile.location,
+          bio: profileData.bio || parsedProfile.bio,
           updatedAt: new Date().toISOString()
         };
         
-        localStorage.setItem('auth_profile', JSON.stringify(updatedProfile));
-        console.log('[MOCK API] Profile data persisted to localStorage', updatedProfile);
+        localStorage.setItem('auth_profile', JSON.stringify(updatedLocalProfile));
+        console.log('[MOCK API] Profile data persisted to localStorage', updatedLocalProfile);
       }
     }
   } catch (error) {
     console.error('[MOCK API] Error persisting profile data to localStorage', error);
   }
   
-  // In a real implementation, this would update the database
+  // Return the merged updated data
   return {
     ...profileData,
+    id: profileData.id, 
     updatedAt: new Date().toISOString()
   };
 }
@@ -839,11 +1033,57 @@ export async function mockUpdateDoctorProfile(profileData: any): Promise<any> {
  */
 export async function mockUpdatePatientProfile(userId: string, profileData: any): Promise<any> {
   console.log('[MOCK API] Updating patient profile', { userId, profileData });
+  logApiCall('mockUpdatePatientProfile', { userId, profileData });
   
   // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await simulateDelay();
   
-  // Save data to localStorage for persistence in mock environment
+  // Find the patient profile in the data store
+  const patientProfileIndex = getPatientProfilesStore().findIndex(profile => profile.userId === userId);
+  if (patientProfileIndex === -1) {
+    console.error(`Patient profile not found for ID: ${userId}`);
+    return { success: false };
+  }
+  
+  // Find the user record as well
+  const userIndex = getUsersStore().findIndex(user => user.id === userId);
+  if (userIndex === -1) {
+    console.error(`User not found for ID: ${userId}`);
+    return { success: false };
+  }
+  
+  // Update user record if we have user information
+  if (profileData.firstName || profileData.lastName || profileData.email || profileData.phone !== undefined) {
+    const updatedUser = {
+      ...getUsersStore()[userIndex],
+      firstName: profileData.firstName || getUsersStore()[userIndex].firstName,
+      lastName: profileData.lastName || getUsersStore()[userIndex].lastName,
+      email: profileData.email || getUsersStore()[userIndex].email,
+      phone: profileData.phone !== undefined ? profileData.phone : getUsersStore()[userIndex].phone,
+      updatedAt: new Date()
+    };
+    
+    // Update user store
+    getUsersStore()[userIndex] = updatedUser;
+    
+    // Sync user changes
+    syncUserUpdated(updatedUser);
+  }
+  
+  // Update the patient profile
+  const updatedProfile = {
+    ...getPatientProfilesStore()[patientProfileIndex],
+    ...profileData,
+    updatedAt: new Date()
+  };
+  
+  // Update patient profile store
+  getPatientProfilesStore()[patientProfileIndex] = updatedProfile;
+  
+  // Sync patient profile changes
+  syncPatientProfileUpdated(updatedProfile);
+  
+  // Maintain localStorage update for backward compatibility
   try {
     const storedUser = localStorage.getItem('auth_user');
     const storedProfile = localStorage.getItem('auth_profile');
@@ -855,23 +1095,24 @@ export async function mockUpdatePatientProfile(userId: string, profileData: any)
       // Ensure we're updating the right user
       if (parsedUser.uid === userId || parsedUser.userType === 'patient') {
         // Update the stored profile with new data
-        const updatedProfile = {
+        const updatedLocalProfile = {
           ...parsedProfile,
           ...profileData,
           updatedAt: new Date().toISOString()
         };
         
-        localStorage.setItem('auth_profile', JSON.stringify(updatedProfile));
-        console.log('[MOCK API] Patient profile data persisted to localStorage', updatedProfile);
+        localStorage.setItem('auth_profile', JSON.stringify(updatedLocalProfile));
+        console.log('[MOCK API] Patient profile data persisted to localStorage', updatedLocalProfile);
       }
     }
   } catch (error) {
     console.error('[MOCK API] Error persisting patient profile data to localStorage', error);
   }
   
-  // In a real implementation, this would update the database
+  // Return the merged updated data
   return {
     ...profileData,
+    id: userId,
     updatedAt: new Date().toISOString()
   };
 }
@@ -1009,50 +1250,39 @@ export async function mockAddUser(userData: {
 }
 
 /**
- * Toggles a user's active status
- * @param userId ID of the user to activate/deactivate
+ * Deactivates a user account
+ * @param userId ID of the user to deactivate
  * @returns Success indicator
  */
 export async function mockDeactivateUser(userId: string): Promise<boolean> {
-  console.log('[MOCK API] Toggling user active status', userId);
+  logInfo("[mockApiService] mockDeactivateUser", { userId });
+  await simulateDelay();
   
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  // Find the user in the data store
-  const userIndex = getUsersStore().findIndex(u => u.id === userId);
-  if (userIndex === -1) {
+  try {
+    const userIndex = getUsersStore().findIndex(u => u.id === userId);
+    if (userIndex === -1) {
+      console.error(`User not found for ID: ${userId}`);
+      return false;
+    }
+    
+    // Create updated user object
+    const updatedUser = {
+      ...getUsersStore()[userIndex],
+      isActive: false,
+      updatedAt: new Date()
+    };
+    
+    // Update store
+    getUsersStore()[userIndex] = updatedUser;
+    
+    // Sync changes
+    syncUserDeactivated(userId, false);
+    
+    return true;
+  } catch (error) {
+    console.error(`Error deactivating user ${userId}:`, error);
     return false;
   }
-  
-  // Toggle the user's active status
-  const user = getUsersStore()[userIndex];
-  user.isActive = !user.isActive;
-  user.updatedAt = new Date();
-  
-  // Persist the change to localStorage
-  syncUserDeactivated(userId, user.isActive);
-  
-  // Update localStorage if it's the current user
-  try {
-    const storedUser = localStorage.getItem('auth_user');
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      if (parsedUser.uid === userId) {
-        // If this is the current user, update their status
-        const storedProfile = localStorage.getItem('auth_profile');
-        if (storedProfile) {
-          const parsedProfile = JSON.parse(storedProfile);
-          parsedProfile.isActive = user.isActive;
-          localStorage.setItem('auth_profile', JSON.stringify(parsedProfile));
-        }
-      }
-    }
-  } catch (error) {
-    console.error('[MOCK API] Error updating user status in localStorage', error);
-  }
-  
-  return true;
 }
 
 /**
@@ -1328,8 +1558,9 @@ export async function mockUpdateAppointmentDetails(
   
   // Create notification for status update if applicable
   if (updates.status) {
-    const doctor = getMockDoctorUser(updatedAppointment.doctorId);
-    const patient = getMockPatientUser(updatedAppointment.patientId);
+    // Get user information from dataStore directly instead of calling mocks
+    const doctor = getUsersStore().find(u => u.id === updatedAppointment.doctorId);
+    const patient = getUsersStore().find(u => u.id === updatedAppointment.patientId);
     
     // Notify the patient about the status change
     if (patient) {
@@ -1379,7 +1610,7 @@ export async function mockCancelAppointmentDetails(
   };
   
   getAppointmentsStore()[appointmentIndex] = updatedAppointment;
-  syncAppointmentCancelled(updatedAppointment.id, cancelReason);
+  syncAppointmentCancelled(updatedAppointment.id, cancelReason || '');
   
   // Create notifications for both parties
   const doctor = getUsersStore().find(u => u.id === appointment.doctorId);
@@ -1421,14 +1652,16 @@ export async function mockCancelAppointmentDetails(
 }
 
 // Helper function to generate appropriate status change messages
-function getStatusChangeMessage(status: AppointmentStatus, doctor: UserProfile | null): string {
+function getStatusChangeMessage(status: AppointmentStatus, doctor: UserProfile | undefined | null): string {
+  const doctorName = doctor ? `Dr. ${doctor.firstName} ${doctor.lastName}` : 'your doctor';
+  
   switch (status) {
     case AppointmentStatus.COMPLETED:
-      return `Your appointment with Dr. ${doctor?.firstName} ${doctor?.lastName} has been marked as completed.`;
+      return `Your appointment with ${doctorName} has been marked as completed.`;
     case AppointmentStatus.NO_SHOW:
-      return `You missed your appointment with Dr. ${doctor?.firstName} ${doctor?.lastName}. Please reschedule if needed.`;
+      return `You missed your appointment with ${doctorName}. Please reschedule if needed.`;
     case AppointmentStatus.RESCHEDULED:
-      return `Your appointment with Dr. ${doctor?.firstName} ${doctor?.lastName} has been rescheduled.`;
+      return `Your appointment with ${doctorName} has been rescheduled.`;
     default:
       return `Your appointment status has been updated to ${status}.`;
   }
@@ -1440,27 +1673,44 @@ export async function mockSaveDoctorAvailability(
 ): Promise<boolean> {
   logApiCall('mockSaveDoctorAvailability', { doctorId, weeklySchedule });
   
-  // Simulate network delay
-  await delay();
-  
-  const doctorProfileIndex = getDoctorProfilesStore().findIndex(profile => profile.userId === doctorId);
-  if (doctorProfileIndex === -1) {
-    console.error(`Doctor profile not found for ID: ${doctorId}`);
+  try {
+    // Validate input
+    if (!doctorId) {
+      console.error('Missing doctorId parameter');
+      return false;
+    }
+    
+    // Validate weekly schedule
+    if (!isValidWeeklySchedule(weeklySchedule)) {
+      console.error('Invalid weekly schedule format');
+      return false;
+    }
+    
+    // Simulate network delay
+    await delay();
+    
+    const doctorProfileIndex = getDoctorProfilesStore().findIndex(profile => profile.userId === doctorId);
+    if (doctorProfileIndex === -1) {
+      console.error(`Doctor profile not found for ID: ${doctorId}`);
+      return false;
+    }
+    
+    // Update the doctor's profile with the new weekly schedule
+    const updatedProfile = {
+      ...getDoctorProfilesStore()[doctorProfileIndex],
+      weeklySchedule,
+      updatedAt: new Date()
+    };
+    
+    getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
+    syncDoctorProfileUpdated(updatedProfile);
+    
+    console.log(`Doctor availability updated for ${doctorId}:`, weeklySchedule);
+    return true;
+  } catch (error) {
+    console.error(`Error saving doctor availability for ${doctorId}:`, error);
     return false;
   }
-  
-  // Update the doctor's profile with the new weekly schedule
-  const updatedProfile = {
-    ...getDoctorProfilesStore()[doctorProfileIndex],
-    weeklySchedule,
-    updatedAt: new Date()
-  };
-  
-  getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
-  syncDoctorProfileUpdated(updatedProfile);
-  
-  console.log(`Doctor availability updated for ${doctorId}:`, weeklySchedule);
-  return true;
 }
 
 export async function mockLoadDoctorAvailability(doctorId: string): Promise<WeeklySchedule | null> {
@@ -1475,8 +1725,58 @@ export async function mockLoadDoctorAvailability(doctorId: string): Promise<Week
     return null;
   }
   
-  // Return the doctor's weekly schedule or an empty schedule if none exists
-  return doctorProfile.weeklySchedule || {
+  // Check if the doctor has mockAvailability data
+  const mockAvailability = (doctorProfile as any).mockAvailability;
+  if (mockAvailability && mockAvailability.slots && Array.isArray(mockAvailability.slots) && mockAvailability.slots.length > 0) {
+    console.log(`Found mockAvailability data for doctor ${doctorId} with ${mockAvailability.slots.length} slots`);
+    
+    // Convert slots to WeeklySchedule format
+    const weeklySchedule: WeeklySchedule = {
+      monday: [],
+      tuesday: [],
+      wednesday: [],
+      thursday: [],
+      friday: [],
+      saturday: [],
+      sunday: []
+    };
+    
+    // Map day number to day name
+    const dayMapping: Record<number, keyof WeeklySchedule> = {
+      0: 'sunday',
+      1: 'monday',
+      2: 'tuesday',
+      3: 'wednesday',
+      4: 'thursday',
+      5: 'friday',
+      6: 'saturday'
+    };
+    
+    // Convert each slot to the appropriate day array
+    mockAvailability.slots.forEach((slot: any) => {
+      if (typeof slot.dayOfWeek === 'number' && slot.dayOfWeek >= 0 && slot.dayOfWeek <= 6) {
+        const day = dayMapping[slot.dayOfWeek];
+        weeklySchedule[day].push({
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          isAvailable: slot.isAvailable
+        });
+      }
+    });
+    
+    console.log(`Converted availability data to weekly schedule format for doctor ${doctorId}`);
+    return weeklySchedule;
+  }
+  
+  // If no mockAvailability, return the weeklySchedule if it exists
+  if (doctorProfile.weeklySchedule) {
+    console.log(`Using existing weeklySchedule for doctor ${doctorId}`);
+    return doctorProfile.weeklySchedule;
+  }
+  
+  // Return an empty schedule if none exists
+  console.log(`No availability data found for doctor ${doctorId}, returning empty schedule`);
+  return {
     monday: [],
     tuesday: [],
     wednesday: [],
@@ -1502,18 +1802,25 @@ export async function mockBlockDoctorDate(
     return false;
   }
   
+  // Get current blocked dates or initialize empty array
+  const currentBlockedDates = getDoctorProfilesStore()[doctorProfileIndex].blockedDates || [];
+  
   // Update the doctor's profile to add this date to blocked dates
+  const updatedBlockedDates = [
+    ...currentBlockedDates,
+    date
+  ];
+  
   const updatedProfile = {
     ...getDoctorProfilesStore()[doctorProfileIndex],
-    blockedDates: [
-      ...(getDoctorProfilesStore()[doctorProfileIndex].blockedDates || []),
-      date
-    ],
+    blockedDates: updatedBlockedDates,
     updatedAt: new Date()
   };
   
   getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
-  syncDoctorProfileUpdated(updatedProfile);
+  
+  // Sync blocked dates changes
+  syncDoctorBlockedDates(doctorId, updatedBlockedDates);
   
   console.log(`Date blocked for doctor ${doctorId}:`, date);
   return true;
@@ -1536,9 +1843,11 @@ export async function mockUnblockDoctorDate(
   
   const dateString = date.toISOString().split('T')[0];
   
+  // Get current blocked dates or initialize empty array
+  const currentBlockedDates = getDoctorProfilesStore()[doctorProfileIndex].blockedDates || [];
+  
   // Update the doctor's profile to remove this date from blocked dates
-  const blockedDates = getDoctorProfilesStore()[doctorProfileIndex].blockedDates || [];
-  const updatedBlockedDates = blockedDates.filter(d => {
+  const updatedBlockedDates = currentBlockedDates.filter(d => {
     const blockedDateString = d instanceof Date 
       ? d.toISOString().split('T')[0] 
       : (d as any).toDate?.().toISOString().split('T')[0] || '';
@@ -1553,7 +1862,9 @@ export async function mockUnblockDoctorDate(
   };
   
   getDoctorProfilesStore()[doctorProfileIndex] = updatedProfile;
-  syncDoctorProfileUpdated(updatedProfile);
+  
+  // Sync blocked dates changes
+  syncDoctorBlockedDates(doctorId, updatedBlockedDates);
   
   console.log(`Date unblocked for doctor ${doctorId}:`, date);
   return true;
@@ -1565,21 +1876,29 @@ export async function mockGetDoctorBlockedDates(doctorId: string): Promise<Date[
   // Simulate network delay
   await delay();
   
-  const doctorProfile = getDoctorProfilesStore().find(profile => profile.userId === doctorId);
-  if (!doctorProfile) {
-    console.error(`Doctor profile not found for ID: ${doctorId}`);
+  try {
+    const doctorProfile = getDoctorProfilesStore().find(profile => profile.userId === doctorId);
+    if (!doctorProfile) {
+      console.error(`Doctor profile not found for ID: ${doctorId}`);
+      return [];
+    }
+    
+    // Return blocked dates or empty array if none exist
+    const blockedDates = doctorProfile.blockedDates || [];
+    
+    // Convert any Timestamp objects to Date objects
+    return blockedDates.map(date => {
+      if (date instanceof Date) {
+        return date;
+      }
+      // Handle Firestore Timestamp objects
+      if ((date as any).toDate) {
+        return (date as any).toDate();
+      }
+      return new Date(date);
+    });
+  } catch (error) {
+    console.error(`Error getting blocked dates for doctor ${doctorId}:`, error);
     return [];
   }
-  
-  // Convert any Timestamp objects to Date objects
-  return (doctorProfile.blockedDates || []).map(date => {
-    if (date instanceof Date) {
-      return date;
-    }
-    // Handle Firestore Timestamp objects
-    if ((date as any).toDate) {
-      return (date as any).toDate();
-    }
-    return new Date(date);
-  });
 }

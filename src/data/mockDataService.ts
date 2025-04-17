@@ -72,8 +72,11 @@ export const getMockDoctorProfile = (id: string): DoctorProfile | undefined => m
 export const getMockDoctorAvailability = (doctorId?: string) => {
   console.log('[mockDataService] Getting mock doctor availability', { doctorId });
   
-  // Import from mockDoctorAvailabilitySlots in mockData.ts
-  const allSlots = [
+  // Import the getDoctorProfilesStore function to get the latest data from store
+  const { getDoctorProfilesStore } = require('@/data/mockDataStore');
+  
+  // Default slots to return if no doctor-specific data is found
+  const defaultSlots = [
     {
       id: 'avail_001',
       doctorId: mockDoctorUser.id,
@@ -132,13 +135,34 @@ export const getMockDoctorAvailability = (doctorId?: string) => {
     }
   ];
   
-  // If a specific doctorId is provided, filter slots for that doctor
+  // If a specific doctorId is provided, check if custom availability exists
   if (doctorId) {
-    return allSlots.filter(slot => slot.doctorId === doctorId);
+    try {
+      // Get all doctor profiles from the store to ensure we have the latest data
+      const doctorProfiles = getDoctorProfilesStore();
+      
+      // Find the specific doctor profile
+      const doctorProfile = doctorProfiles.find((p: DoctorProfile) => p.userId === doctorId);
+      
+      if (doctorProfile && (doctorProfile as any).mockAvailability) {
+        const mockAvailability = (doctorProfile as any).mockAvailability;
+        if (mockAvailability.slots && Array.isArray(mockAvailability.slots) && mockAvailability.slots.length > 0) {
+          console.log(`[mockDataService] Found custom availability for doctor ${doctorId} with ${mockAvailability.slots.length} slots`);
+          return mockAvailability.slots;
+        }
+      }
+      
+      // If no custom data, return default slots filtered for this doctor
+      console.log(`[mockDataService] No custom availability found for doctor ${doctorId}, using defaults`);
+      return defaultSlots.filter(slot => slot.doctorId === doctorId);
+    } catch (error) {
+      console.error(`[mockDataService] Error getting availability for doctor ${doctorId}:`, error);
+      return defaultSlots.filter(slot => slot.doctorId === doctorId);
+    }
   }
   
-  // Otherwise, return all slots
-  return allSlots;
+  // Otherwise, return all default slots
+  return defaultSlots;
 };
 
 export const getMockDoctorForms = () => {
