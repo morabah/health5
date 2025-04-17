@@ -5,8 +5,10 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
-import { mockGetAllUsers } from "@/lib/mockApiService";
+import { mockGetAllUsers, mockAddUser } from "@/lib/mockApiService";
 import { useRouter } from "next/navigation";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
 
 interface User {
   id: string;
@@ -25,6 +27,19 @@ export default function AdminListsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "admin" | "doctor" | "patient">("all");
   const router = useRouter();
+  
+  // State for Add User modal
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    userType: "patient",
+    phone: ""
+  });
+  const [addingUser, setAddingUser] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [addSuccess, setAddSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchUsers() {
@@ -47,6 +62,69 @@ export default function AdminListsPage() {
       router.push(`/admin/doctor-verification/${userId}`);
     } else {
       router.push(`/admin/users/${userId}`);
+    }
+  };
+  
+  const handleAddUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setNewUser(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddingUser(true);
+    setAddError(null);
+    setAddSuccess(null);
+    
+    try {
+      // Basic validation
+      if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.userType) {
+        throw new Error("Please fill all required fields");
+      }
+      
+      // Email validation
+      if (!/^\S+@\S+\.\S+$/.test(newUser.email)) {
+        throw new Error("Please enter a valid email address");
+      }
+      
+      // Submit to API
+      const addedUser = await mockAddUser({
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        userType: newUser.userType,
+        phone: newUser.phone || undefined
+      });
+      
+      // Update the user list with the new user
+      setUsers(prev => [...prev, addedUser]);
+      
+      // Show success message
+      setAddSuccess(`User ${newUser.firstName} ${newUser.lastName} added successfully`);
+      
+      // Reset form
+      setNewUser({
+        firstName: "",
+        lastName: "",
+        email: "",
+        userType: "patient",
+        phone: ""
+      });
+      
+      // Close modal after a delay
+      setTimeout(() => {
+        setShowAddUserModal(false);
+        setAddSuccess(null);
+      }, 2000);
+      
+    } catch (err: any) {
+      if (err.message === "email-already-exists") {
+        setAddError("A user with this email already exists");
+      } else {
+        setAddError(err.message || "Failed to add user");
+      }
+    } finally {
+      setAddingUser(false);
     }
   };
 
@@ -78,6 +156,14 @@ export default function AdminListsPage() {
             </div>
           </div>
           <div className="flex gap-3">
+            <Button 
+              label="Add User"
+              pageName="admin-lists"
+              variant="primary"
+              onClick={() => setShowAddUserModal(true)}
+            >
+              Add User
+            </Button>
             <Button 
               label="Back to Dashboard"
               pageName="admin-lists"
@@ -144,6 +230,91 @@ export default function AdminListsPage() {
           </div>
         )}
       </Card>
+      
+      {/* Add User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md p-6">
+            <h2 className="text-xl font-semibold mb-4">Add New User</h2>
+            <form onSubmit={handleAddUserSubmit}>
+              <div className="space-y-4">
+                <Input
+                  label="First Name *"
+                  name="firstName"
+                  value={newUser.firstName}
+                  onChange={handleAddUserChange}
+                  required
+                />
+                <Input
+                  label="Last Name *"
+                  name="lastName"
+                  value={newUser.lastName}
+                  onChange={handleAddUserChange}
+                  required
+                />
+                <Input
+                  label="Email *"
+                  name="email"
+                  type="email"
+                  value={newUser.email}
+                  onChange={handleAddUserChange}
+                  required
+                />
+                <Input
+                  label="Phone"
+                  name="phone"
+                  type="tel"
+                  value={newUser.phone}
+                  onChange={handleAddUserChange}
+                />
+                <Select
+                  label="User Type *"
+                  name="userType"
+                  value={newUser.userType}
+                  onChange={handleAddUserChange}
+                  options={[
+                    { value: "patient", label: "Patient" },
+                    { value: "doctor", label: "Doctor" },
+                    { value: "admin", label: "Admin" }
+                  ]}
+                  required
+                />
+                
+                {addError && (
+                  <div className="text-red-600 dark:text-red-400 text-sm">{addError}</div>
+                )}
+                
+                {addSuccess && (
+                  <div className="text-green-600 dark:text-green-400 text-sm">{addSuccess}</div>
+                )}
+                
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setShowAddUserModal(false)}
+                    label="Cancel"
+                    pageName="admin-lists"
+                    disabled={addingUser}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    isLoading={addingUser}
+                    label="Add User"
+                    pageName="admin-lists"
+                    disabled={addingUser}
+                  >
+                    {addingUser ? "Adding..." : "Add User"}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </main>
   );
 }

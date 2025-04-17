@@ -1,7 +1,7 @@
 /**
  * Represents the core user profile data stored in Firestore, common to all roles.
  */
-import { UserType } from './enums';
+import { UserType, VerificationStatus } from './enums';
 import { Timestamp } from 'firebase/firestore';
 
 /**
@@ -21,13 +21,26 @@ export interface UserProfile {
   /** The role of the user within the system. */
   userType: UserType;
   /** Flag indicating if the user account is active (e.g., not disabled by admin). */
-  isActive: boolean;
+  isActive?: boolean;
   /** Flag indicating if the user's email has been verified. */
-  emailVerified: boolean;
+  emailVerified?: boolean;
   /** Flag indicating if the user's phone number has been verified. */
-  phoneVerified: boolean;
+  phoneVerified?: boolean;
   /** Timestamp of when the user profile document was created. */
-  createdAt: Date | Timestamp;
+  createdAt?: string | Date;
   /** Timestamp of the last update to the user profile document. */
-  updatedAt: Date | Timestamp;
+  updatedAt?: string | Date;
+  // Doctor-specific fields
+  specialty?: string;
+  licenseNumber?: string;
+  yearsOfExperience?: number;
+  education?: string;
+  bio?: string;
+  languages?: string[];
+  location?: string;
+  consultationFee?: number;
+  profilePictureUrl?: string;
+  licenseDocumentUrl?: string;
+  certificateUrl?: string;
+  verificationStatus?: VerificationStatus;
 }

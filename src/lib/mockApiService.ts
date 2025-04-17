@@ -862,59 +862,121 @@ export async function mockGetAllUsers(): Promise<any[]> {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 800));
   
-  // Mock users data
-  return [
-    {
-      id: 'user1',
-      firstName: 'John',
-      lastName: 'Smith',
-      email: 'john.smith@example.com',
-      userType: 'patient',
-      isActive: true,
-      emailVerified: true,
-      createdAt: '2023-05-15T08:20:00'
-    },
-    {
-      id: 'user2',
-      firstName: 'Sarah',
-      lastName: 'Johnson',
-      email: 'sarah.johnson@example.com',
-      userType: 'doctor',
-      isActive: true,
-      emailVerified: true,
-      createdAt: '2023-05-10T14:30:00'
-    },
-    {
-      id: 'user3',
-      firstName: 'Michael',
-      lastName: 'Lee',
-      email: 'michael.lee@example.com',
-      userType: 'doctor',
-      isActive: true,
-      emailVerified: true,
-      createdAt: '2023-05-08T11:15:00'
-    },
-    {
-      id: 'user4',
-      firstName: 'Emily',
-      lastName: 'Chen',
-      email: 'emily.chen@example.com',
-      userType: 'patient',
-      isActive: false,
-      emailVerified: true,
-      createdAt: '2023-05-05T09:45:00'
-    },
-    {
-      id: 'user5',
-      firstName: 'Admin',
-      lastName: 'User',
-      email: 'admin@example.com',
-      userType: 'admin',
-      isActive: true,
-      emailVerified: true,
-      createdAt: '2023-04-01T10:00:00'
-    }
-  ];
+  // Get actual users from the data store instead of hardcoded mock data
+  return dataStore.getUsersStore().map(user => ({
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    userType: user.userType,
+    isActive: user.isActive,
+    emailVerified: user.emailVerified,
+    createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt
+  }));
+}
+
+/**
+ * Adds a new user to the system
+ * @param userData User data to add
+ * @returns Created user object with ID
+ */
+export async function mockAddUser(userData: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  userType: string;
+  password?: string;
+  phone?: string;
+}): Promise<any> {
+  logInfo("[mockApiService] mockAddUser", { userData });
+  await simulateDelay();
+  
+  // Check if email already exists
+  const existing = dataStore.getUsersStore().find(u => u.email === userData.email);
+  if (existing) throw new Error("email-already-exists");
+  
+  // Create a new user ID
+  const id = uuidv4();
+  const now = new Date();
+  
+  // Convert user type string to enum
+  let userType: UserType;
+  switch (userData.userType.toLowerCase()) {
+    case 'admin':
+      userType = UserType.ADMIN;
+      break;
+    case 'doctor':
+      userType = UserType.DOCTOR;
+      break;
+    case 'patient':
+      userType = UserType.PATIENT;
+      break;
+    default:
+      throw new Error("invalid-user-type");
+  }
+  
+  // Create the new user object
+  const newUser: UserProfile = {
+    id,
+    email: userData.email,
+    phone: userData.phone || null,
+    firstName: userData.firstName,
+    lastName: userData.lastName,
+    userType,
+    isActive: true,
+    emailVerified: false,
+    phoneVerified: false,
+    createdAt: now,
+    updatedAt: now
+  };
+  
+  // Add user to the users store
+  dataStore.usersStore.push(newUser);
+  
+  // Create corresponding profile based on user type
+  if (userType === UserType.PATIENT) {
+    const patientProfile: PatientProfile = {
+      userId: id,
+      dateOfBirth: null,
+      gender: null,
+      bloodType: null,
+      medicalHistory: null
+    };
+    dataStore.patientProfilesStore.push(patientProfile);
+  } else if (userType === UserType.DOCTOR) {
+    const doctorProfile: DoctorProfile = {
+      userId: id,
+      specialty: "",
+      licenseNumber: "",
+      yearsOfExperience: 0,
+      education: "",
+      bio: "",
+      verificationStatus: VerificationStatus.PENDING,
+      location: "",
+      languages: [],
+      consultationFee: 0,
+      profilePictureUrl: null,
+      licenseDocumentUrl: null,
+      certificateUrl: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    dataStore.doctorProfilesStore.push(doctorProfile);
+  }
+  
+  logInfo("[mockApiService] User added successfully", { id, userType });
+  
+  // Return the created user
+  return { 
+    id, 
+    firstName: userData.firstName,
+    lastName: userData.lastName,
+    email: userData.email,
+    userType: userData.userType,
+    isActive: true,
+    emailVerified: false,
+    createdAt: now.toISOString()
+  };
 }
 
 /**
@@ -1000,12 +1062,7 @@ export async function mockGetUserProfile(userId: string): Promise<any> {
       userType: 'patient',
       isActive: true,
       emailVerified: true,
-      createdAt: '2023-05-15T08:20:00',
-      phoneNumber: '+1 555-123-4567',
-      address: '123 Main St, Anytown, CA 12345',
-      dateOfBirth: '1985-06-15',
-      gender: 'male',
-      profilePicUrl: 'https://randomuser.me/api/portraits/men/32.jpg'
+      createdAt: '2023-05-15T08:20:00'
     },
     'user2': {
       id: 'user2',
@@ -1015,11 +1072,7 @@ export async function mockGetUserProfile(userId: string): Promise<any> {
       userType: 'doctor',
       isActive: true,
       emailVerified: true,
-      createdAt: '2023-05-10T14:30:00',
-      phoneNumber: '+1 555-987-6543',
-      address: '456 Oak Ave, Anytown, CA 12345',
-      specialty: 'Cardiology',
-      profilePicUrl: 'https://randomuser.me/api/portraits/women/44.jpg'
+      createdAt: '2023-05-10T14:30:00'
     },
     'user3': {
       id: 'user3',
@@ -1029,11 +1082,7 @@ export async function mockGetUserProfile(userId: string): Promise<any> {
       userType: 'doctor',
       isActive: true,
       emailVerified: true,
-      createdAt: '2023-05-08T11:15:00',
-      phoneNumber: '+1 555-789-0123',
-      address: '789 Elm St, Anytown, CA 12345',
-      specialty: 'Dermatology',
-      profilePicUrl: 'https://randomuser.me/api/portraits/men/67.jpg'
+      createdAt: '2023-05-08T11:15:00'
     },
     'user4': {
       id: 'user4',
@@ -1043,12 +1092,7 @@ export async function mockGetUserProfile(userId: string): Promise<any> {
       userType: 'patient',
       isActive: false,
       emailVerified: true,
-      createdAt: '2023-05-05T09:45:00',
-      phoneNumber: '+1 555-456-7890',
-      address: '101 Pine St, Anytown, CA 12345',
-      dateOfBirth: '1990-03-22',
-      gender: 'female',
-      profilePicUrl: 'https://randomuser.me/api/portraits/women/33.jpg'
+      createdAt: '2023-05-05T09:45:00'
     },
     'user5': {
       id: 'user5',
@@ -1058,10 +1102,7 @@ export async function mockGetUserProfile(userId: string): Promise<any> {
       userType: 'admin',
       isActive: true,
       emailVerified: true,
-      createdAt: '2023-04-01T10:00:00',
-      phoneNumber: '+1 555-321-6540',
-      address: '200 Admin Blvd, Anytown, CA 12345',
-      profilePicUrl: 'https://randomuser.me/api/portraits/lego/1.jpg'
+      createdAt: '2023-04-01T10:00:00'
     }
   };
   
