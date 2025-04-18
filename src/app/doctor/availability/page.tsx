@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
@@ -12,6 +12,7 @@ import { format, addDays } from "date-fns";
 import { DayPicker } from "react-day-picker";
 import 'react-day-picker/dist/style.css';
 import Link from "next/link";
+import { Disclosure } from "@headlessui/react";
 
 interface TimeSlot {
   startTime: string;
@@ -48,6 +49,19 @@ export default function DoctorAvailabilityPage() {
   const [blockedDates, setBlockedDates] = useState<Date[]>([]);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [dataChanged, setDataChanged] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const dragModeRef = useRef<'add'|'remove'|null>(null);
+  const [lastSaved, setLastSaved] = useState<string|null>(null);
+  // Undo refs, filter state & insights
+  const prevScheduleRef = useRef<WeeklySchedule>(weeklySchedule);
+  const prevBlockedRef = useRef<Date[]>(blockedDates);
+  const [showWeekends, setShowWeekends] = useState(true);
+  // Insights & timezone
+  const daysToRender = showWeekends ? [0,1,2,3,4,5,6] : [1,2,3,4,5];
+  const currentDay = new Date().getDay();
+  const totalSlots = Object.values(weeklySchedule).flat().length;
+  const totalHours = (totalSlots * 0.5).toFixed(1);
+  const weekendSlots = (weeklySchedule[0]?.length || 0) + (weeklySchedule[6]?.length || 0);
 
   // Time slots from 8AM to 6PM in 30-minute increments
   useEffect(() => {
@@ -273,11 +287,31 @@ export default function DoctorAvailabilityPage() {
       for (let day = 0; day <= 6; day++) {
         newSchedule[day] = [];
       }
+    } else if (preset === 'morning-only') {
+      [0,1,2,3,4,5,6].forEach(day => {
+        const slots = availableTimes
+          .filter(t => Number(t.split(':')[0]) >= 8 && Number(t.split(':')[0]) < 12)
+          .map(time => { const [h,m] = time.split(':'); const dt=new Date(); dt.setHours(+h); dt.setMinutes(+m+30); return { startTime: time, endTime: format(dt,'HH:mm') }; });
+        newSchedule[day] = slots;
+      });
+    } else if (preset === 'afternoon-only') {
+      [0,1,2,3,4,5,6].forEach(day => {
+        const slots = availableTimes
+          .filter(t => Number(t.split(':')[0]) >= 12 && Number(t.split(':')[0]) < 18)
+          .map(time => { const [h,m] = time.split(':'); const dt=new Date(); dt.setHours(+h); dt.setMinutes(+m+30); return { startTime: time, endTime: format(dt,'HH:mm') }; });
+        newSchedule[day] = slots;
+      });
+    } else if (preset === 'weekends-only') {
+      [0,6].forEach(day => {
+        const slots = availableTimes.map(time => { const [h,m] = time.split(':'); const dt=new Date(); dt.setHours(+h); dt.setMinutes(+m+30); return { startTime: time, endTime: format(dt,'HH:mm') }; });
+        newSchedule[day] = slots;
+      });
+      [1,2,3,4,5].forEach(day => { newSchedule[day] = []; });
     }
     
     setWeeklySchedule(newSchedule);
     setDataChanged(true);
-    toast.success(`Applied ${preset === 'clear-all' ? 'cleared schedule' : 'weekday 9-5 schedule'}`);
+    toast.success(`Applied ${preset.replace('-', ' ')}`);
   };
 
   const handleSaveAvailability = async () => {
@@ -355,6 +389,11 @@ export default function DoctorAvailabilityPage() {
         toast.success('Availability settings saved successfully');
         console.log('Availability saved successfully');
         setDataChanged(false); // Reset the change tracker after saving
+        setLastSaved(format(new Date(), 'yyyy-MM-dd HH:mm'));
+        prevScheduleRef.current = weeklySchedule;
+        prevBlockedRef.current = blockedDates;
+        // auto-dismiss undo after 10s
+        setTimeout(() => setLastSaved(null), 10000);
       } else {
         throw new Error('Failed to save availability');
       }
@@ -372,6 +411,70 @@ export default function DoctorAvailabilityPage() {
     return days[day];
   };
 
+  // Drag handlers
+  const handleSlotMouseDown = (day: number, time: string) => {
+    const selected = isTimeSlotSelected(day, time);
+    dragModeRef.current = selected ? 'remove' : 'add';
+    setDragging(true);
+    if ((dragModeRef.current === 'add' && !selected) || (dragModeRef.current === 'remove' && selected)) {
+      toggleTimeSlot(day, time);
+    }
+  };
+  const handleSlotMouseEnter = (day: number, time: string) => {
+    if (!dragging) return;
+    const selected = isTimeSlotSelected(day, time);
+    if ((dragModeRef.current === 'add' && !selected) || (dragModeRef.current === 'remove' && selected)) {
+      toggleTimeSlot(day, time);
+    }
+  };
+  useEffect(() => {
+    const onUp = () => setDragging(false);
+    window.addEventListener('mouseup', onUp);
+    return () => window.removeEventListener('mouseup', onUp);
+  }, []);
+
+  // Bulk per-day controls
+  const selectAllDay = (day: number) => {
+    setWeeklySchedule(prev => {
+      const slots = availableTimes.map(time => {
+        const [h, m] = time.split(':').map(Number);
+        const dt = new Date(); dt.setHours(h); dt.setMinutes(m + 30);
+        return { startTime: time, endTime: format(dt, 'HH:mm') };
+      });
+      return { ...prev, [day]: slots };
+    });
+    setDataChanged(true);
+  };
+  const clearAllDay = (day: number) => {
+    setWeeklySchedule(prev => ({ ...prev, [day]: [] }));
+    setDataChanged(true);
+  };
+
+  // Persist draft to localStorage
+  useEffect(() => {
+    if (!user) return;
+    const key = `doctor_avail_draft_${user.uid}`;
+    localStorage.setItem(key, JSON.stringify({
+      weeklySchedule,
+      blockedDates: blockedDates.map(d => d.toISOString())
+    }));
+  }, [weeklySchedule, blockedDates, user]);
+
+  // Load draft on mount
+  useEffect(() => {
+    if (!user) return;
+    const key = `doctor_avail_draft_${user.uid}`;
+    const d = localStorage.getItem(key);
+    if (d) {
+      try {
+        const { weeklySchedule: ws, blockedDates: bd } = JSON.parse(d);
+        setWeeklySchedule(ws);
+        setBlockedDates(bd.map((s: string) => new Date(s)));
+        setDataChanged(true);
+      } catch {}
+    }
+  }, [user]);
+
   return (
     <main className="bg-gray-50 dark:bg-gray-900 py-6 px-4">
       <div className="max-w-6xl mx-auto">
@@ -385,7 +488,7 @@ export default function DoctorAvailabilityPage() {
                 pageName="DoctorAvailabilityPage"
               >
                 Back to Dashboard
-          </Button>
+              </Button>
             </Link>
             <ApiModeIndicator />
           </div>
@@ -421,6 +524,34 @@ export default function DoctorAvailabilityPage() {
                 >
                   Clear All Slots
                 </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => applyPresetSchedule('morning-only')} 
+                  label="Morning Only"
+                  pageName="DoctorAvailabilityPage"
+                >
+                  Morning Only
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => applyPresetSchedule('afternoon-only')} 
+                  label="Afternoon Only"
+                  pageName="DoctorAvailabilityPage"
+                >
+                  Afternoon Only
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => applyPresetSchedule('weekends-only')} 
+                  label="Weekends Only"
+                  pageName="DoctorAvailabilityPage"
+                >
+                  Weekends Only
+                </Button>
+                <label className="flex items-center gap-1 ml-4">
+                  <input type="checkbox" checked={showWeekends} onChange={() => setShowWeekends(!showWeekends)} className="h-4 w-4" />
+                  <span>Show Weekends</span>
+                </label>
               </div>
             </Card>
             
@@ -435,26 +566,34 @@ export default function DoctorAvailabilityPage() {
               {/* Weekly Schedule Grid */}
               <div className="mb-6 overflow-x-auto">
                 <table className="min-w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-gray-800">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-gray-800">
                       <th className="py-2 px-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Time</th>
-                      {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-                        <th key={day} className="py-2 px-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {getDayName(day)}
+                      {daysToRender.map((day) => (
+                        <th key={day} className={`py-2 px-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300 ${day === currentDay ? 'bg-yellow-200 dark:bg-yellow-700' : ''}`}>
+                          <div className="flex flex-col items-center">
+                            <span>{getDayName(day)}</span>
+                            <div className="mt-1 flex gap-1">
+                              <button onClick={() => selectAllDay(day)} className="text-xs text-blue-600">All</button>
+                              <button onClick={() => clearAllDay(day)} className="text-xs text-red-600">None</button>
+                            </div>
+                          </div>
                         </th>
                       ))}
-                </tr>
-              </thead>
-              <tbody>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {availableTimes.map(time => (
                       <tr key={time} className="border-t border-gray-200 dark:border-gray-700">
                         <td className="py-2 px-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
                           {time}
-                    </td>
-                        {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                        </td>
+                        {daysToRender.map((day) => (
                           <td key={day} className="py-2 px-3 text-center">
                             <button
-                              onClick={() => toggleTimeSlot(day, time)}
+                              onMouseDown={() => handleSlotMouseDown(day, time)}
+                              onMouseEnter={() => handleSlotMouseEnter(day, time)}
+                              onClick={(e) => e.preventDefault()}
                               className={`w-full py-1 px-2 text-sm rounded-md transition-colors ${
                                 isTimeSlotSelected(day, time)
                                   ? 'bg-blue-600 text-white hover:bg-blue-700'
@@ -464,12 +603,12 @@ export default function DoctorAvailabilityPage() {
                             >
                               {isTimeSlotSelected(day, time) ? 'Available' : 'Unavailable'}
                             </button>
-                    </td>
+                          </td>
                         ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </Card>
             
@@ -517,8 +656,40 @@ export default function DoctorAvailabilityPage() {
               )}
             </Card>
             
+            {/* Mobile accordion view */}
+            <div className="md:hidden mt-6">
+              {Object.keys(weeklySchedule).map(day => (
+                <Disclosure key={day}>
+                  {({ open }) => (
+                    <>
+                      <Disclosure.Button className="w-full text-left py-2 px-4 bg-gray-100 dark:bg-gray-800 mb-1">
+                        {getDayName(Number(day))}
+                      </Disclosure.Button>
+                      <Disclosure.Panel className="flex flex-wrap gap-2 p-2 border border-gray-200 dark:border-gray-700 rounded mb-4">
+                        {availableTimes.map(time => (
+                          <button
+                            key={time}
+                            onClick={() => toggleTimeSlot(Number(day), time)}
+                            className={`py-1 px-2 text-sm rounded ${isTimeSlotSelected(Number(day), time) ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700'}`}
+                            aria-label={`${getDayName(Number(day))} ${time}`}
+                          >
+                            {time}
+                          </button>
+                        ))}
+                      </Disclosure.Panel>
+                    </>
+                  )}
+                </Disclosure>
+              ))}
+            </div>
+            
             {/* Save Button */}
             <div className="md:col-span-12 flex justify-end">
+              {dataChanged && (
+                <div role="status" aria-live="polite" className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 p-2 rounded mb-4 text-center">
+                  You have unsaved changes
+                </div>
+              )}
               <Button
                 variant="primary"
                 onClick={handleSaveAvailability}
@@ -529,7 +700,28 @@ export default function DoctorAvailabilityPage() {
               >
                 {dataChanged ? 'Save Changes' : 'No Changes to Save'}
               </Button>
+              {lastSaved && (
+                <div role="status" aria-live="polite" className="mt-2 flex items-center gap-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Last saved: {lastSaved}</p>
+                  <button onClick={() => {
+                    setWeeklySchedule(prevScheduleRef.current);
+                    setBlockedDates(prevBlockedRef.current);
+                    setDataChanged(true);
+                    setLastSaved(null);
+                  }} className="text-sm text-blue-600">Undo</button>
+                </div>
+              )}
             </div>
+            
+            {/* Insights Panel */}
+            <Card className="md:col-span-12 p-6 mb-4">
+              <h2 className="text-lg font-medium mb-2">Insights</h2>
+              <p>Total availability: {totalHours} hrs/week</p>
+              {weekendSlots === 0 && <p className="text-yellow-600 dark:text-yellow-300">You have no weekend availability</p>}
+            </Card>
+            
+            {/* Timezone Display */}
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Your timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
           </div>
         )}
       </div>

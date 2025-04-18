@@ -338,7 +338,7 @@ export default function BookAppointmentPage() {
             <span className="text-gray-700 dark:text-gray-300 font-medium">
               Step {selectedDate ? (selectedTime ? (appointmentType ? 4 : 3) : 2) : 1} of 4
             </span>
-            <Button variant="outline" size="sm" onClick={handleReset}>Reset</Button>
+            <Button variant="secondary" size="sm" onClick={handleReset} label="Reset" pageName="BookAppointmentPage">Reset</Button>
             <ApiModeIndicator />
           </div>
         </div>
