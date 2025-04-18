@@ -29,6 +29,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { CheckCircleIcon, HeartIcon } from "@heroicons/react/24/solid";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { resetMockDataStoresForUser } from "@/data/resetMockDataStoresForUser";
 
 interface Doctor {
   id: string;
@@ -90,6 +91,15 @@ export default function FindDoctorsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useLocalStorage<boolean>("find_doctors_showFilters", false);
   const router = useRouter();
+
+  // Auto-reset mock data on first visit
+  useEffect(() => {
+    const flag = "health_app_mockResetDone";
+    if (typeof window !== "undefined" && !window.localStorage.getItem(flag)) {
+      window.localStorage.setItem(flag, "true");
+      resetMockDataStoresForUser('doctor');
+    }
+  }, []);
 
   // Process doctor data to ensure names are properly formatted
   const processDoctorData = (doctorData: Doctor[]) => {

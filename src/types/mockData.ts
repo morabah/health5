@@ -29,7 +29,7 @@ export const mockDoctorUser: UserProfile = {
   id: 'user_doctor_001',
   email: 'doctor1@example.com',
   phone: '+1234567891',
-  firstName: 'Dr. Bob',
+  firstName: 'Bob',
   lastName: 'Johnson',
   userType: UserType.DOCTOR,
   isActive: true,

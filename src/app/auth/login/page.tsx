@@ -97,8 +97,8 @@ export default function LoginPage() {
               type="button"
               className="w-full bg-green-600 text-white hover:bg-green-700"
               onClick={() => {
-                setEmail("jane@example.com");
-                setPassword("patientpass");
+                setEmail("patient1@example.com");
+                setPassword("password");
               }}
               disabled={loading}
               label="Fill Patient Credentials"
@@ -110,8 +110,8 @@ export default function LoginPage() {
               type="button"
               className="w-full bg-purple-600 text-white hover:bg-purple-700"
               onClick={() => {
-                setEmail("johndoe@example.com");
-                setPassword("doctorpass");
+                setEmail("doctor1@example.com");
+                setPassword("password");
               }}
               disabled={loading}
               label="Fill Doctor Credentials"

@@ -10,6 +10,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import ApiModeIndicator from "@/components/ui/ApiModeIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { formatDate } from "@/utils/helpers";
+import { getUsersStore } from '@/data/mockDataStore';
 import { 
   MapPinIcon, 
   GlobeAltIcon, 
@@ -58,13 +59,30 @@ export default function DoctorProfilePage() {
         const data = await loadDoctorProfilePublic(doctorId);
         
         if (data) {
-          // Convert DoctorProfile to Doctor format with proper fallback values
+          console.log('=== fetchDoctor CALLED (doctor-profile) ===');
+          const users = getUsersStore();
+          console.log('DEBUG usersStore (doctor-profile):', users);
+          console.log('DEBUG doctorId (doctor-profile):', doctorId);
+          // Use userId from doctor profile data
+          const doctorUser = users.find(u => u.id === data.userId);
+          console.log('fetchDoctor debug - doctorId:', doctorId, 'doctorUser:', doctorUser);
+
+          // Compose full name if found
+          let doctorName = 'Dr. Unknown';
+          let firstName = '';
+          let lastName = '';
+          if (doctorUser) {
+            doctorName = `Dr. ${doctorUser.firstName} ${doctorUser.lastName}`;
+            firstName = doctorUser.firstName || '';
+            lastName = doctorUser.lastName || '';
+          }
+
           const doctorData: Doctor = {
             id: data.userId || doctorId,
             userId: data.userId || doctorId,
-            name: `Dr. ${data.userId?.substring(0, 8) || 'Unknown'}`,
-            firstName: '',
-            lastName: '',
+            name: doctorName,
+            firstName,
+            lastName,
             specialty: data.specialty || 'General Practice',
             experience: data.yearsOfExperience || 0,
             location: data.location || 'Not specified',
@@ -77,8 +95,8 @@ export default function DoctorProfilePage() {
             services: ['General Consultation'], // Default service
             reviews: [], // Empty reviews array as default
           };
-          
           setDoctor(doctorData);
+          console.log('Doctor loaded (doctor-profile):', doctorData);
         } else {
           setDoctor(null);
         }
@@ -238,7 +256,7 @@ export default function DoctorProfilePage() {
                   
                   {calculateAverageRating() && (
                     <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
-                      <StarIcon className="w-5 h-5 mr-3 text-yellow-500" />
+                      <StarIcon className="w-5 h-5 text-yellow-500" />
                       <span className="text-yellow-500 font-medium">{calculateAverageRating()}</span>
                       <span className="text-gray-500 ml-1">({doctor.reviews?.length || 0} reviews)</span>
                     </div>

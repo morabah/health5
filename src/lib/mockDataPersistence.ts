@@ -114,16 +114,14 @@ export function cleanupDataPersistence() {
 /**
  * Load persisted data from localStorage
  */
-function loadUsers(): void {
+export function loadUsers(): void {
   try {
     const persistedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
     if (persistedUsers) {
       const parsedUsers = JSON.parse(persistedUsers) as UserProfile[];
-      // Only replace the store if we have data
       if (parsedUsers.length > 0) {
-        // Clear the current store
+        // Use only persisted users as source of truth
         dataStore.usersStore.length = 0;
-        // Add all persisted users
         parsedUsers.forEach(user => dataStore.usersStore.push(user));
         logInfo(`[mockDataPersistence] Loaded ${parsedUsers.length} persisted users`);
       }
@@ -133,7 +131,7 @@ function loadUsers(): void {
   }
 }
 
-function loadDoctorProfiles(): void {
+export function loadDoctorProfiles(): void {
   try {
     const persistedProfiles = localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES);
     if (persistedProfiles) {
@@ -160,7 +158,7 @@ function loadDoctorProfiles(): void {
   }
 }
 
-function loadPatientProfiles(): void {
+export function loadPatientProfiles(): void {
   try {
     const persistedProfiles = localStorage.getItem(STORAGE_KEYS.PATIENT_PROFILES);
     if (persistedProfiles) {
@@ -182,7 +180,7 @@ function loadPatientProfiles(): void {
 /**
  * Load persisted appointments from localStorage
  */
-function loadAppointments(): void {
+export function loadAppointments(): void {
   try {
     const persistedAppointments = localStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
     if (persistedAppointments) {
@@ -204,7 +202,7 @@ function loadAppointments(): void {
 /**
  * Load persisted notifications from localStorage
  */
-function loadNotifications(): void {
+export function loadNotifications(): void {
   try {
     const persistedNotifications = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
     if (persistedNotifications) {
