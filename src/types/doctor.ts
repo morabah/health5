@@ -149,6 +149,16 @@ export interface DoctorVerificationData {
   lastUpdated: Date | Timestamp;
   /** Optional notes from administrator regarding verification. */
   adminNotes?: string;
+  /** Optional public profile picture URL */
+  profilePictureUrl?: string | null;
+  /** Years of professional experience */
+  experience?: number;
+  /** Practice location */
+  location?: string;
+  /** Languages spoken */
+  languages?: string[];
+  /** Consultation fee */
+  fee?: number;
 }
 
 /**

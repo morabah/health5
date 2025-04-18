@@ -790,6 +790,9 @@ export function fetchAllAppointments(): Appointment[] {
   return getAppointmentsStore();
 }
 
+// Revert mockGetAllAppointments to use in-memory store (hydrated by initDataPersistence)
+export const mockGetAllAppointments = fetchAllAppointments;
+
 // Add more mock API methods as needed for your app's needs.
 
 /**
@@ -820,11 +823,14 @@ export async function mockGetDoctorVerifications(): Promise<DoctorVerification[]
     .filter(profile => profile.verificationStatus !== VerificationStatus.APPROVED)
     .map(profile => {
       const user = getUsersStore().find(u => u.id === profile.userId);
+      // Convert created timestamp to Date
+      const rawDate = profile.createdAt || new Date();
+      const dateSubmitted = rawDate instanceof Timestamp ? rawDate.toDate() : rawDate;
       return {
         id: profile.userId,
-        name: user ? `${user.firstName} ${user.lastName}` : 'Unknown Doctor',
+        name: user ? `${user.firstName} ${user.lastName}` : profile.userId,
         status: profile.verificationStatus,
-        dateSubmitted: profile.createdAt || new Date(),
+        dateSubmitted,
         specialty: profile.specialty
       };
     });
@@ -844,23 +850,37 @@ export async function mockGetDoctorVerificationDetails(doctorId: string): Promis
   
   const userProfile = getUsersStore().find(user => user.id === doctorId);
   if (!userProfile) {
-    console.error(`User profile not found for ID: ${doctorId}`);
-    return null;
+    console.warn(`User profile not found for ID: ${doctorId}. Falling back to minimal info.`);
   }
-  
+  const fullName = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : doctorId;
+  // Convert dates
+  const rawSubmission = doctorProfile.createdAt || new Date();
+  const submissionDate = rawSubmission instanceof Timestamp ? rawSubmission.toDate() : rawSubmission;
+  const rawUpdated = doctorProfile.updatedAt || submissionDate;
+  const lastUpdated = rawUpdated instanceof Timestamp ? rawUpdated.toDate() : rawUpdated;
+  // Map verification documents
+  const licenseUrl = doctorProfile.licenseDocumentUrl || null;
+  const certificateUrl = doctorProfile.certificateUrl || null;
+  const idDoc = doctorProfile.verificationDocuments?.find(doc =>
+    doc.documentType.toLowerCase() === 'identification'
+  );
+  const identificationUrl = idDoc?.fileUrl || null;
   return {
-    id: doctorId,
-    name: `${userProfile.firstName} ${userProfile.lastName}`,
-    email: userProfile.email,
-    phone: userProfile.phone || '',
-    specialty: doctorProfile.specialty || 'General Medicine',
-    licenseNumber: doctorProfile.licenseNumber || '',
-    education: doctorProfile.education || [],
-    experience: doctorProfile.experience || [],
+    doctorId,
+    fullName,
+    specialty: doctorProfile.specialty,
+    licenseNumber: doctorProfile.licenseNumber,
+    licenseAuthority: doctorProfile.verificationNotes || '',
+    profilePictureUrl: doctorProfile.profilePictureUrl || null,
+    experience: doctorProfile.yearsOfExperience,
+    location: doctorProfile.location,
+    languages: doctorProfile.languages,
+    fee: doctorProfile.consultationFee,
     status: doctorProfile.verificationStatus,
-    applicationDate: doctorProfile.createdAt || new Date(),
-    documents: doctorProfile.verificationDocuments || [],
-    adminNotes: doctorProfile.adminNotes || ''
+    documents: { licenseUrl, certificateUrl, identificationUrl },
+    submissionDate,
+    lastUpdated,
+    adminNotes: doctorProfile.adminNotes
   };
 }
 
@@ -1933,3 +1953,16 @@ export const mockGetUnreadNotificationCount = async (userId: string): Promise<nu
     throw error;
   }
 };
+
+export async function mockVerifyEmail(token: string): Promise<{ success: boolean; userId: string }> {
+  logApiCall("mockVerifyEmail", { token });
+  await simulateDelay();
+  const users = getUsersStore();
+  const user = users.find(u => u.id === token);
+  if (!user) throw new Error("invalid-token");
+  user.emailVerified = true;
+  user.updatedAt = new Date();
+  syncUserUpdated(token);
+  persistAllData();
+  return { success: true, userId: token };
+}

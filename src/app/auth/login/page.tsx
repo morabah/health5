@@ -22,10 +22,17 @@ export default function LoginPage() {
       
       if (userProfile.userType === UserType.DOCTOR) {
         await login('doctor');
-        setFeedback("Login successful. Redirecting to doctor dashboard...");
-        setTimeout(() => {
-          window.location.href = "/doctor/dashboard";
-        }, 900);
+        if (!userProfile.emailVerified) {
+          setFeedback("Email not verified. Redirecting to verification page...");
+          setTimeout(() => {
+            window.location.href = `/auth/verify-email?token=${user.uid}`;
+          }, 900);
+        } else {
+          setFeedback("Login successful. Admin approval pending...");
+          setTimeout(() => {
+            window.location.href = "/auth/pending-verification";
+          }, 900);
+        }
       } else if (userProfile.userType === UserType.PATIENT) {
         await login('patient');
         setFeedback("Login successful. Redirecting to patient dashboard...");

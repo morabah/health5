@@ -70,7 +70,9 @@ export function resetMockDataStoresForUser(role: UserType | 'patient' | 'doctor'
   }
 
   // Clear all stores IN-PLACE using .splice to preserve references
-  usersStore.splice(0, usersStore.length, basePatientUser, baseDoctorUser, baseAdminUser);
+  if (role !== 'admin') {
+    usersStore.splice(0, usersStore.length, basePatientUser, baseDoctorUser, baseAdminUser);
+  }
   
   // Update the appropriate profile stores
   if (role === 'patient') {

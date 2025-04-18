@@ -1,4 +1,6 @@
 // Auth page (App Router)
+import { redirect } from 'next/navigation';
+
 export default function AuthPage() {
-  return <div>Auth Page</div>;
+  redirect('/auth/login');
 }

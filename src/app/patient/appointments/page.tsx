@@ -13,6 +13,7 @@ import { FaCalendarCheck, FaCalendarTimes, FaHistory, FaFilter, FaSearch,
   FaUserMd, FaNotesMedical, FaClock, FaMapMarkerAlt, FaExclamationTriangle } from "react-icons/fa";
 import Link from "next/link";
 import { formatDate } from "@/utils/dateUtils";
+import { useSearchParams } from "next/navigation";
 
 type FilterType = "all" | "upcoming" | "past" | "cancelled";
 
@@ -28,6 +29,9 @@ export default function PatientAppointmentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const showJustBookedParam = searchParams.get("justBooked") === "true";
+  const [showJustBookedBanner, setShowJustBookedBanner] = useState(showJustBookedParam);
 
   async function fetchAppointments() {
     if (!user) return;
@@ -154,6 +158,14 @@ export default function PatientAppointmentsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
       <div className="max-w-6xl mx-auto">
+        {showJustBookedBanner && (
+          <div className="mb-6">
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex justify-between items-center">
+              <span>Your appointment was just booked!</span>
+              <button onClick={() => setShowJustBookedBanner(false)} className="text-green-800 hover:text-green-600">&times;</button>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>

@@ -251,7 +251,7 @@ export default function BookAppointmentPage() {
       
       if (result.success) {
         toast.success("Appointment booked successfully!");
-        router.push('/patient/appointments');
+        router.push('/patient/appointments?justBooked=true');
       } else {
         throw new Error("Booking failed");
       }

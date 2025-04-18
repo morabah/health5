@@ -43,7 +43,7 @@ const NotificationBell: React.FC = () => {
   }
 
   return (
-    <Link href="/notifications" className="relative block">
+    <Link href="/main/notifications" className="relative block">
       <FontAwesomeIcon
         icon={faBell}
         className="text-xl text-gray-700 dark:text-gray-300 hover:text-primary transition-colors"

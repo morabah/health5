@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import EmptyState from "@/components/ui/EmptyState";
-import { mockGetMyAppointments } from "@/lib/mockApiService";
+import { mockGetMyAppointments, mockCompleteAppointment, mockCancelAppointmentDetails } from "@/lib/mockApiService";
 import { useAuth } from "@/context/AuthContext";
 import { formatDate } from "@/utils/dateUtils";
 import { UserType, AppointmentStatus } from "@/types/enums";
 import { Timestamp } from "firebase/firestore";
 import { FaCalendarCheck, FaCalendarTimes, FaHistory, FaFilter, FaSearch, FaUserInjured, FaNotesMedical, FaClock, FaMapMarkerAlt } from "react-icons/fa";
 import Link from "next/link";
+import { toast } from "react-hot-toast";
+import Textarea from "@/components/ui/Textarea";
 
 interface Appointment {
   id: string;
@@ -38,6 +40,13 @@ export default function DoctorAppointmentsPage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [detailsOpen, setDetailsOpen] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [completeApptId, setCompleteApptId] = useState<string | null>(null);
+  const [completeNotes, setCompleteNotes] = useState("");
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [cancelApptId, setCancelApptId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
 
@@ -148,6 +157,52 @@ export default function DoctorAppointmentsPage() {
         return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200";
+    }
+  };
+
+  const handleOpenComplete = (id: string) => {
+    setCompleteApptId(id);
+    setCompleteNotes("");
+    setShowCompleteModal(true);
+  };
+
+  const handleOpenCancel = (id: string) => {
+    setCancelApptId(id);
+    setCancelReason("");
+    setShowCancelModal(true);
+  };
+
+  const handleComplete = async (id: string, notes: string) => {
+    setShowCompleteModal(false);
+    setActionLoadingId(id);
+    try {
+      const res = await mockCompleteAppointment({ appointmentId: id, notes, doctorId: user?.uid || "" });
+      if (res.success) {
+        toast.success("Appointment marked completed");
+        setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: AppointmentStatus.COMPLETED, notes } : a));
+        setDetailsOpen(null);
+      } else throw new Error();
+    } catch {
+      toast.error("Failed to complete appointment");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleCancel = async (id: string, reason: string) => {
+    setShowCancelModal(false);
+    setActionLoadingId(id);
+    try {
+      const ok = await mockCancelAppointmentDetails(id, "doctor", reason);
+      if (ok) {
+        toast.success("Appointment cancelled");
+        setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: AppointmentStatus.CANCELLED_BY_DOCTOR, notes: (a.notes ? a.notes + "\n" : "") + "Cancellation reason: " + reason } : a));
+        setDetailsOpen(null);
+      } else throw new Error();
+    } catch {
+      toast.error("Failed to cancel appointment");
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -375,25 +430,25 @@ export default function DoctorAppointmentsPage() {
                     
                     {(appt.status === AppointmentStatus.CONFIRMED || appt.status === AppointmentStatus.PENDING) && (
                       <>
-                        <Button 
-                          disabled 
-                          title="Feature coming soon"
-                          variant="secondary" 
-                          size="sm" 
-                          label="Mark as Completed" 
+                        <Button
+                          onClick={() => handleOpenComplete(appt.id)}
+                          disabled={actionLoadingId === appt.id}
+                          variant="secondary"
+                          size="sm"
+                          label="Mark as Completed"
                           pageName="DoctorAppointments"
                         >
-                          Mark as Completed
+                          {actionLoadingId === appt.id ? <Spinner size="sm" /> : "Mark as Completed"}
                         </Button>
-                        <Button 
-                          disabled 
-                          title="Feature coming soon"
-                          variant="danger" 
-                          size="sm" 
-                          label="Cancel" 
+                        <Button
+                          onClick={() => handleOpenCancel(appt.id)}
+                          disabled={actionLoadingId === appt.id}
+                          variant="danger"
+                          size="sm"
+                          label="Cancel"
                           pageName="DoctorAppointments"
                         >
-                          Cancel
+                          {actionLoadingId === appt.id ? <Spinner size="sm" /> : "Cancel"}
                         </Button>
                       </>
                     )}
@@ -489,19 +544,89 @@ export default function DoctorAppointmentsPage() {
                       </Button>
                       {(appt.status === AppointmentStatus.CONFIRMED || appt.status === AppointmentStatus.PENDING) && (
                         <Button 
-                          disabled 
-                          title="Feature coming soon"
+                          onClick={() => handleOpenComplete(appt.id)}
+                          disabled={actionLoadingId === appt.id}
                           className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" 
                           label="Start Appointment" 
                           pageName="DoctorAppointments"
                         >
-                          Start Appointment
+                          {actionLoadingId === appt.id ? <Spinner size="sm" /> : "Start Appointment"}
                         </Button>
                       )}
                     </div>
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        )}
+        
+        {/* Completion Modal */}
+        {showCompleteModal && completeApptId && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full max-w-lg relative">
+              <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onClick={() => setShowCompleteModal(false)}>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Complete Appointment</h2>
+              <Textarea
+                id="complete-notes"
+                label="Completion Notes (optional)"
+                rows={4}
+                value={completeNotes}
+                onChange={(e) => setCompleteNotes(e.target.value)}
+              />
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <Button variant="secondary" className="flex-1" onClick={() => setShowCompleteModal(false)} label="Cancel" pageName="DoctorAppointments">
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  disabled={actionLoadingId === completeApptId}
+                  onClick={() => handleComplete(completeApptId as string, completeNotes)}
+                  label="Confirm"
+                  pageName="DoctorAppointments"
+                >
+                  {actionLoadingId === completeApptId ? <Spinner size="sm" /> : "Confirm"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Cancellation Modal */}
+        {showCancelModal && cancelApptId && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full max-w-lg relative">
+              <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onClick={() => setShowCancelModal(false)}>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Cancel Appointment</h2>
+              <Textarea
+                id="cancel-reason"
+                label="Cancellation Reason (optional)"
+                rows={4}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <Button variant="secondary" className="flex-1" onClick={() => setShowCancelModal(false)} label="Close" pageName="DoctorAppointments">
+                  Close
+                </Button>
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  disabled={actionLoadingId === cancelApptId}
+                  onClick={() => handleCancel(cancelApptId as string, cancelReason)}
+                  label="Confirm"
+                  pageName="DoctorAppointments"
+                >
+                  {actionLoadingId === cancelApptId ? <Spinner size="sm" /> : "Confirm"}
+                </Button>
+              </div>
             </div>
           </div>
         )}

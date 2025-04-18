@@ -6,24 +6,30 @@ import Button from "@/components/ui/Button";
 import Link from "next/link";
 import { loadDoctorProfile } from '@/data/loadDoctorProfile';
 import { mockUpdateDoctorProfile } from '@/lib/mockApiService';
-import { FaUser, FaEnvelope, FaPhone, FaMapMarkerAlt, FaStethoscope, FaEdit, FaArrowLeft, FaSave, FaFileAlt } from "react-icons/fa";
+import { FaUser, FaEnvelope, FaPhone, FaMapMarkerAlt, FaStethoscope, FaEdit, FaArrowLeft, FaSave, FaFileAlt, FaLanguage, FaMoneyBillWave } from "react-icons/fa";
+import { toast } from "react-hot-toast";
 
-interface DoctorProfile {
+// Local UI-specific profile type including editable fields
+interface UIProfile {
   id: string;
   name: string;
   email: string;
-  phone: string;
-  specialty: string;
-  location: string;
-  bio: string;
+  phone?: string;
+  specialty?: string;
+  location?: string;
+  bio?: string;
+  licenseNumber?: string;
+  yearsOfExperience?: number;
+  languages?: string[];
+  consultationFee?: number;
 }
 
 export default function DoctorProfilePage() {
-  const [profile, setProfile] = useState<DoctorProfile | null>(null);
+  const [profile, setProfile] = useState<UIProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedProfile, setEditedProfile] = useState<DoctorProfile | null>(null);
+  const [editedProfile, setEditedProfile] = useState<UIProfile | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
 
@@ -33,8 +39,8 @@ export default function DoctorProfilePage() {
       setError(null);
       try {
         const data = await loadDoctorProfile();
-        setProfile(data);
-        setEditedProfile(data); // Initialize edited profile with current data
+        setProfile(data as UIProfile); // Cast API response to local UI type
+        setEditedProfile(data as UIProfile); // Initialize edited profile with current data
         
         // Generate avatar URL using doctor's name
         if (data?.name) {
@@ -53,7 +59,18 @@ export default function DoctorProfilePage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setEditedProfile(prev => prev ? { ...prev, [name]: value } : null);
+    setEditedProfile(prev => {
+      if (!prev) return null;
+      // Parse numeric fields
+      if (name === 'yearsOfExperience') {
+        return { ...prev, yearsOfExperience: parseInt(value, 10) };
+      }
+      if (name === 'consultationFee') {
+        return { ...prev, consultationFee: parseFloat(value) };
+      }
+      // Default to string for other fields
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleSaveProfile = async () => {
@@ -62,29 +79,15 @@ export default function DoctorProfilePage() {
     setSaveLoading(true);
     try {
       // Call the mock API service to update the profile
-      const updatedProfile = await mockUpdateDoctorProfile(editedProfile);
+      const updatedProfile = (await mockUpdateDoctorProfile(editedProfile)) as UIProfile; // Cast API response to local UI type
       setProfile(updatedProfile);
       setIsEditing(false);
       
       // Show success message
-      const notification = document.getElementById('notification');
-      if (notification) {
-        notification.className = "fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity";
-        notification.textContent = "Profile updated successfully!";
-        setTimeout(() => {
-          notification.className = "fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity opacity-0";
-        }, 3000);
-      }
+      toast.success("Profile updated successfully!");
     } catch (err) {
       // Show error message
-      const notification = document.getElementById('notification');
-      if (notification) {
-        notification.className = "fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity";
-        notification.textContent = "Failed to save profile changes.";
-        setTimeout(() => {
-          notification.className = "fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity opacity-0";
-        }, 3000);
-      }
+      toast.error("Failed to save profile changes.");
     } finally {
       setSaveLoading(false);
     }
@@ -221,6 +224,46 @@ export default function DoctorProfilePage() {
                       <p className="font-medium">{profile.bio || "No biography provided"}</p>
                     </div>
                   </div>
+                  {/* License Number */}
+                  <div className="flex items-start mt-4">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mr-3">
+                      <FaFileAlt className="text-gray-600 dark:text-gray-300" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">License Number</p>
+                      <p className="font-medium">{profile.licenseNumber || "Not provided"}</p>
+                    </div>
+                  </div>
+                  {/* Years of Experience */}
+                  <div className="flex items-start mt-4">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mr-3">
+                      <FaStethoscope className="text-gray-600 dark:text-gray-300" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Years of Experience</p>
+                      <p className="font-medium">{profile.yearsOfExperience ?? 0} years</p>
+                    </div>
+                  </div>
+                  {/* Languages */}
+                  <div className="flex items-start mt-4">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mr-3">
+                      <FaLanguage className="text-gray-600 dark:text-gray-300" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Languages</p>
+                      <p className="font-medium">{profile.languages?.join(", ") || "Not specified"}</p>
+                    </div>
+                  </div>
+                  {/* Consultation Fee */}
+                  <div className="flex items-start mt-4">
+                    <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mr-3">
+                      <FaMoneyBillWave className="text-gray-600 dark:text-gray-300" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Consultation Fee</p>
+                      <p className="font-medium">${profile.consultationFee?.toFixed(2) ?? "0.00"}</p>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={(e) => { e.preventDefault(); handleSaveProfile(); }}>
@@ -303,6 +346,57 @@ export default function DoctorProfilePage() {
                       />
                     </div>
                     
+                    {/* Additional fields for editing */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label htmlFor="licenseNumber" className="block text-sm font-medium mb-1">License Number</label>
+                        <input
+                          type="text"
+                          id="licenseNumber"
+                          name="licenseNumber"
+                          value={editedProfile?.licenseNumber || ""}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="yearsOfExperience" className="block text-sm font-medium mb-1">Years of Experience</label>
+                        <input
+                          type="number"
+                          id="yearsOfExperience"
+                          name="yearsOfExperience"
+                          value={(editedProfile?.yearsOfExperience ?? 0).toString()}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <div>
+                        <label htmlFor="languages" className="block text-sm font-medium mb-1">Languages</label>
+                        <input
+                          type="text"
+                          id="languages"
+                          name="languages"
+                          value={editedProfile?.languages?.join(", ") || ""}
+                          onChange={(e) => setEditedProfile(prev => prev ? { ...prev, languages: e.target.value.split(",").map(lang => lang.trim()) } : null)}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="consultationFee" className="block text-sm font-medium mb-1">Consultation Fee</label>
+                        <input
+                          type="number"
+                          id="consultationFee"
+                          name="consultationFee"
+                          step="0.01"
+                          value={editedProfile?.consultationFee?.toFixed(2) || ""}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    
                     <div className="flex space-x-4 pt-4">
                       <Button 
                         type="submit" 
@@ -345,9 +439,6 @@ export default function DoctorProfilePage() {
             </Card>
           </div>
         )}
-        
-        {/* Notification element */}
-        <div id="notification" className="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity opacity-0"></div>
       </div>
     </main>
   );

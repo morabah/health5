@@ -48,6 +48,9 @@ export default function PendingVerificationPage() {
     
     switch (verificationStatus) {
       case VerificationStatus.PENDING:
+        if (userType === UserType.DOCTOR) {
+          return "Thank you for registering as a doctor. Your credentials have been submitted and are pending administrator review. We'll notify you once approved.";
+        }
         return "Your account is pending verification by an administrator. We'll notify you when your status changes.";
       case VerificationStatus.APPROVED:
         return "Your account has been verified! You can now access the doctor dashboard.";
@@ -85,7 +88,7 @@ export default function PendingVerificationPage() {
             </div>
             {verificationStatus === VerificationStatus.APPROVED ? (
               <Button type="button" className="w-full mb-4" asChild label="Go to Dashboard" pageName="DoctorVerification">
-                <Link href="/doctor">Go to Dashboard</Link>
+                <Link href="/doctor/dashboard">Go to Dashboard</Link>
               </Button>
             ) : (
               <div className="text-gray-600 dark:text-gray-300 mb-4">

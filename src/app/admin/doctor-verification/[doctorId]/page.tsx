@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import { logValidation } from "@/lib/logger";
-import { mockGetDoctorVerificationData, mockSetDoctorVerificationStatus } from "@/lib/mockApiService";
+import { mockGetDoctorVerificationDetails, mockSetDoctorVerificationStatus } from "@/lib/mockApiService";
 import { VerificationStatus } from "@/types/enums";
+import type { DoctorVerificationData } from '@/types/doctor';
 
 export default function DoctorVerificationPage() {
   const params = useParams();
@@ -16,7 +17,7 @@ export default function DoctorVerificationPage() {
   console.log("Doctor verification page - params:", params);
   console.log("Doctor verification page - doctorId:", doctorId);
   
-  const [doctor, setDoctor] = useState<any>(null);
+  const [doctor, setDoctor] = useState<DoctorVerificationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<VerificationStatus>(VerificationStatus.PENDING);
   const [notes, setNotes] = useState("");
@@ -37,13 +38,13 @@ export default function DoctorVerificationPage() {
         console.log("Fetching verification data for doctorId:", doctorId);
         console.log("DoctorId type:", typeof doctorId);
         console.log("Request URL would be: /api/admin/doctors/verification/" + doctorId);
-        const data = await mockGetDoctorVerificationData(doctorId);
+        const data = await mockGetDoctorVerificationDetails(doctorId);
         console.log("Received verification data:", data);
         if (data) {
-          setDoctor(data);
+          setDoctor(data as DoctorVerificationData);
           setStatus(data.status || VerificationStatus.PENDING);
         } else {
-          console.error("No data returned from mockGetDoctorVerificationData");
+          console.error("No data returned from mockGetDoctorVerificationDetails");
         }
       } catch (error) {
         console.error("Error fetching verification data:", error);
@@ -64,7 +65,10 @@ export default function DoctorVerificationPage() {
     try {
       await mockSetDoctorVerificationStatus(doctorId, status, notes);
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 2000);
+      setTimeout(() => {
+        setSuccess(false);
+        router.push("/admin/dashboard");
+      }, 2000);
     } catch {
       // Optionally set error state
     } finally {
@@ -84,15 +88,8 @@ export default function DoctorVerificationPage() {
     return <div className="text-center text-muted-foreground">Doctor not found.</div>;
   }
 
-  // Helper to safely render doctor name
-  const getDoctorName = () => {
-    if (doctor.name) return doctor.name;
-    if (doctor.fullName) return doctor.fullName;
-    const firstName = doctor.firstName || '';
-    const lastName = doctor.lastName || '';
-    if (firstName || lastName) return `${firstName} ${lastName}`.trim();
-    return doctor.doctorId || doctor.userId;
-  };
+  // Helper to get doctor name
+  const getDoctorName = () => doctor.fullName || doctor.doctorId;
 
   return (
     <div className="min-h-screen bg-background text-foreground py-8 px-4 md:px-12 lg:px-32">
@@ -101,7 +98,7 @@ export default function DoctorVerificationPage() {
           <div className="flex flex-col md:flex-row gap-6">
             <div className="md:w-1/3 flex flex-col items-center md:items-start">
               <img
-                src={doctor.profilePicUrl || "https://via.placeholder.com/150?text=Doctor"}
+                src={doctor.profilePictureUrl ?? "https://via.placeholder.com/150?text=Doctor"}
                 alt={getDoctorName()}
                 className="w-20 h-20 rounded-full object-cover border mb-2"
               />
@@ -169,7 +166,7 @@ export default function DoctorVerificationPage() {
               >
                 {saving ? "Saving..." : "Save Decision"}
               </Button>
-              {success && <div className="text-green-600 mt-2 text-center">Decision saved.</div>}
+              {success && <div className="text-green-600 mt-2 text-center">Decision saved and notification sent to doctor.</div>}
             </div>
           </div>
         </Card>

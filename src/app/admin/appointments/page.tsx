@@ -1,4 +1,5 @@
-"use client";
+'use client';
+
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
@@ -6,6 +7,7 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
+import { initDataPersistence } from "@/lib/mockDataPersistence";
 import { mockGetAllAppointments } from "@/lib/mockApiService";
 import { AppointmentStatus } from "@/types/enums";
 
@@ -15,8 +17,9 @@ interface Appointment {
   doctorName: string;
   date: string;
   time: string;
-  status: AppointmentStatus;
   type: string;
+  status: AppointmentStatus;
+  reason: string;
 }
 
 const AppointmentListPage: React.FC = () => {
@@ -27,19 +30,32 @@ const AppointmentListPage: React.FC = () => {
   const router = useRouter();
 
   useEffect(() => {
-    async function fetchAppointments() {
+    initDataPersistence();
+    async function loadAppointments() {
       setLoading(true);
       setError(null);
       try {
-        const items = await mockGetAllAppointments();
-        setAppointments(items);
+        const rawItems = await mockGetAllAppointments();
+        const shaped = rawItems.map(item => ({
+          id: item.id || '',
+          patientName: item.patientName || item.patientId || '',
+          doctorName: item.doctorName || item.doctorId || '',
+          date: typeof item.appointmentDate === 'string'
+            ? item.appointmentDate
+            : item.appointmentDate.toString(),
+          time: item.startTime,
+          type: item.appointmentType || '',
+          status: item.status,
+          reason: item.reason,
+        }));
+        setAppointments(shaped);
       } catch (err) {
         setError("Failed to load appointments.");
       } finally {
         setLoading(false);
       }
     }
-    fetchAppointments();
+    loadAppointments();
   }, []);
 
   const filtered = filter === "all" ? appointments : appointments.filter(a => a.status === filter);
@@ -86,6 +102,7 @@ const AppointmentListPage: React.FC = () => {
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
                   <th className="px-4 py-2"></th>
                 </tr>
               </thead>
@@ -107,6 +124,7 @@ const AppointmentListPage: React.FC = () => {
                         {appt.status}
                       </span>
                     </td>
+                    <td className="px-4 py-2 whitespace-nowrap">{appt.reason}</td>
                     <td className="px-4 py-2 text-right">
                       {/* Placeholder for appointment actions */}
                       <Button size="sm" disabled>Details</Button>

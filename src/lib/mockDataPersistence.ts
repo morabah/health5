@@ -15,7 +15,7 @@ import type { Appointment } from "@/types/appointment";
 import type { Notification } from "@/types/notification";
 
 // Storage keys for localStorage
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   USERS: 'health_app_data_users',
   DOCTOR_PROFILES: 'health_app_data_doctor_profiles',
   PATIENT_PROFILES: 'health_app_data_patient_profiles',

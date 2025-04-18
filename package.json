@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --ext .ts,.tsx",
+    "type-check": "tsc --noEmit",
+    "test": "jest --passWithNoTests",
     "format": "prettier --write src/**/*.{js,ts,jsx,tsx}",
     "db:seed:dev": "ts-node ./scripts/seedDevFirestore.ts",
     "db:verify:dev": "ts-node ./scripts/verifyDevFirestore.ts"
