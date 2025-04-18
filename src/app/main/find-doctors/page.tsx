@@ -28,6 +28,7 @@ import {
   AdjustmentsHorizontalIcon
 } from "@heroicons/react/24/outline";
 import { CheckCircleIcon, HeartIcon } from "@heroicons/react/24/solid";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 interface Doctor {
   id: string;
@@ -82,12 +83,12 @@ export default function FindDoctorsPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [specialty, setSpecialty] = useState("");
-  const [location, setLocation] = useState("");
-  const [language, setLanguage] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [specialty, setSpecialty] = useLocalStorage<string>("find_doctors_specialty", "");
+  const [location, setLocation] = useLocalStorage<string>("find_doctors_location", "");
+  const [language, setLanguage] = useLocalStorage<string>("find_doctors_language", "");
+  const [searchQuery, setSearchQuery] = useLocalStorage<string>("find_doctors_searchQuery", "");
   const [error, setError] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useLocalStorage<boolean>("find_doctors_showFilters", false);
   const router = useRouter();
 
   // Process doctor data to ensure names are properly formatted

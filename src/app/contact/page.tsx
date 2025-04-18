@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import Button from '@/components/ui/Button';
@@ -7,6 +8,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMapMarkerAlt, faPhone, faEnvelope } from '@fortawesome/free-solid-svg-icons';
 import { logInfo } from '@/lib/logger';
 import { db } from '@/lib/firebaseClient';
+import type { Firestore } from 'firebase/firestore';
 import { doc, getDoc } from 'firebase/firestore';
 
 interface ContactInfo {
@@ -17,9 +19,9 @@ interface ContactInfo {
 
 export default function ContactPage() {
   // Form state
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
+  const [name, setName] = useLocalStorage<string>('contact_name', '');
+  const [email, setEmail] = useLocalStorage<string>('contact_email', '');
+  const [message, setMessage] = useLocalStorage<string>('contact_message', '');
 
   // Contact info state
   const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null);
@@ -32,7 +34,7 @@ export default function ContactPage() {
       setLoading(true);
       setError(null);
       try {
-        const docRef = doc(db, 'siteInfo', 'mainContact');
+        const docRef = doc(db! as Firestore, 'siteInfo', 'mainContact');
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           setContactInfo(snap.data() as ContactInfo);
@@ -65,7 +67,7 @@ export default function ContactPage() {
             <Input label="Name" value={name} onChange={e => setName(e.target.value)} required />
             <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
             <Textarea label="Message" value={message} onChange={e => setMessage(e.target.value)} rows={4} required />
-            <Button type="submit" className="w-full">Send Message</Button>
+            <Button type="submit" className="w-full" label="Send Message" pageName="ContactPage">Send Message</Button>
           </form>
         </section>
         {/* Right: Contact Info */}

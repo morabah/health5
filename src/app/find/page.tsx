@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useRouter } from "next/navigation";
 import { loadDoctors } from '@/data/loadDoctors';
 import { mockFindDoctors } from '@/lib/mockApiService';
@@ -13,6 +13,7 @@ import ApiModeIndicator from '@/components/ui/ApiModeIndicator';
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "react-hot-toast";
 import { debounce } from "@/utils/helpers";
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { 
   MagnifyingGlassIcon, 
   AdjustmentsHorizontalIcon,
@@ -76,16 +77,16 @@ const languageOptions = [
 export default function FindDoctorPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [specialty, setSpecialty] = useState('');
-  const [location, setLocation] = useState('');
-  const [language, setLanguage] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [availableOnly, setAvailableOnly] = useState(false);
+  const [doctors, setDoctors] = React.useState<Doctor[]>([]);
+  const [filteredDoctors, setFilteredDoctors] = React.useState<Doctor[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useLocalStorage<string>('find_searchQuery', '');
+  const [specialty, setSpecialty] = useLocalStorage<string>('find_specialty', '');
+  const [location, setLocation] = useLocalStorage<string>('find_location', '');
+  const [language, setLanguage] = useLocalStorage<string>('find_language', '');
+  const [showFilters, setShowFilters] = useLocalStorage<boolean>('find_showFilters', false);
+  const [availableOnly, setAvailableOnly] = useLocalStorage<boolean>('find_availableOnly', false);
 
   // Process doctor data to ensure names are properly formatted
   const processDoctorData = (doctorData: Doctor[]) => {
@@ -158,7 +159,7 @@ export default function FindDoctorPage() {
   };
 
   // Initial fetch on mount and when filters change
-  useEffect(() => {
+  React.useEffect(() => {
     fetchDoctors();
   }, [specialty, location]);
 
@@ -216,7 +217,7 @@ export default function FindDoctorPage() {
   };
 
   // Update filters when any filter changes
-  useEffect(() => {
+  React.useEffect(() => {
     applyFilters(doctors, searchQuery, specialty, location, language, availableOnly);
   }, [doctors, searchQuery, specialty, location, language, availableOnly, applyFilters]);
 

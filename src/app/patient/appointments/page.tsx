@@ -14,19 +14,20 @@ import { FaCalendarCheck, FaCalendarTimes, FaHistory, FaFilter, FaSearch,
 import Link from "next/link";
 import { formatDate } from "@/utils/dateUtils";
 import { useSearchParams } from "next/navigation";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 type FilterType = "all" | "upcoming" | "past" | "cancelled";
 
 export default function PatientAppointmentsPage() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const [activeFilter, setActiveFilter] = useLocalStorage<FilterType>("patient_appointments_activeFilter", "all");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelSuccess, setCancelSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useLocalStorage<string>("patient_appointments_searchQuery", "");
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();

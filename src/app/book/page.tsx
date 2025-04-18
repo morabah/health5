@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
@@ -30,12 +31,12 @@ export default function BookPage({ searchParams }: { searchParams: { [key: strin
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [slots, setSlots] = useState<AppointmentSlot[]>([]);
-  const [dateString, setDateString] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [dateString, setDateString] = useLocalStorage<string>("book_dateString", new Date().toISOString().split('T')[0]);
   const [error, setError] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [appointmentReason, setAppointmentReason] = useState<string>("");
-  const [appointmentType, setAppointmentType] = useState<'In-person' | 'Video'>('In-person');
+  const [appointmentReason, setAppointmentReason] = useLocalStorage<string>("book_appointmentReason", "");
+  const [appointmentType, setAppointmentType] = useLocalStorage<'In-person' | 'Video'>("book_appointmentType", "In-person");
   const [success, setSuccess] = useState<boolean>(false);
   const [doctorInfo, setDoctorInfo] = useState<any>(null);
   

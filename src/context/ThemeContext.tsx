@@ -4,6 +4,7 @@
  * Uses localStorage for persistence and prefers system setting on first load.
  */
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 type Theme = "light" | "dark";
 
@@ -15,7 +16,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useLocalStorage<Theme>("theme", "light");
 
   useEffect(() => {
     // On mount, check localStorage or system preference
@@ -32,7 +33,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
-    localStorage.setItem("theme", theme);
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));

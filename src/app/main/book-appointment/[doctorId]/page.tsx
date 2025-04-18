@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { loadDoctorProfilePublic } from '@/data/doctorLoaders';
 import { mockGetAvailableSlots, mockBookAppointment } from "@/lib/mockApiService";
 import Spinner from "@/components/ui/Spinner";
@@ -29,6 +30,7 @@ import { Timestamp } from "firebase/firestore";
 import { AppointmentStatus } from "@/types/enums";
 import { getMockDoctorAvailability } from "@/data/mockDataService";
 import { getUsersStore } from "@/data/mockDataStore";
+import type { DoctorAvailabilitySlot } from "@/types/doctor";
 
 interface Doctor {
   id: string;
@@ -53,15 +55,31 @@ export default function BookAppointmentPage() {
   const [loading, setLoading] = useState(true);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [appointmentType, setAppointmentType] = useState<AppointmentType>("IN_PERSON");
-  const [reason, setReason] = useState<string>("");
+  const defaultDateStr = addDays(new Date(), 1).toISOString().split('T')[0];
+  const [dateString, setDateString] = useLocalStorage<string>(`book_${doctorId}_dateString`, defaultDateStr);
+  const [selectedTime, setSelectedTime] = useLocalStorage<string | null>(`book_${doctorId}_selectedTime`, null);
+  const [appointmentType, setAppointmentType] = useLocalStorage<AppointmentType>(`book_${doctorId}_appointmentType`, "IN_PERSON");
+  const [reason, setReason] = useLocalStorage<string>(`book_${doctorId}_reason`, "");
   const [bookingInProgress, setBookingInProgress] = useState(false);
   
+  const selectedDate = dateString ? new Date(dateString) : undefined;
+
   const router = useRouter();
   const { user } = useAuth();
   
+  const timeStepRef = useRef<HTMLDivElement>(null);
+  const typeStepRef = useRef<HTMLDivElement>(null);
+  const reasonStepRef = useRef<HTMLDivElement>(null);
+  const summaryRef = useRef<HTMLDivElement>(null);
+
+  const handleReset = () => {
+    setDateString(defaultDateStr);
+    setSelectedTime(null);
+    setAppointmentType("IN_PERSON");
+    setReason("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   // Check if user is logged in
   useEffect(() => {
     if (!user) {
@@ -110,10 +128,6 @@ export default function BookAppointmentPage() {
           
           setDoctor(doctorData);
           console.log("Doctor loaded:", doctorData);
-          
-          // Set default date to tomorrow
-          const tomorrow = addDays(new Date(), 1);
-          setSelectedDate(tomorrow);
         } else {
           toast.error("Doctor not found");
           setDoctor(null);
@@ -148,7 +162,7 @@ export default function BookAppointmentPage() {
         console.log(`Selected date ${dateString} is day of week: ${dayOfWeek}`);
         
         // Get doctor's weekly availability slots
-        const doctorAvailability = getMockDoctorAvailability(doctor.userId);
+        const doctorAvailability: DoctorAvailabilitySlot[] = getMockDoctorAvailability(doctor.userId);
         const availableDaysForDoctor = doctorAvailability.filter(slot => 
           slot.dayOfWeek === dayOfWeek && slot.isAvailable
         );
@@ -199,18 +213,23 @@ export default function BookAppointmentPage() {
     }
     
     fetchAvailableSlots();
-  }, [selectedDate, doctor]);
+  }, [dateString, doctor]);
 
   const handleDateSelect = (date: Date | undefined) => {
-    setSelectedDate(date);
+    if (date) {
+      setDateString(format(date, 'yyyy-MM-dd'));
+      setTimeout(() => timeStepRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
   };
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
+    setTimeout(() => typeStepRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
   const handleAppointmentTypeChange = (type: AppointmentType) => {
     setAppointmentType(type);
+    setTimeout(() => reasonStepRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
   const handleBookAppointment = async () => {
@@ -315,8 +334,14 @@ export default function BookAppointmentPage() {
             </button>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Book Appointment</h1>
           </div>
-          <ApiModeIndicator />
-              </div>
+          <div className="flex items-center space-x-4">
+            <span className="text-gray-700 dark:text-gray-300 font-medium">
+              Step {selectedDate ? (selectedTime ? (appointmentType ? 4 : 3) : 2) : 1} of 4
+            </span>
+            <Button variant="outline" size="sm" onClick={handleReset}>Reset</Button>
+            <ApiModeIndicator />
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
           {/* Doctor Information Sidebar */}
@@ -396,6 +421,8 @@ export default function BookAppointmentPage() {
                       disabled={[
                         { before: addDays(new Date(), 1) }, // Disable past dates and today
                       ]}
+                      modifiers={{ today: new Date() }}
+                      modifiersClassNames={{ today: 'ring-2 ring-blue-500 text-blue-700' }}
                       className="border rounded-lg bg-white dark:bg-gray-800 p-4"
                     />
                   </div>
@@ -403,7 +430,7 @@ export default function BookAppointmentPage() {
                 
                 {/* Step 2: Select Time */}
                 {selectedDate && (
-                  <div className="mb-8">
+                  <div ref={timeStepRef} className="mb-8">
                     <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">
                       2. Select a Time Slot for {format(selectedDate, 'MMMM d, yyyy')}
                     </h4>
@@ -438,7 +465,7 @@ export default function BookAppointmentPage() {
                 
                 {/* Step 3: Appointment Type */}
                 {selectedTime && (
-                  <div className="mb-8">
+                  <div ref={typeStepRef} className="mb-8">
                     <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">3. Appointment Type</h4>
                     <div className="flex flex-col sm:flex-row gap-4">
                       <button
@@ -470,7 +497,7 @@ export default function BookAppointmentPage() {
                 
                 {/* Step 4: Reason for Visit */}
                 {selectedTime && (
-                  <div className="mb-8">
+                  <div ref={reasonStepRef} className="mb-8">
                     <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">4. Reason for Visit (Optional)</h4>
                 <Input
                   type="text"
@@ -484,7 +511,7 @@ export default function BookAppointmentPage() {
                 
                 {/* Appointment Summary & Confirm Button */}
                 {selectedDate && selectedTime && (
-                  <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <div ref={summaryRef} className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 z-10 p-4">
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
                       <h4 className="font-medium text-gray-900 dark:text-white mb-2">Appointment Summary</h4>
                       <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
@@ -526,10 +553,9 @@ export default function BookAppointmentPage() {
                   </div>
             )}
           </div>
-        </Card>
+        </div>
       </div>
     </div>
-      </div>
-    </main>
+      </main>
   );
 }

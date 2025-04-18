@@ -12,6 +12,7 @@ import Spinner from '@/components/ui/Spinner';
 import { toast } from 'react-hot-toast';
 import 'react-day-picker/dist/style.css';
 import { getDateObject } from '@/utils/dateUtils';
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const ReschedulePage = () => {
   const params = useParams();
@@ -20,9 +21,10 @@ const ReschedulePage = () => {
   
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedDateStr, setSelectedDateStr] = useLocalStorage<string>(`reschedule_${appointmentId}_selectedDate`, '');
+  const selectedDate = selectedDateStr ? new Date(selectedDateStr) : undefined;
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useLocalStorage<string | null>(`reschedule_${appointmentId}_selectedSlot`, null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -123,7 +125,7 @@ const ReschedulePage = () => {
           <DayPicker
             mode="single"
             selected={selectedDate}
-            onSelect={setSelectedDate}
+            onSelect={(date) => setSelectedDateStr(date ? date.toISOString() : '')}
             disabled={[
               { before: new Date() },
               { dayOfWeek: [0, 6] } // Disable weekends

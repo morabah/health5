@@ -12,6 +12,7 @@ import React, {
 import type { UserProfile } from "../types/user";
 import { logInfo } from "@/lib/logger";
 import { mockPatientUser, mockDoctorUser, mockAdminUser } from "../types/mockData";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 /**
  * AuthContextState defines the shape of the authentication context.
@@ -41,21 +42,16 @@ const AuthContext = createContext<AuthContextState | undefined>(undefined);
  * Implements session timeout: logs out user after 30 minutes of inactivity.
  */
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<any | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [user, setUser] = useLocalStorage<any | null>("auth_user", null);
+  const [userProfile, setUserProfile] = useLocalStorage<UserProfile | null>("auth_profile", null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [role, setRole] = useState<'patient' | 'doctor' | 'admin' | null>(null);
+  const [role, setRole] = useLocalStorage<'patient' | 'doctor' | 'admin' | null>("auth_role", null);
   const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
   const lastLoggedRef = useRef<number>(0);
 
   // Simulate logout (must be declared before resetTimeout for closure safety)
   const logout = useCallback(() => {
     logInfo("Mock logout called");
-    // Clear auth data from localStorage
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('auth_profile');
-    localStorage.removeItem('auth_role');
-    
     setUser(null);
     setUserProfile(null);
     setRole(null);
@@ -102,11 +98,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { user, userProfile } = await import("@/lib/mockApiService").then(mod => mod.mockSignIn(email, 'mock'));
       const authUser = { uid: user.uid, email: user.email, userType: role };
       
-      // Store auth data in localStorage for persistence
-      localStorage.setItem('auth_user', JSON.stringify(authUser));
-      localStorage.setItem('auth_profile', JSON.stringify(userProfile));
-      localStorage.setItem('auth_role', role);
-      
       setUser(authUser);
       setUserProfile(userProfile);
       setRole(role);
@@ -128,13 +119,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadPersistedAuth = () => {
       try {
-        const storedUser = localStorage.getItem('auth_user');
-        const storedProfile = localStorage.getItem('auth_profile');
-        const storedRole = localStorage.getItem('auth_role');
+        const storedUser = user;
+        const storedProfile = userProfile;
+        const storedRole = role;
         
         if (storedUser && storedProfile && storedRole) {
-          const parsedUser = JSON.parse(storedUser);
-          const parsedProfile = JSON.parse(storedProfile);
+          const parsedUser = storedUser;
+          const parsedProfile = storedProfile;
           const roleValue = storedRole as 'patient' | 'doctor' | 'admin';
           
           setUser(parsedUser);
@@ -146,9 +137,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (error) {
         logInfo("Error restoring auth state", { error });
         // Clear potentially corrupted data
-        localStorage.removeItem('auth_user');
-        localStorage.removeItem('auth_profile');
-        localStorage.removeItem('auth_role');
+        setUser(null);
+        setUserProfile(null);
+        setRole(null);
       }
       
       setLoading(false);
@@ -186,12 +177,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refreshProfile = useCallback(() => {
     logInfo("Reloading profile from localStorage");
     try {
-      const storedUser = localStorage.getItem('auth_user');
-      const storedProfile = localStorage.getItem('auth_profile');
+      const storedUser = user;
+      const storedProfile = userProfile;
       
       if (storedUser && storedProfile) {
-        const parsedUser = JSON.parse(storedUser);
-        const parsedProfile = JSON.parse(storedProfile);
+        const parsedUser = storedUser;
+        const parsedProfile = storedProfile;
         
         setUser(parsedUser);
         setUserProfile(parsedProfile);
