@@ -37,16 +37,46 @@ const DoctorVerificationListPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const items = await mockGetDoctorVerifications();
+        let items = await mockGetDoctorVerifications();
+        // Persist fetched data
+        try {
+          localStorage.setItem(
+            'health_app_data_doctor_verifications',
+            JSON.stringify(items)
+          );
+        } catch (e) {
+          console.error('Failed to persist doctor verifications', e);
+        }
+        // Load persisted if available
+        try {
+          const stored = localStorage.getItem(
+            'health_app_data_doctor_verifications'
+          );
+          if (stored) items = JSON.parse(stored);
+        } catch (e) {
+          console.error('Failed to parse persisted doctor verifications', e);
+        }
         setVerifications(items);
       } catch (err) {
-        setError("Failed to load doctor verifications.");
+        setError('Failed to load doctor verifications.');
       } finally {
         setLoading(false);
       }
     }
     fetchVerifications();
   }, []);
+
+  // Save to localStorage whenever verifications change
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'health_app_data_doctor_verifications',
+        JSON.stringify(verifications)
+      );
+    } catch (e) {
+      console.error('Failed to sync doctor verifications to localStorage', e);
+    }
+  }, [verifications]);
 
   const filtered = filter === "all"
     ? verifications

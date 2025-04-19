@@ -47,7 +47,15 @@ export default function AdminListsPage() {
       setError(null);
       try {
         const items = await mockGetAllUsers();
-        setUsers(items);
+        // Check for persisted users in localStorage
+        let loaded: User[] = items;
+        try {
+          const stored = localStorage.getItem('health_app_data_users');
+          if (stored) loaded = JSON.parse(stored) as User[];
+        } catch (e) {
+          console.error('Failed to parse persisted users', e);
+        }
+        setUsers(loaded);
       } catch (err) {
         setError("Failed to load users.");
       } finally {
@@ -96,8 +104,16 @@ export default function AdminListsPage() {
         phone: newUser.phone || undefined
       });
       
-      // Update the user list with the new user
-      setUsers(prev => [...prev, addedUser]);
+      // Update the user list with the new user and persist to localStorage
+      setUsers(prev => {
+        const updated = [...prev, addedUser];
+        try {
+          localStorage.setItem('health_app_data_users', JSON.stringify(updated));
+        } catch (e) {
+          console.error('Failed to persist users to localStorage', e);
+        }
+        return updated;
+      });
       
       // Show success message
       setAddSuccess(`User ${newUser.firstName} ${newUser.lastName} added successfully`);

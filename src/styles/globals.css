@@ -2,6 +2,7 @@
   globals.css: Global Tailwind CSS directives for the entire application.
   This file is imported once in the root layout/app file to apply base, component, and utility styles globally.
 */
+/* stylelint-disable at-rule-no-unknown */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

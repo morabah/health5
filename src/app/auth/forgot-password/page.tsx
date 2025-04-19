@@ -23,7 +23,9 @@ export default function ForgotPasswordPage() {
         <h1 className="text-2xl font-bold mb-6 text-center">Forgot Password</h1>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-          <Button type="submit" className="w-full">Send Reset Link</Button>
+          <Button type="submit" className="w-full" label="Send Reset Link" pageName="auth-forgot-password">
+            Send Reset Link
+          </Button>
         </form>
         {feedback && <div className="mt-4 text-center text-sm text-blue-600 dark:text-blue-400">{feedback}</div>}
         <div className="mt-6 text-center">
