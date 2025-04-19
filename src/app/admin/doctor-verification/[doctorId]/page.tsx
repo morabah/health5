@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Spinner } from "@/components/ui/Spinner";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import Spinner from "@/components/ui/Spinner";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import { logValidation } from "@/lib/logger";

@@ -36,27 +36,22 @@ const DoctorVerificationListPage: React.FC = () => {
     async function fetchVerifications() {
       setLoading(true);
       setError(null);
+      const key = 'health_app_data_doctor_verifications';
       try {
-        let items = await mockGetDoctorVerifications();
-        // Persist fetched data
-        try {
-          localStorage.setItem(
-            'health_app_data_doctor_verifications',
-            JSON.stringify(items)
-          );
-        } catch (e) {
-          console.error('Failed to persist doctor verifications', e);
+        // Try loading from localStorage first
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          setVerifications(JSON.parse(stored));
+        } else {
+          // No stored data: fetch from API and persist
+          const items = await mockGetDoctorVerifications();
+          setVerifications(items);
+          try {
+            localStorage.setItem(key, JSON.stringify(items));
+          } catch (e) {
+            console.error('Failed to persist doctor verifications', e);
+          }
         }
-        // Load persisted if available
-        try {
-          const stored = localStorage.getItem(
-            'health_app_data_doctor_verifications'
-          );
-          if (stored) items = JSON.parse(stored);
-        } catch (e) {
-          console.error('Failed to parse persisted doctor verifications', e);
-        }
-        setVerifications(items);
       } catch (err) {
         setError('Failed to load doctor verifications.');
       } finally {
