@@ -3,6 +3,7 @@ import { format, addDays } from 'date-fns';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { getMockDoctorAvailability } from '@/data/mockDataService';
+import { getDoctorProfilesStore } from '@/data/mockDataStore';
 import Spinner from '@/components/ui/Spinner';
 import { toast } from 'react-hot-toast';
 
@@ -43,8 +44,11 @@ export function DoctorAvailabilityCalendar({
       const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
       const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       
-      // Get doctor's weekly availability slots
+      // Get doctor's weekly availability slots and blocked dates
       const doctorAvailability = getMockDoctorAvailability(doctor.userId);
+      const profiles = getDoctorProfilesStore();
+      const profile = profiles.find(p => p.userId === doctor.userId) as any;
+      const blockedDates: string[] = profile?.mockAvailability?.blockedDates || [];
       console.log(`Retrieved ${doctorAvailability.length} availability slots for doctor`);
       
       // Get the days of week where the doctor is available
@@ -65,13 +69,14 @@ export function DoctorAvailabilityCalendar({
       let currentDay = new Date(firstDay);
       
       while (currentDay <= lastDay) {
-        // Check if this day of week is in doctor's availability
-        if (availableDaysOfWeek.includes(currentDay.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6)) {
-          // Don't add days in the past if disablePastDates is true
-          if (!disablePastDates || currentDay > today) {
-            // Format date as ISO string and add to set
-            availableDays.add(format(currentDay, 'yyyy-MM-dd'));
-          }
+        const dateStr = format(currentDay, 'yyyy-MM-dd');
+        // Add if matches weekly availability, not past, and not blocked
+        if (
+          availableDaysOfWeek.includes(currentDay.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6) &&
+          (!disablePastDates || currentDay > today) &&
+          !blockedDates.includes(dateStr)
+        ) {
+          availableDays.add(dateStr);
         }
         
         // Move to next day

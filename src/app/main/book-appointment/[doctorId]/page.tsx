@@ -567,22 +567,8 @@ export default function BookAppointmentPage() {
           
           // Set the proper doctor name using the user data if available
           let doctorName = "Dr. Unknown";
-          
           if (doctorUser && doctorUser.firstName && doctorUser.lastName) {
             doctorName = `Dr. ${doctorUser.firstName} ${doctorUser.lastName}`;
-          } else if (doctorId === 'user_doctor_001') {
-            doctorName = 'Dr. Bob Johnson';
-          } else if (doctorId === 'user_doctor_002') {
-            doctorName = 'Dr. Emily Carter';
-          } else if (doctorId === 'user_doctor_003') {
-            doctorName = 'Dr. David Nguyen';
-          } else {
-            // Try to extract a name from the doctor ID
-            const match = doctorId.match(/doctor_(\d+)/);
-            if (match) {
-              const num = match[1];
-              doctorName = `Dr. Doctor ${num}`;
-            }
           }
           
           // Convert to Doctor format with proper fallback values
@@ -703,6 +689,17 @@ export default function BookAppointmentPage() {
             }
           ];
           console.log("Using fallback availability:", doctorAvailability);
+        }
+        
+        // Exclude dates blocked by doctor
+        const profiles = getDoctorProfilesStore();
+        const profile = profiles.find(p => p.userId === doctor.userId) as any;
+        const blockedDates: string[] = profile?.mockAvailability?.blockedDates || [];
+        if (blockedDates.includes(dateString)) {
+          console.log(`Selected date ${dateString} is blocked`);
+          setAvailableSlots([]);
+          setLoadingSlots(false);
+          return;
         }
         
         // Check if doctor is available on this day of week
@@ -1012,11 +1009,11 @@ export default function BookAppointmentPage() {
             <div className="md:col-span-8">
               <Card className="border border-gray-200 dark:border-gray-700">
                 <div className="p-6">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Schedule Your Appointment</h3>
+                  <h3 className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white mb-8">Schedule Your Appointment</h3>
                   
                   {/* Step 1: Select Date */}
                   <div className="mb-8">
-                    <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4">1. Select a Date</h4>
+                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 tracking-wide">1. Select a Date</h4>
                     <div className="flex justify-center">
                       <DoctorAvailabilityCalendar 
                         doctor={doctor}
@@ -1030,7 +1027,7 @@ export default function BookAppointmentPage() {
                   {/* Step 2: Select Time */}
                   {selectedDate && (
                     <div ref={timeStepRef} className="mb-8">
-                      <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+                      <h4 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-4 flex items-center">
                         <CalendarIcon className="w-5 h-5 mr-2 text-blue-500" />
                         2. Select a Time Slot for {format(selectedDate, 'MMMM d, yyyy')}
                       </h4>
@@ -1124,7 +1121,7 @@ export default function BookAppointmentPage() {
                   {/* Step 3: Appointment Type */}
                   {selectedTime && (
                     <div ref={typeStepRef} className="mb-8">
-                      <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+                      <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
                         <VideoCameraIcon className="w-5 h-5 mr-2 text-blue-500" />
                         3. Appointment Type
                       </h4>
@@ -1193,7 +1190,7 @@ export default function BookAppointmentPage() {
                   {/* Step 4: Reason for Visit */}
                   {selectedTime && (
                     <div ref={reasonStepRef} className="mb-8">
-                      <h4 className="text-md font-medium text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+                      <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
@@ -1236,7 +1233,7 @@ export default function BookAppointmentPage() {
                             </div>
                             <div className="ml-3">
                               <span className="text-gray-500 dark:text-gray-400 block text-xs">Date</span>
-                              <span className="font-medium">{selectedDate ? format(selectedDate, 'MMMM d, yyyy') : ''}</span>
+                              <span className="font-medium">{selectedDate ? format(selectedDate, 'MMMM d, yyyy') : 'Not selected'}</span>
                             </div>
                           </div>
                           <div className="flex items-center">
@@ -1245,7 +1242,7 @@ export default function BookAppointmentPage() {
                             </div>
                             <div className="ml-3">
                               <span className="text-gray-500 dark:text-gray-400 block text-xs">Time</span>
-                              <span className="font-medium">{selectedTime}</span>
+                              <span className="font-medium">{selectedTime ?? 'Not selected'}</span>
                             </div>
                           </div>
                           <div className="flex items-center">
@@ -1258,10 +1255,7 @@ export default function BookAppointmentPage() {
                             </div>
                             <div className="ml-3">
                               <span className="text-gray-500 dark:text-gray-400 block text-xs">Type</span>
-                              <span className="font-medium">{appointmentType === "IN_PERSON" ? "In-Person Visit" : "Video Consultation"}</span>
-                              {appointmentType === "IN_PERSON" && (
-                                <span className="block text-xs mt-1">at {doctor?.location || "doctor's office"}</span>
-                              )}
+                              <span className="font-medium">{appointmentType ? (appointmentType === "IN_PERSON" ? "In-Person Visit" : "Video Consultation") : 'Not selected'}</span>
                             </div>
                           </div>
                           <div className="flex items-center">
@@ -1270,12 +1264,7 @@ export default function BookAppointmentPage() {
                             </div>
                             <div className="ml-3">
                               <span className="text-gray-500 dark:text-gray-400 block text-xs">Consultation Fee</span>
-                              <span className="font-medium">${doctor?.fee}</span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 block mt-1">
-                                {appointmentType === "IN_PERSON" 
-                                  ? "Insurance may cover part of this cost" 
-                                  : "Some insurance plans cover telehealth visits"}
-                              </span>
+                              <span className="font-medium">{doctor ? `$${doctor.fee}` : 'Unknown'}</span>
                             </div>
                           </div>
                         </div>
@@ -1346,11 +1335,11 @@ export default function BookAppointmentPage() {
                 <div className="mt-4 space-y-4 text-sm text-gray-700 dark:text-gray-300">
                   <div className="flex items-center">
                     <CalendarIcon className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" />
-                    <span>Date: {selectedDate ? format(selectedDate, 'MMMM d, yyyy') : ''}</span>
+                    <span>Date: {selectedDate ? format(selectedDate, 'MMMM d, yyyy') : 'Not selected'}</span>
                   </div>
                   <div className="flex items-center">
                     <ClockIcon className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" />
-                    <span>Time: {selectedTime}</span>
+                    <span>Time: {selectedTime ?? 'Not selected'}</span>
                   </div>
                   <div className="flex items-center">
                     {appointmentType === 'IN_PERSON' ? (
@@ -1359,12 +1348,12 @@ export default function BookAppointmentPage() {
                       <VideoCameraIcon className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" />
                     )}
                     <span>
-                      Type: {appointmentType === 'IN_PERSON' ? 'In-Person Visit' : 'Video Consultation'}
+                      Type: {appointmentType ? (appointmentType === 'IN_PERSON' ? 'In-Person Visit' : 'Video Consultation') : 'Not selected'}
                     </span>
                   </div>
                   <div className="flex items-center">
                     <CurrencyDollarIcon className="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" />
-                    <span>Fee: ${doctor?.fee}</span>
+                    <span>Fee: {doctor ? `$${doctor.fee}` : 'Unknown'}</span>
                   </div>
                   {reason && (
                     <div>

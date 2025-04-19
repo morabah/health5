@@ -469,8 +469,21 @@ export async function mockGetAvailableSlots({ doctorId, dateString }: { doctorId
     slotCount: doctor.mockAvailability.slots.length
   });
   
-  // Return all available slot start times
-  return doctor.mockAvailability.slots.map((slot: any) => slot.startTime);
+  // Generate time slots in 30-minute increments based on availability windows
+  return doctor.mockAvailability.slots.flatMap((slot: any) => {
+    const slots: string[] = [];
+    const [startHour, startMinute] = slot.startTime.split(':').map(Number);
+    const [endHour, endMinute] = slot.endTime.split(':').map(Number);
+    let current = startHour * 60 + startMinute;
+    const end = endHour * 60 + endMinute;
+    while (current < end) {
+      const h = Math.floor(current / 60);
+      const m = current % 60;
+      slots.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+      current += 30;
+    }
+    return slots;
+  });
 }
 
 /**
@@ -596,7 +609,7 @@ export async function mockGetNotifications(userId: string): Promise<Notification
   logApiCall('mockGetNotifications', { userId });
   
   // Simulate network delay
-  await simulateDelay();
+  await delay();
   
   const notifications = dataStore.getNotificationsStore();
   return notifications
@@ -621,7 +634,7 @@ export async function mockMarkNotificationAsRead(notificationId: string): Promis
   logApiCall('mockMarkNotificationAsRead', { notificationId });
   
   // Simulate network delay
-  await simulateDelay();
+  await delay();
   
   const notifications = dataStore.getNotificationsStore();
   const notificationIndex = notifications.findIndex(n => n.id === notificationId);
@@ -658,7 +671,7 @@ export async function mockMarkAllNotificationsAsRead(userId: string): Promise<bo
   logApiCall('mockMarkAllNotificationsAsRead', { userId });
   
   // Simulate network delay
-  await simulateDelay();
+  await delay();
   
   let updatedCount = 0;
   const notifications = dataStore.getNotificationsStore();
@@ -693,7 +706,7 @@ export async function mockCreateNotification(
   logApiCall('mockCreateNotification', { userId, title, message, type, relatedId });
   
   // Simulate network delay
-  await simulateDelay();
+  await delay();
   
   const newNotification: Notification = {
     id: uuidv4(),
