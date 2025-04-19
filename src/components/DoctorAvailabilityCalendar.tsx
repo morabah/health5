@@ -166,14 +166,18 @@ export function DoctorAvailabilityCalendar({
         mode="single"
         selected={selectedDate}
         onSelect={handleDateSelect}
-        disabled={disablePastDates ? [{ before: addDays(new Date(), 1) }] : undefined}
+        disabled={[
+          ...(disablePastDates ? [{ before: new Date() }] : []),
+          (date: Date) => !isDateAvailable(date)
+        ]}
         modifiers={{
           available: isDateAvailable,
           today: new Date()
         }}
         modifiersClassNames={{
           today: 'ring-2 ring-blue-500 text-blue-700',
-          available: 'bg-green-50 text-green-700 font-medium hover:bg-green-100 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-800/40'
+          available: 'bg-green-50 text-green-700 font-medium hover:bg-green-100 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-800/40',
+          disabled: 'text-gray-400 dark:text-gray-600 line-through'
         }}
         className="border rounded-lg bg-white dark:bg-gray-800 p-4"
         onMonthChange={handleMonthChange}

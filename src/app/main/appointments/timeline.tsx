@@ -303,6 +303,7 @@ export const AppointmentTimeline = () => {
         ) : (
           filteredAppointments.map((appointment) => {
             const appointmentDate = toDate(appointment.appointmentDate);
+            const isDateValid = !isNaN(appointmentDate.getTime());
             const statusInfo = getStatusInfo(appointment);
             const StatusIcon = statusInfo.icon;
             
@@ -359,10 +360,10 @@ export const AppointmentTimeline = () => {
                     <div className="flex items-center">
                       <CalendarIcon className="w-4 h-4 text-gray-500 dark:text-gray-400 mr-1" />
                       <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {format(appointmentDate, 'MMM d, yyyy')}
+                        {isDateValid ? format(appointmentDate, 'MMM d, yyyy') : 'Unknown Date'}
                       </span>
                       <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
-                        ({getRelativeTimeText(appointmentDate)})
+                        ({isDateValid ? getRelativeTimeText(appointmentDate) : 'Unknown'})
                       </span>
                     </div>
                     
