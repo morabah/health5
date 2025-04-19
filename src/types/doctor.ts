@@ -74,7 +74,7 @@ export interface DoctorProfile {
   /** Weekly availability schedule */
   weeklySchedule?: WeeklySchedule;
   /** Dates that are blocked regardless of weekly schedule */
-  blockedDates?: Date[] | string[];
+  blockedDates?: Date[];
   // Add createdAt and updatedAt for mock/real compatibility
   createdAt?: Date | Timestamp;
   updatedAt?: Date | Timestamp;

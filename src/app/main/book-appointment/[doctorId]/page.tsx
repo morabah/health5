@@ -233,20 +233,20 @@ const AppointmentSuccessScreen = ({
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6 text-left">
           <h3 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Appointment Details</h3>
           <div className="space-y-2">
-            <div className="flex items-center">
+                  <div className="flex items-center">
               <CalendarIcon className="w-5 h-5 mr-3 text-blue-500 dark:text-blue-400" />
               <span className="text-gray-700 dark:text-gray-300">{format(appointment.date, 'EEEE, MMMM d, yyyy')}</span>
-            </div>
-            <div className="flex items-center">
+                  </div>
+                  <div className="flex items-center">
               <ClockIcon className="w-5 h-5 mr-3 text-blue-500 dark:text-blue-400" />
               <span className="text-gray-700 dark:text-gray-300">{appointment.startTime}</span>
-            </div>
-            <div className="flex items-center">
+                  </div>
+                  <div className="flex items-center">
               <MapPinIcon className="w-5 h-5 mr-3 text-blue-500 dark:text-blue-400" />
               <span className="text-gray-700 dark:text-gray-300">{doctor.location}</span>
-            </div>
-          </div>
-        </div>
+                  </div>
+                  </div>
+                    </div>
         
         <div className="flex flex-col space-y-3">
           <Button 
@@ -259,11 +259,11 @@ const AppointmentSuccessScreen = ({
             <div className="flex items-center">
               <CalendarIcon className="w-5 h-5 mr-2" />
               Add to Calendar
-            </div>
-          </Button>
+                    </div>
+                  </Button>
           
-          <Button 
-            variant="primary" 
+                  <Button
+                    variant="primary"
             onClick={onViewAppointments}
             className="justify-center"
             label="View My Appointments"
@@ -273,10 +273,10 @@ const AppointmentSuccessScreen = ({
               <ChevronRightIcon className="w-5 h-5 mr-2" />
               View My Appointments
             </div>
-          </Button>
-        </div>
-      </div>
-    </div>
+                  </Button>
+                </div>
+              </div>
+          </div>
   );
 };
 
@@ -361,7 +361,7 @@ export default function BookAppointmentPage() {
   const initialAvailableDates = new Set<string>();
   const [availableDays, setAvailableDays] = useState<Set<string>>(initialAvailableDates);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-
+  
   const timeStepRef = useRef<HTMLDivElement>(null);
   const typeStepRef = useRef<HTMLDivElement>(null);
   const reasonStepRef = useRef<HTMLDivElement>(null);
@@ -550,9 +550,9 @@ export default function BookAppointmentPage() {
         console.log(`Attempting to load doctor with ID: ${doctorId}`);
         
         // First check if the doctor exists in the user store
-        const users = getUsersStore();
-        const doctorUser = users.find(u => u.id === doctorId);
-        
+          const users = getUsersStore();
+          const doctorUser = users.find(u => u.id === doctorId);
+          
         if (!doctorUser) {
           console.warn(`Doctor user not found in users store: ${doctorId}`);
         } else {
@@ -618,8 +618,8 @@ export default function BookAppointmentPage() {
             console.log("Created temporary doctor:", tempDoctorData);
           } else {
             // No user or profile found, handle gracefully
-            toast.error("Doctor not found");
-            setDoctor(null);
+          toast.error("Doctor not found");
+          setDoctor(null);
           }
         }
       } catch (error) {
@@ -723,9 +723,9 @@ export default function BookAppointmentPage() {
         
         try {
           slots = await mockGetAvailableSlots({ 
-            doctorId: doctor.userId, 
-            dateString 
-          });
+          doctorId: doctor.userId, 
+          dateString 
+        });
           console.log(`Retrieved ${slots.length} available slots from API`);
         } catch (error) {
           console.error(`Error getting available slots: ${error}`);
@@ -773,8 +773,8 @@ export default function BookAppointmentPage() {
           slotsCacheRef.current[cacheKey] = filteredForToday;
           setAvailableSlots(filteredForToday);
         } else {
-          slotsCacheRef.current[cacheKey] = filteredSlots;
-          setAvailableSlots(filteredSlots);
+        slotsCacheRef.current[cacheKey] = filteredSlots;
+        setAvailableSlots(filteredSlots);
         }
       } catch (error) {
         console.error(`Error in fetchAvailableSlots: ${error}`);
@@ -828,7 +828,7 @@ export default function BookAppointmentPage() {
   }
 
   // If doctor not found, try to create a fallback doctor from the ID
-  if (!doctor) {
+    if (!doctor) {
     console.log("No doctor data found, attempting to create fallback doctor");
     
     // Extract information from doctor ID if possible
@@ -856,9 +856,9 @@ export default function BookAppointmentPage() {
     
     console.log("Using fallback doctor:", fallbackDoctor);
     
-    return (
-      <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
+      return (
+        <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+          <div className="max-w-6xl mx-auto">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-4">
               <button 
@@ -897,18 +897,18 @@ export default function BookAppointmentPage() {
                   >
                     Continue with Limited Info
                   </Button>
-                </div>
+            </div>
               </div>
             </div>
           </div>
           
           <DebugInfo doctorId={doctorId} />
-        </div>
-      </main>
-    );
-  }
+          </div>
+        </main>
+      );
+    }
 
-  return (
+    return (
     <>
       {/* Show success screen if appointment was booked */}
       {appointmentBooked && bookedAppointment && doctor && (
@@ -1041,7 +1041,7 @@ export default function BookAppointmentPage() {
                       {loadingSlots ? (
                         <div className="flex justify-center py-6">
                           <div className="text-center">
-                            <Spinner size="md" />
+                          <Spinner size="md" />
                             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading available time slots...</p>
                           </div>
                         </div>
@@ -1093,7 +1093,7 @@ export default function BookAppointmentPage() {
                                       <TimeSlotTooltip
                                         key={`${time}-${idx}`}
                                         time={time}
-                                        onClick={() => handleTimeSelect(time)}
+                              onClick={() => handleTimeSelect(time)}
                                         isSelected={selectedTime === time}
                                         isDisabled={isPast}
                                       />
@@ -1199,8 +1199,8 @@ export default function BookAppointmentPage() {
                       <div className="space-y-4">
                         <textarea
                           placeholder="Please describe your symptoms or reason for visiting Dr. Ana Souza (Neurology)"
-                          value={reason}
-                          onChange={(e) => setReason(e.target.value)}
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
                           className="w-full h-24 px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                         />
                         <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
@@ -1247,7 +1247,7 @@ export default function BookAppointmentPage() {
                           </div>
                           <div className="flex items-center">
                             <div className="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-800/50 rounded-full flex items-center justify-center">
-                              {appointmentType === "IN_PERSON" ? (
+                            {appointmentType === "IN_PERSON" ? (
                                 <UserGroupIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                               ) : (
                                 <VideoCameraIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -1261,30 +1261,30 @@ export default function BookAppointmentPage() {
                           <div className="flex items-center">
                             <div className="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-800/50 rounded-full flex items-center justify-center">
                               <CurrencyDollarIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                            </div>
+                          </div>
                             <div className="ml-3">
                               <span className="text-gray-500 dark:text-gray-400 block text-xs">Consultation Fee</span>
                               <span className="font-medium">{doctor ? `$${doctor.fee}` : 'Unknown'}</span>
-                            </div>
-                          </div>
+                        </div>
+                      </div>
                         </div>
                         <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-blue-100 dark:border-blue-800">
-                          <Button
-                            variant="primary"
-                            size="lg"
+                      <Button
+                        variant="primary"
+                        size="lg"
                             className="w-full justify-center py-3"
                             onClick={() => setShowSummaryModal(true)}
                             disabled={bookingAppointment}
                             label="Continue to Confirm Appointment"
-                            pageName="BookAppointmentPage"
-                          >
+                        pageName="BookAppointmentPage"
+                      >
                             <span className="flex items-center justify-center">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
                               Continue to Confirm Appointment
                             </span>
-                          </Button>
+                      </Button>
                         </div>
                       </div>
                     </div>

@@ -838,7 +838,11 @@ export async function mockGetDoctorVerifications(): Promise<DoctorVerification[]
       const user = getUsersStore().find(u => u.id === profile.userId);
       // Convert created timestamp to Date
       const rawDate = profile.createdAt || new Date();
-      const dateSubmitted = rawDate instanceof Timestamp ? rawDate.toDate() : rawDate;
+      const dateSubmitted = rawDate instanceof Date 
+        ? rawDate.toISOString() 
+        : rawDate && typeof (rawDate as any).toDate === 'function' 
+          ? (rawDate as any).toDate().toISOString() 
+          : String(rawDate);
       return {
         id: profile.userId,
         name: user ? `${user.firstName} ${user.lastName}` : profile.userId,
@@ -868,9 +872,17 @@ export async function mockGetDoctorVerificationDetails(doctorId: string): Promis
   const fullName = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : doctorId;
   // Convert dates
   const rawSubmission = doctorProfile.createdAt || new Date();
-  const submissionDate = rawSubmission instanceof Timestamp ? rawSubmission.toDate() : rawSubmission;
+  const submissionDate = rawSubmission instanceof Date 
+    ? rawSubmission.toISOString() 
+    : rawSubmission && typeof (rawSubmission as any).toDate === 'function' 
+      ? (rawSubmission as any).toDate().toISOString() 
+      : String(rawSubmission);
   const rawUpdated = doctorProfile.updatedAt || submissionDate;
-  const lastUpdated = rawUpdated instanceof Timestamp ? rawUpdated.toDate() : rawUpdated;
+  const lastUpdated = rawUpdated instanceof Date 
+    ? rawUpdated.toISOString() 
+    : rawUpdated && typeof (rawUpdated as any).toDate === 'function' 
+      ? (rawUpdated as any).toDate().toISOString() 
+      : String(rawUpdated);
   // Map verification documents
   const licenseUrl = doctorProfile.licenseDocumentUrl || null;
   const certificateUrl = doctorProfile.certificateUrl || null;
@@ -1179,7 +1191,11 @@ export async function mockGetAllUsers(): Promise<any[]> {
     userType: user.userType,
     isActive: user.isActive,
     emailVerified: user.emailVerified,
-    createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt
+    createdAt: user.createdAt instanceof Date 
+      ? user.createdAt.toISOString() 
+      : user.createdAt && typeof (user.createdAt as any).toDate === 'function' 
+        ? (user.createdAt as any).toDate().toISOString() 
+        : String(user.createdAt)
   }));
 }
 
@@ -1424,8 +1440,8 @@ export async function mockGetUserProfile(userId: string): Promise<any> {
   // Format date fields
   const createdAt = user.createdAt instanceof Date 
     ? user.createdAt.toISOString() 
-    : typeof user.createdAt === 'object' && user.createdAt !== null && 'toDate' in user.createdAt 
-      ? user.createdAt.toDate().toISOString() 
+    : user.createdAt && typeof (user.createdAt as any).toDate === 'function' 
+      ? (user.createdAt as any).toDate().toISOString() 
       : String(user.createdAt);
   
   // Return combined data
@@ -1656,7 +1672,7 @@ export async function mockCancelAppointmentDetails(
   
   // Fix the issue with potentially undefined cancelReason parameter
   const reason = cancelReason || '';
-  syncAppointmentCancelled(updatedAppointment.id, reason);
+  syncAppointmentCancelled(updatedAppointment.id!, reason);
   
   // Create notifications for both parties
   const doctor = getUsersStore().find(u => u.id === appointment.doctorId);
@@ -1852,7 +1868,7 @@ export async function mockBlockDoctorDate(
   const currentBlockedDates = getDoctorProfilesStore()[doctorProfileIndex].blockedDates || [];
   
   // Update the doctor's profile to add this date to blocked dates
-  const updatedBlockedDates = [
+  const updatedBlockedDates: Date[] = [
     ...currentBlockedDates,
     date
   ];
@@ -1893,7 +1909,7 @@ export async function mockUnblockDoctorDate(
   const currentBlockedDates = getDoctorProfilesStore()[doctorProfileIndex].blockedDates || [];
   
   // Update the doctor's profile to remove this date from blocked dates
-  const updatedBlockedDates = currentBlockedDates.filter(d => {
+  const updatedBlockedDates: Date[] = currentBlockedDates.filter(d => {
     const blockedDateString = d instanceof Date 
       ? d.toISOString().split('T')[0] 
       : (d as any).toDate?.().toISOString().split('T')[0] || '';
