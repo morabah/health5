@@ -6,7 +6,14 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import Input from "@/components/ui/Input";
-import { mockGetUserProfile, mockDeactivateUser, mockResetUserPassword, mockUpdateUserProfile } from "@/lib/mockApiService";
+import Textarea from "@/components/ui/Textarea";
+import { 
+  mockGetUserProfile, 
+  mockDeactivateUser, 
+  mockResetUserPassword, 
+  mockUpdateUserProfile, 
+  mockUpdatePatientProfile
+} from "@/lib/mockApiService";
 import { UserType } from "@/types/enums";
 
 interface UserProfile {
@@ -25,15 +32,28 @@ interface UserProfile {
   profilePicUrl?: string;
 }
 
+interface PatientProfile {
+  userId: string;
+  dateOfBirth: string | Date;
+  gender: string;
+  bloodType: string;
+  medicalHistory: string;
+  allergies?: string;
+  medications?: string;
+  emergencyContact?: string;
+}
+
 export default function UserDetailPage() {
   const { userId } = useParams() as { userId: string };
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [patientProfile, setPatientProfile] = useState<PatientProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editedUser, setEditedUser] = useState<Partial<UserProfile>>({});
+  const [editedPatientProfile, setEditedPatientProfile] = useState<Partial<PatientProfile>>({});
   const router = useRouter();
 
   useEffect(() => {
@@ -51,6 +71,20 @@ export default function UserDetailPage() {
             phoneNumber: userData.phoneNumber,
             address: userData.address,
           });
+          
+          // If this is a patient, also get patient profile data
+          if (userData.userType === UserType.PATIENT && userData.profile) {
+            setPatientProfile(userData.profile as PatientProfile);
+            setEditedPatientProfile({
+              dateOfBirth: userData.profile.dateOfBirth,
+              gender: userData.profile.gender,
+              bloodType: userData.profile.bloodType || '',
+              medicalHistory: userData.profile.medicalHistory || '',
+              allergies: userData.profile.allergies || '',
+              medications: userData.profile.medications || '',
+              emergencyContact: userData.profile.emergencyContact || '',
+            });
+          }
         } else {
           setError("User not found.");
         }
@@ -95,20 +129,39 @@ export default function UserDetailPage() {
     }
   };
 
-  const handleEditChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setEditedUser(prev => ({ ...prev, [field]: e.target.value }));
+  };
+  
+  const handlePatientProfileChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setEditedPatientProfile(prev => ({ ...prev, [field]: e.target.value }));
   };
 
   const handleSaveProfile = async () => {
     setActionInProgress('save');
     try {
+      // Update basic user profile
       const result = await mockUpdateUserProfile(userId, editedUser);
       
-      if (result && result.success) {
+      // If patient, also update patient-specific profile
+      let patientResult = { success: true };
+      if (user?.userType === UserType.PATIENT && patientProfile) {
+        patientResult = await mockUpdatePatientProfile(userId, editedPatientProfile);
+      }
+      
+      if (result && result.success && patientResult.success) {
         setUser(prev => {
           if (!prev) return null;
           return { ...prev, ...editedUser };
         });
+        
+        if (user?.userType === UserType.PATIENT && patientProfile) {
+          setPatientProfile(prev => {
+            if (!prev) return null;
+            return { ...prev, ...editedPatientProfile };
+          });
+        }
+        
         setEditing(false);
         showSuccess("User profile updated successfully.");
       } else {
@@ -162,7 +215,7 @@ export default function UserDetailPage() {
             size="sm"
             asChild
           >
-            <Link href="/admin/users">Back to Users</Link>
+            <Link href="/admin/doctor-verification">Back to Admin Manager</Link>
           </Button>
         </div>
 
@@ -261,6 +314,18 @@ export default function UserDetailPage() {
                             phoneNumber: user.phoneNumber,
                             address: user.address,
                           });
+                          
+                          if (patientProfile) {
+                            setEditedPatientProfile({
+                              dateOfBirth: patientProfile.dateOfBirth,
+                              gender: patientProfile.gender,
+                              bloodType: patientProfile.bloodType || '',
+                              medicalHistory: patientProfile.medicalHistory || '',
+                              allergies: patientProfile.allergies || '',
+                              medications: patientProfile.medications || '',
+                              emergencyContact: patientProfile.emergencyContact || '',
+                            });
+                          }
                         }
                       }}
                       disabled={actionInProgress !== null}
@@ -321,17 +386,50 @@ export default function UserDetailPage() {
                     </div>
                   </div>
                   
-                  {user.userType === 'patient' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm font-medium text-gray-500">Date of Birth</div>
-                        <div>{user.dateOfBirth || "Not provided"}</div>
+                  {user.userType === UserType.PATIENT && patientProfile && (
+                    <>
+                      <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+                        <h4 className="font-semibold mb-2">Patient Information</h4>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-500">Date of Birth</div>
+                          <div>
+                            {patientProfile.dateOfBirth
+                              ? typeof patientProfile.dateOfBirth === 'string'
+                                ? patientProfile.dateOfBirth
+                                : new Date(patientProfile.dateOfBirth).toLocaleDateString()
+                              : "Not provided"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-500">Gender</div>
+                          <div className="capitalize">{patientProfile.gender || "Not provided"}</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-500">Blood Type</div>
+                          <div>{patientProfile.bloodType || "Not specified"}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-500">Emergency Contact</div>
+                          <div>{patientProfile.emergencyContact || "Not provided"}</div>
+                        </div>
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-gray-500">Gender</div>
-                        <div className="capitalize">{user.gender || "Not provided"}</div>
+                        <div className="text-sm font-medium text-gray-500">Medical History</div>
+                        <div className="whitespace-pre-line">{patientProfile.medicalHistory || "None"}</div>
                       </div>
-                    </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-500">Allergies</div>
+                        <div>{patientProfile.allergies || "None known"}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-500">Current Medications</div>
+                        <div>{patientProfile.medications || "None"}</div>
+                      </div>
+                    </>
                   )}
                 </div>
               ) : (
@@ -368,13 +466,73 @@ export default function UserDetailPage() {
                     value={editedUser.address || ''}
                     onChange={handleEditChange('address')}
                   />
+                  
+                  {user.userType === UserType.PATIENT && patientProfile && (
+                    <>
+                      <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+                        <h4 className="font-semibold mb-2">Patient Information</h4>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          label="Date of Birth"
+                          value={typeof editedPatientProfile.dateOfBirth === 'string' 
+                            ? editedPatientProfile.dateOfBirth 
+                            : editedPatientProfile.dateOfBirth instanceof Date
+                              ? editedPatientProfile.dateOfBirth.toISOString().split('T')[0] 
+                              : ''}
+                          onChange={handlePatientProfileChange('dateOfBirth')}
+                          type="date"
+                        />
+                        <Input
+                          label="Gender"
+                          value={editedPatientProfile.gender || ''}
+                          onChange={handlePatientProfileChange('gender')}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          label="Blood Type"
+                          value={editedPatientProfile.bloodType || ''}
+                          onChange={handlePatientProfileChange('bloodType')}
+                        />
+                        <Input
+                          label="Emergency Contact"
+                          value={editedPatientProfile.emergencyContact || ''}
+                          onChange={handlePatientProfileChange('emergencyContact')}
+                        />
+                      </div>
+                      
+                      <Textarea
+                        label="Medical History"
+                        value={editedPatientProfile.medicalHistory || ''}
+                        onChange={handlePatientProfileChange('medicalHistory')}
+                        rows={3}
+                      />
+                      
+                      <Textarea
+                        label="Allergies"
+                        value={editedPatientProfile.allergies || ''}
+                        onChange={handlePatientProfileChange('allergies')}
+                        rows={2}
+                      />
+                      
+                      <Textarea
+                        label="Current Medications"
+                        value={editedPatientProfile.medications || ''}
+                        onChange={handlePatientProfileChange('medications')}
+                        rows={2}
+                      />
+                    </>
+                  )}
                 </div>
               )}
             </div>
           </div>
         </Card>
 
-        {user.userType === 'doctor' && (
+        {user.userType === UserType.DOCTOR && (
           <div className="flex justify-end">
             <Button
               label="View Verification Details"

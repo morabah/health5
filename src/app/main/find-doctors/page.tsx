@@ -30,6 +30,8 @@ import {
 import { CheckCircleIcon, HeartIcon } from "@heroicons/react/24/solid";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { resetMockDataStoresForUser } from "@/data/resetMockDataStoresForUser";
+import { DoctorProfile } from "@/types/doctor";
+import { UserProfile } from "@/types/user";
 
 interface Doctor {
   id: string;
@@ -42,7 +44,7 @@ interface Doctor {
   languages: string[];
   fee: number;
   available: boolean;
-  profilePicUrl: string;
+  profilePicUrl: string | null;
   userId: string;
   bio?: string;
   rating?: number;
@@ -101,28 +103,39 @@ export default function FindDoctorsPage() {
     }
   }, []);
 
-  // Process doctor data to ensure names are properly formatted
-  const processDoctorData = (doctorData: Doctor[]) => {
-    return doctorData.map(doctor => {
+  // Process doctor data to ensure names are properly formatted and map to local Doctor interface
+  const processDoctorData = (doctorProfiles: DoctorProfile[]) => {
+    // Note: We need access to the usersStore to get first/last names
+    // This ideally should happen within mockFindDoctors or be passed here
+    // For now, assume mockFindDoctors provides the full name correctly
+    
+    return doctorProfiles.map(profile => {
       // Make sure each doctor has a properly formatted name
-      let displayName = doctor.name;
-      
-      if (!displayName || displayName.trim() === '') {
-        if (doctor.firstName || doctor.lastName) {
-          displayName = `Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim();
-        } else {
-          displayName = `Doctor (ID: ${doctor.userId.substring(0, 8)})`;
-        }
-      }
-      
+      // mockFindDoctors should already provide a 'name' field
+      let displayName = (profile as any).name || `Doctor (ID: ${profile.userId.substring(0, 8)})`; // Use name from profile, fallback if missing
+
       // Add mock next available time if not present
-      const nextAvailable = doctor.nextAvailable || getRandomTimeSlot();
-      
+      const nextAvailable = (profile as any).nextAvailable || getRandomTimeSlot(); // Placeholder
+      const rating = (profile as any).rating || (Math.random() * 1.5 + 3.5).toFixed(1); // Mock rating 3.5-5.0
+
+      // Map DoctorProfile to local Doctor interface
       return {
-        ...doctor,
-        name: displayName,
+        id: profile.userId,
+        userId: profile.userId,
+        name: displayName, 
+        firstName: '' , // Placeholder: Ideally fetch from UserProfile
+        lastName: '', // Placeholder: Ideally fetch from UserProfile
+        specialty: profile.specialty,
+        experience: profile.yearsOfExperience,
+        location: profile.location,
+        languages: profile.languages || [],
+        fee: profile.consultationFee,
+        available: true, // Mock availability
+        profilePicUrl: profile.profilePictureUrl || null,
+        bio: profile.bio,
+        rating: parseFloat(rating),
         nextAvailable
-      };
+      } as Doctor;
     });
   };
 
@@ -145,24 +158,28 @@ export default function FindDoctorsPage() {
   useEffect(() => {
     async function fetchDoctors() {
       setLoading(true);
+      setError(null); // Reset error state on fetch
       try {
-        // Using mockFindDoctors API
-        let results;
-        if (specialty || location) {
-          results = await mockFindDoctors({ 
-            specialty: specialty || undefined, 
-            location: location || undefined 
-          });
-        } else {
-          // Fallback to loadDoctors if no filters provided
-          results = await loadDoctors();
-        }
+        console.log("[FindDoctorsPage] Fetching doctors with filters:", { specialty, location, language });
+
+        // Always use mockFindDoctors to fetch from the dynamic data store
+        // Pass filters if they exist
+        const results = await mockFindDoctors({ 
+          specialty: specialty || undefined, 
+          location: location || undefined 
+          // Note: mockFindDoctors itself doesn't filter by language, we do that later
+        });
         
-        // Process the results to ensure names are properly formatted
+        console.log("[FindDoctorsPage] Raw results from mockFindDoctors:", results);
+
+        // Process the results to ensure names are properly formatted and add placeholders
         const processedResults = processDoctorData(results);
+        console.log("[FindDoctorsPage] Processed doctor results:", processedResults);
         
         setDoctors(processedResults);
+        // Apply all current filters (including language and search query) locally
         applyFilters(processedResults, searchQuery, specialty, location, language);
+
       } catch (e) {
         setError('Failed to load doctors. Please try again later.');
         console.error('Error fetching doctors:', e);
@@ -172,33 +189,48 @@ export default function FindDoctorsPage() {
     }
 
     fetchDoctors();
+  // Rerun fetch whenever specialty or location filters change as mockFindDoctors uses them
+  // searchQuery and language are applied locally in applyFilters
   }, [specialty, location]);
 
-  // Apply filters whenever filter parameters change
-  const applyFilters = useCallback((doctorList: Doctor[], query: string, specialty: string, location: string, language: string) => {
+  // Apply filters whenever filter parameters change or the base doctor list updates
+  const applyFilters = useCallback((doctorList: Doctor[], query: string, currentSpecialty: string, currentLocation: string, currentLanguage: string) => {
+    console.log("[FindDoctorsPage] Applying filters:", { query, currentSpecialty, currentLocation, currentLanguage });
     let filtered = [...doctorList];
+
+    // Filter by specialty if provided (frontend filter for consistency)
+    if (currentSpecialty) {
+      filtered = filtered.filter(doctor => doctor.specialty === currentSpecialty);
+    }
     
-    // Filter by search query (name search)
+    // Filter by location if provided (frontend filter for consistency)
+    if (currentLocation) {
+      filtered = filtered.filter(doctor => doctor.location === currentLocation);
+    }
+
+    // Filter by search query (name or specialty match)
     if (query) {
       const lowerQuery = query.toLowerCase();
       filtered = filtered.filter(doctor => {
-        const fullName = doctor.name.toLowerCase();
-        return fullName.includes(lowerQuery) || 
-               (doctor.specialty && doctor.specialty.toLowerCase().includes(lowerQuery));
+        const fullName = (doctor.name || '').toLowerCase();
+        const spec = (doctor.specialty || '').toLowerCase();
+        return fullName.includes(lowerQuery) || spec.includes(lowerQuery);
       });
     }
-    
-    // Apply language filter separately (since it's not handled by the API)
-    if (language) {
+
+    // Apply language filter (frontend only)
+    if (currentLanguage) {
       filtered = filtered.filter(doctor => 
         doctor.languages && doctor.languages.some(lang => 
-          lang.toLowerCase().includes(language.toLowerCase())
+          lang.toLowerCase().includes(currentLanguage.toLowerCase())
         )
       );
     }
-    
+
+    console.log("[FindDoctorsPage] Filtered doctors count:", filtered.length);
     setFilteredDoctors(filtered);
-  }, []);
+  // Ensure dependencies include all filters used inside
+  }, []); // Removed dependencies as they are passed as arguments
 
   // Debounce search to avoid too many re-renders
   const debouncedSearch = useCallback(

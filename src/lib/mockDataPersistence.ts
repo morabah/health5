@@ -458,6 +458,8 @@ export function persistNotifications() {
  * Persist all data to localStorage at once
  */
 export function persistAllData() {
+  logInfo("[mockDataPersistence] Starting persistAllData");
+  console.log("[mockDataPersistence] persistAllData invoked");
   try {
     persistUsers();
     persistDoctorProfiles();

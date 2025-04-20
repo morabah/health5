@@ -84,7 +84,8 @@ export default function AdminListsPage() {
         lastName: newUser.lastName,
         email: newUser.email,
         userType: newUser.userType,
-        phone: newUser.phone || undefined
+        phone: newUser.phone || undefined,
+        isFromAdmin: true
       });
 
       // If doctor, also add to doctor verification queue (localStorage)

@@ -164,7 +164,14 @@ const UserListPage: React.FC = () => {
       }
       
       // Create the user
-      const result = await mockAddUser(newUser);
+      const result = await mockAddUser({
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        userType: newUser.userType,
+        phone: newUser.phone || undefined,
+        isFromAdmin: true // Add this flag to indicate doctors added by admin should be auto-approved
+      });
       
       // Ensure data is persisted properly
       try {
