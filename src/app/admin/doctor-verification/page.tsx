@@ -6,7 +6,7 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
-import { mockGetDoctorVerifications, mockGetAllUsers } from "@/lib/mockApiService";
+import { mockGetDoctorVerifications, mockGetAllUsers, mockSetDoctorVerificationStatus } from "@/lib/mockApiService";
 import { VerificationStatus, UserType } from "@/types/enums";
 import type { DoctorVerification } from "@/types/doctor";
 import { persistDoctorProfiles, persistAllData } from '@/lib/mockDataPersistence';
@@ -125,7 +125,7 @@ const DoctorVerificationListPage: React.FC = () => {
                   size="sm"
                   label="Approve All Pending"
                   pageName="DoctorVerificationListPage"
-                  variant="success"
+                  variant="primary"
                   onClick={() => {
                     const pendingDocs = verifications.filter(v => v.status === VerificationStatus.PENDING);
                     if (pendingDocs.length > 0) {
@@ -159,7 +159,7 @@ const DoctorVerificationListPage: React.FC = () => {
                   size="sm"
                   label="Import All Users"
                   pageName="DoctorVerificationListPage"
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => {
                     persistAllData();
                     showSuccess("All user data imported successfully!");

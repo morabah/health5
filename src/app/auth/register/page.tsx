@@ -12,7 +12,12 @@ export default function RegisterChoicePage() {
         <Card className="flex-1 p-8 flex flex-col items-center">
           <h2 className="text-xl font-semibold mb-4">Register as Patient</h2>
           <p className="mb-6 text-gray-600 dark:text-gray-300 text-center">Book appointments, manage your health, and access personalized services.</p>
-          <Button asChild className="w-full">
+          <Button
+            asChild
+            className="w-full"
+            label="Continue as Patient"
+            pageName="RegisterChoicePage"
+          >
             <Link href="/auth/register/patient">Continue as Patient</Link>
           </Button>
         </Card>
@@ -20,7 +25,12 @@ export default function RegisterChoicePage() {
         <Card className="flex-1 p-8 flex flex-col items-center">
           <h2 className="text-xl font-semibold mb-4">Register as Doctor</h2>
           <p className="mb-6 text-gray-600 dark:text-gray-300 text-center">Join the network, manage appointments, and connect with patients.</p>
-          <Button asChild className="w-full">
+          <Button
+            asChild
+            className="w-full"
+            label="Continue as Doctor"
+            pageName="RegisterChoicePage"
+          >
             <Link href="/auth/register/doctor">Continue as Doctor</Link>
           </Button>
         </Card>

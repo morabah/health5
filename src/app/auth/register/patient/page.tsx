@@ -53,7 +53,7 @@ export default function PatientRegisterPage() {
         // These will be added to the patient profile
         patientData: {
           dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth) : null,
-          gender: form.gender || null,
+          gender: (["Male", "Female", "Other"].includes(form.gender) ? form.gender : null) as "Male" | "Female" | "Other" | null,
           bloodType: form.bloodType || null,
           medicalHistory: form.medicalHistory || null
         }

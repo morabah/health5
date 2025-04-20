@@ -53,7 +53,23 @@ const UserListPage: React.FC = () => {
       setError(null);
       try {
         const items = await mockGetAllUsers();
-        setUsers(items);
+        setUsers(
+          items.map(item => ({
+            id: item.id,
+            firstName: item.firstName,
+            lastName: item.lastName,
+            email: item.email ?? "",
+            userType: item.userType,
+            isActive: item.isActive ?? true,
+            emailVerified: item.emailVerified ?? false,
+            createdAt:
+              typeof item.createdAt === "string"
+                ? item.createdAt
+                : item.createdAt instanceof Date
+                  ? item.createdAt.toISOString()
+                  : "",
+          }))
+        );
         
         // Apply filter from URL if present
         const urlFilter = searchParams?.get('filter');

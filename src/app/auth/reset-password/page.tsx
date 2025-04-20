@@ -25,7 +25,14 @@ export default function ResetPasswordPage() {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <Input label="New Password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
           <Input label="Confirm New Password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
-          <Button type="submit" className="w-full">Reset Password</Button>
+          <Button
+            type="submit"
+            className="w-full"
+            label="Reset Password"
+            pageName="ResetPasswordPage"
+          >
+            Reset Password
+          </Button>
         </form>
         {feedback && <div className="mt-4 text-center text-sm text-blue-600 dark:text-blue-400">{feedback}</div>}
         <div className="mt-6 text-center">

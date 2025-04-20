@@ -24,6 +24,14 @@ interface PendingDoctor {
   submittedAt: string;
 }
 
+interface DoctorVerification {
+  id: string;
+  name: string;
+  specialty: string;
+  status: string;
+  dateSubmitted: string | Date;
+}
+
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
@@ -54,16 +62,27 @@ export default function AdminDashboardPage() {
       ).length;
       setStats({ totalUsers, totalPatients, totalDoctors, pendingVerifications, activeAppointments });
       setPendingDoctors(
-        verifications.map(v => ({
+        verifications.map((v: DoctorVerification) => ({
           id: v.id,
           name: v.name ?? '',
           specialty: v.specialty ?? '',
           status: String(v.status),
-          submittedAt: typeof v.dateSubmitted === 'string'
-            ? v.dateSubmitted
-            : 'toDate' in v.dateSubmitted
-              ? v.dateSubmitted.toDate().toISOString()
-              : v.dateSubmitted.toISOString()
+          submittedAt: (() => {
+            if (typeof v.dateSubmitted === 'string') return v.dateSubmitted;
+            if (
+              v.dateSubmitted &&
+              typeof v.dateSubmitted === 'object' &&
+              'toDate' in v.dateSubmitted &&
+              typeof (v.dateSubmitted as any).toDate === 'function'
+            ) {
+              return (v.dateSubmitted as any).toDate().toISOString();
+            }
+            if (v.dateSubmitted instanceof Date) {
+              return v.dateSubmitted.toISOString();
+            }
+            // fallback for unknown cases
+            return String(v.dateSubmitted);
+          })()
         }))
       );
     } catch {

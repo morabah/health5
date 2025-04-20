@@ -27,7 +27,10 @@ const LogListPage: React.FC = () => {
       setError(null);
       try {
         const items = await mockGetSystemLogs();
-        setLogs(items);
+        setLogs(items.map(item => ({
+          ...item,
+          level: item.level === 'info' || item.level === 'warn' || item.level === 'error' ? item.level : 'info',
+        })));
       } catch (err) {
         setError("Failed to load logs.");
       } finally {
