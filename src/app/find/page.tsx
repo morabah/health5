@@ -1,8 +1,8 @@
 "use client";
 import React, { useEffect, useCallback } from 'react';
 import { useRouter } from "next/navigation";
-import { loadDoctors } from '@/data/loadDoctors';
 import { mockFindDoctors } from '@/lib/mockApiService';
+import type { DoctorProfile } from '@/types/doctor';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -91,7 +91,7 @@ export default function FindDoctorPage() {
   const [sortBy, setSortBy] = React.useState<string>('rating');
 
   // Process doctor data to ensure names are properly formatted
-  const processDoctorData = (doctorData: Doctor[]) => {
+  const processDoctorData = (doctorData: DoctorProfile[]): Doctor[] => {
     return doctorData.map(doctor => {
       // Ensure proper name format
       let displayName = doctor.name;
@@ -137,16 +137,8 @@ export default function FindDoctorPage() {
     try {
       let results;
       
-      // Use mockFindDoctors with filters if provided
-      if (specialty || location) {
-        results = await mockFindDoctors({ 
-          specialty: specialty || undefined, 
-          location: location || undefined 
-        });
-      } else {
-        // Otherwise use general loadDoctors function
-        results = await loadDoctors();
-      }
+      // Always fetch from dynamic store via mockFindDoctors
+      results = await mockFindDoctors({ specialty: specialty || undefined, location: location || undefined });
       
       // Process and set doctor data
       const processedResults = processDoctorData(results);
