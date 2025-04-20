@@ -1,0 +1,12 @@
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow public read for all files
+    match /{allPaths=**} {
+      allow read;
+    }
+    // Allow uploads to doctors folder during registration
+    match /doctors/{allPaths=**} {
+      allow write;
+    }
+  }
+}

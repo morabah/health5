@@ -1,4 +1,5 @@
 import * as functions from 'firebase-functions';
+import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { auth, db } from './config/firebaseAdmin';
 import { logInfo, logError } from './shared/logger';
@@ -111,16 +112,25 @@ export const registerUser = functions.https.onCall(async (data, context) => {
   // Create Firebase Auth user
   let uid: string;
   try {
-    const userRecord = await auth.createUser({
+    // Prepare Auth creation params, include phoneNumber only if provided
+    const createParams: admin.auth.CreateRequest = {
       email,
       password,
       displayName: `${firstName} ${lastName}`,
-      phoneNumber: phone,
-    });
+    };
+    // Include phoneNumber only if in E.164 format (starts with '+')
+    if (phone && phone.startsWith('+')) {
+      createParams.phoneNumber = phone;
+    }
+    const userRecord = await auth.createUser(createParams);
     uid = userRecord.uid;
     logInfo('[registerUser] Auth user created', { uid, userType });
   } catch (err: any) {
-    logError('[registerUser] Auth creation error', { code: err.code });
+    logError('[registerUser] Auth creation error', { code: err.code, message: err.message });
+    // If admin throw invalid phone format (with or without prefix)
+    if (err.code && err.code.includes('invalid-phone-number')) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid phone number format. Please include country code e.g. +1234567890');
+    }
     throw new functions.https.HttpsError('internal', 'Failed to create auth user');
   }
 

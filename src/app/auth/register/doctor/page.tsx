@@ -6,7 +6,12 @@ import Button from "@/components/ui/Button";
 import Link from "next/link";
 import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
-import { mockRegisterUser } from "@/lib/mockApiService";
+import Alert from "@/components/ui/Alert";
+import { useRouter } from "next/navigation";
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { logInfo, logWarn, logError, logValidation } from "@/lib/logger";
+import { trackPerformance } from "@/lib/performance";
 import { UserType, VerificationStatus } from "@/types/enums";
 
 export default function DoctorRegisterPage() {
@@ -26,12 +31,14 @@ export default function DoctorRegisterPage() {
     languages: "",
     consultationFee: ""
   });
-  
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [certificateFile, setCertificateFile] = useState<File | null>(null);
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -43,36 +50,91 @@ export default function DoctorRegisterPage() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setFeedback("Registering doctor...");
-    setIsSubmitting(true);
-    
-    // Basic validation
-    if (!form.firstName || !form.lastName || !form.email || !form.password || !form.confirmPassword || !form.licenseNumber || !form.specialty) {
-      setFeedback("Please fill in all required fields.");
-      setIsSubmitting(false);
-      return;
-    }
-    
-    if (form.password !== form.confirmPassword) {
-      setFeedback("Passwords do not match.");
-      setIsSubmitting(false);
-      return;
-    }
-    
-    if (!licenseFile) {
-      setFeedback("Please upload your medical license document.");
-      setIsSubmitting(false);
-      return;
-    }
-    
+  async function handleFileUpload(file: File, path: string): Promise<string> {
+    const perf = trackPerformance(`upload-${path}`);
     try {
-      const result = await mockRegisterUser({
+      const storage = getStorage();
+      const storageRef = ref(storage, path);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      return await new Promise<string>((resolve, reject) => {
+        uploadTask.on(
+          "state_changed",
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+            logInfo(`Upload progress for ${path}: ${progress}%`);
+          },
+          (err) => {
+            logError(`Upload error for ${path}: ${err.message}`);
+            perf.stop();
+            reject(err);
+          },
+          async () => {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            logInfo(`Upload complete for ${path}: ${url}`);
+            perf.stop();
+            resolve(url);
+          }
+        );
+      });
+    } catch (err: any) {
+      logError(`File upload failed for ${path}: ${err.message}`);
+      perf.stop();
+      throw err;
+    }
+  }
+
+  async function handleDoctorRegister(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFeedback(null);
+    setError(null);
+    setIsSubmitting(true);
+    const perf = trackPerformance("registerDoctor");
+    try {
+      // Basic validation
+      if (!form.firstName || !form.lastName || !form.email || !form.password || !form.confirmPassword || !form.licenseNumber || !form.specialty) {
+        setError("Please fill in all required fields.");
+        setIsSubmitting(false);
+        return;
+      }
+      if (form.password !== form.confirmPassword) {
+        setError("Passwords do not match.");
+        setIsSubmitting(false);
+        return;
+      }
+      if (!licenseFile) {
+        setError("Please upload your medical license document.");
+        setIsSubmitting(false);
+        return;
+      }
+      // Upload files if present (use timestamp for now; backend should move/rename after UID assignment)
+      let profilePicUrl = null;
+      let licenseDocUrl = null;
+      let certUrl = null;
+      const timestamp = Date.now();
+      try {
+        if (profilePicture) {
+          profilePicUrl = await handleFileUpload(profilePicture, `doctors/tmp_${timestamp}_profile.jpg`);
+        }
+        if (licenseFile) {
+          licenseDocUrl = await handleFileUpload(licenseFile, `doctors/tmp_${timestamp}_license.pdf`);
+        }
+        if (certificateFile) {
+          certUrl = await handleFileUpload(certificateFile, `doctors/tmp_${timestamp}_certificate.pdf`);
+        }
+      } catch (uploadErr: any) {
+        setError("File upload failed. Please try again.");
+        logError("File upload failed:", uploadErr);
+        setIsSubmitting(false);
+        perf.stop();
+        return;
+      }
+      // Prepare registration data
+      const dataObject = {
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
-        phone: form.phone || null,
+        phone: form.phone,
         password: form.password,
         userType: UserType.DOCTOR,
         specialty: form.specialty,
@@ -83,22 +145,28 @@ export default function DoctorRegisterPage() {
         location: form.location,
         languages: form.languages.split(',').map(lang => lang.trim()),
         consultationFee: form.consultationFee ? parseFloat(form.consultationFee) : 0,
-        // Files would be uploaded to storage in a real app
-        profilePictureUrl: profilePicture ? URL.createObjectURL(profilePicture) : null,
-        licenseDocumentUrl: licenseFile ? URL.createObjectURL(licenseFile) : null,
-        certificateUrl: certificateFile ? URL.createObjectURL(certificateFile) : null,
+        profilePictureUrl: profilePicUrl,
+        licenseDocumentUrl: licenseDocUrl,
+        certificateUrl: certUrl,
         verificationStatus: VerificationStatus.PENDING
-      } as any);
-      
-      setFeedback("Registration successful! Your account is pending verification by an administrator. Redirecting to verification status page...");
-      
+      };
+      logInfo("Doctor registration payload:", dataObject);
+      // Call backend
+      const functions = getFunctions();
+      const registerUser = httpsCallable(functions, "registerUser");
+      const result = await registerUser(dataObject);
+      logInfo("Doctor registration result:", result);
+      logValidation("6.5", "success", "Live Doctor Registration connected with uploads.");
+      setFeedback("Registration successful! Your account is pending verification by an administrator. Redirecting...");
       setTimeout(() => {
-        window.location.href = "/auth/pending-verification";
+        router.push("/auth/pending-verification");
       }, 2000);
     } catch (err: any) {
-      setFeedback(err.message === "already-exists" ? "Email already registered." : "Registration failed.");
+      logError("Doctor registration failed:", err);
+      setError(err.message === "already-exists" ? "Email already registered." : "Registration failed.");
     } finally {
       setIsSubmitting(false);
+      perf.stop();
     }
   }
 
@@ -111,8 +179,9 @@ export default function DoctorRegisterPage() {
             Join our healthcare network by providing your professional information.
             Your account will be verified by an administrator before you can start using the platform.
           </p>
-          
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          {error && <Alert variant="error" message={error} isVisible={!!error} className="mb-4" />}
+          {feedback && <Alert variant="info" message={feedback} isVisible={!!feedback} className="mb-4" />}
+          <form className="space-y-6" onSubmit={handleDoctorRegister}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold">Personal Information</h2>
@@ -124,7 +193,6 @@ export default function DoctorRegisterPage() {
                 <Input label="Phone" name="phone" type="tel" value={form.phone} onChange={handleChange} />
                 <Input label="Password *" name="password" type="password" value={form.password} onChange={handleChange} required />
                 <Input label="Confirm Password *" name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} required />
-                
                 <div>
                   <label className="block text-sm font-medium mb-1">Profile Picture</label>
                   <input 
@@ -135,7 +203,6 @@ export default function DoctorRegisterPage() {
                   />
                 </div>
               </div>
-              
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold">Professional Information</h2>
                 <Input label="Medical License Number *" name="licenseNumber" value={form.licenseNumber} onChange={handleChange} required />
@@ -200,82 +267,51 @@ export default function DoctorRegisterPage() {
                   rows={2} 
                 />
                 <Textarea 
-                  label="Professional Bio" 
+                  label="Bio" 
                   name="bio" 
                   value={form.bio} 
-                  onChange={handleChange}
-                  placeholder="Brief description of your practice and expertise" 
-                  rows={2} 
+                  onChange={handleChange} 
+                  placeholder="Tell us about yourself" 
+                  rows={3} 
                 />
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Verification Documents</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Please upload the following documents for verification. Your account will remain in "Pending Verification" status until an administrator reviews and approves these documents.
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Medical License Document *</label>
                   <input 
                     type="file" 
-                    accept="application/pdf,image/*" 
-                    onChange={e => handleFileChange(e, setLicenseFile)} 
+                    accept="application/pdf,image/*"
+                    onChange={e => handleFileChange(e, setLicenseFile)}
                     className="block w-full text-gray-900 dark:text-gray-100"
-                    required
                   />
-                  <p className="text-xs text-gray-500 mt-1">PDF or image of your valid medical license</p>
                 </div>
-                
                 <div>
-                  <label className="block text-sm font-medium mb-1">Board Certification</label>
+                  <label className="block text-sm font-medium mb-1">Certificate (optional)</label>
                   <input 
                     type="file" 
-                    accept="application/pdf,image/*" 
-                    onChange={e => handleFileChange(e, setCertificateFile)} 
+                    accept="application/pdf,image/*"
+                    onChange={e => handleFileChange(e, setCertificateFile)}
                     className="block w-full text-gray-900 dark:text-gray-100"
                   />
-                  <p className="text-xs text-gray-500 mt-1">PDF or image of your specialty certification (optional)</p>
                 </div>
               </div>
             </div>
-            
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <input 
-                  id="terms" 
-                  type="checkbox" 
-                  required 
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <label htmlFor="terms" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                  I agree to the <Link href="#" className="text-blue-600 dark:text-blue-400 hover:underline">Terms of Service</Link> and <Link href="#" className="text-blue-600 dark:text-blue-400 hover:underline">Privacy Policy</Link>
-                </label>
-              </div>
-              
-              <Button 
-                type="submit" 
-                label="Register as Doctor"
+            <div className="flex justify-between items-center pt-4">
+              <Button
+                type="submit"
+                label={isSubmitting ? "Registering..." : "Register"}
                 pageName="DoctorRegistration"
-                className="w-full" 
+                className="w-full"
                 isLoading={isSubmitting}
                 disabled={isSubmitting}
-              >
-                {isSubmitting ? "Registering..." : "Register as Doctor"}
-              </Button>
+              />
             </div>
+            {uploadProgress > 0 && uploadProgress < 100 && (
+              <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-2">
+                <div className="bg-primary h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }} />
+              </div>
+            )}
           </form>
-          
-          {feedback && (
-            <div className={`mt-4 p-3 rounded text-center ${feedback.includes("successful") ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"}`}>
-              {feedback}
-            </div>
-          )}
-          
           <div className="mt-6 text-center">
-            <Link href="/auth/login" className="text-blue-600 dark:text-blue-400 hover:underline">Already have an account? Sign in</Link>
+            Already have an account? <Link href="/auth/login" className="text-primary font-semibold">Login</Link>
           </div>
         </Card>
       </div>
