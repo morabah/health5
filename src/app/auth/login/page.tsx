@@ -101,7 +101,7 @@ export default function LoginPage() {
               className="w-full bg-blue-600 text-white hover:bg-blue-700"
               onClick={() => {
                 setEmail("admin@example.com");
-                setPassword("adminpass");
+                setPassword("Password123!");
               }}
               disabled={isLoading}
               label="Fill Admin Credentials"
@@ -114,7 +114,7 @@ export default function LoginPage() {
               className="w-full bg-green-600 text-white hover:bg-green-700"
               onClick={() => {
                 setEmail("patient1@example.com");
-                setPassword("password");
+                setPassword("Password123!");
               }}
               disabled={isLoading}
               label="Fill Patient Credentials"
@@ -127,7 +127,7 @@ export default function LoginPage() {
               className="w-full bg-purple-600 text-white hover:bg-purple-700"
               onClick={() => {
                 setEmail("doctor1@example.com");
-                setPassword("password");
+                setPassword("Password123!");
               }}
               disabled={isLoading}
               label="Fill Doctor Credentials"

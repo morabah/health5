@@ -3,7 +3,7 @@
  * Navbar component: Main site navigation with mock authentication state.
  * Supports desktop/mobile, dark mode, and theme toggle.
  */
-import React, { Fragment } from "react";
+import React, { Fragment, useEffect } from "react";
 import Button from "@/components/ui/Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -28,16 +28,22 @@ const Navbar: React.FC = () => {
   const { user, userProfile, loading, login, logout, role } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
+  // Debug: Show current auth state in console
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('[Navbar] user:', user, 'userProfile:', userProfile, 'role:', role);
+  }, [user, userProfile, role]);
+
   // Determine dashboard/profile links based on role
   let dashboardPath = "/";
   let profilePath = "/";
-  if (role === "doctor") {
+  if (role === UserType.DOCTOR) {
     dashboardPath = "/doctor/dashboard";
     profilePath = "/doctor/profile";
-  } else if (role === "patient") {
+  } else if (role === UserType.PATIENT) {
     dashboardPath = "/patient/dashboard";
     profilePath = "/patient/profile";
-  } else if (role === "admin") {
+  } else if (role === UserType.ADMIN) {
     dashboardPath = "/admin/dashboard";
     profilePath = "/admin/profile";
   }
@@ -45,7 +51,7 @@ const Navbar: React.FC = () => {
   // Helper: Render role-based links
   const renderRoleLinks = () => {
     if (!user || !userProfile) return null;
-    if (role === "patient") {
+    if (role === UserType.PATIENT) {
       return (
         <>
           <Link href="/patient/dashboard" className="hover:text-primary font-medium transition-colors">Dashboard</Link>
@@ -56,7 +62,7 @@ const Navbar: React.FC = () => {
         </>
       );
     }
-    if (role === "doctor") {
+    if (role === UserType.DOCTOR) {
       return (
         <>
           <Link href="/doctor/dashboard" className="hover:text-primary font-medium transition-colors">Dashboard</Link>
@@ -69,7 +75,7 @@ const Navbar: React.FC = () => {
         </>
       );
     }
-    if (role === "admin") {
+    if (role === UserType.ADMIN) {
       return (
         <>
           <Link href="/admin/dashboard" className="hover:text-primary font-medium transition-colors">Dashboard</Link>
@@ -80,7 +86,10 @@ const Navbar: React.FC = () => {
         </>
       );
     }
-    return null;
+    // If userProfile exists but role is missing or invalid, show a warning
+    return (
+      <span className="text-red-600 dark:text-red-400 font-semibold">[Navbar config error: Unknown role '{role}']</span>
+    );
   };
 
   // Helper: Render login buttons for each role
@@ -88,21 +97,21 @@ const Navbar: React.FC = () => {
     <div className="flex gap-2">
       <Button
         variant="secondary"
-        onClick={() => login('patient')}
+        onClick={() => login(UserType.PATIENT)}
         label="Login as Patient"
         pageName="Navbar"
         additionalLogData={{ method: 'quick-patient' }}
       >Login as Patient</Button>
       <Button
         variant="secondary"
-        onClick={() => login('doctor')}
+        onClick={() => login(UserType.DOCTOR)}
         label="Login as Doctor"
         pageName="Navbar"
         additionalLogData={{ method: 'quick-doctor' }}
       >Login as Doctor</Button>
       <Button
         variant="secondary"
-        onClick={() => login('admin')}
+        onClick={() => login(UserType.ADMIN)}
         label="Login as Admin"
         pageName="Navbar"
         additionalLogData={{ method: 'quick-admin' }}
@@ -150,7 +159,7 @@ const Navbar: React.FC = () => {
                   {/* Role badge */}
                   {role && (
                     <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 capitalize">
-                      {role}
+                      {role === UserType.PATIENT ? 'Patient' : role === UserType.DOCTOR ? 'Doctor' : role === UserType.ADMIN ? 'Admin' : role}
                     </span>
                   )}
                 </Menu.Button>
@@ -185,7 +194,7 @@ const Navbar: React.FC = () => {
                           </Link>
                         )}
                       </Menu.Item>
-                      {role === 'admin' && (
+                      {role === UserType.ADMIN && (
                         <Menu.Item>
                           {({ active }) => (
                             <Link
@@ -266,7 +275,7 @@ const Navbar: React.FC = () => {
                   </span>
                   {role && (
                     <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 capitalize">
-                      {role}
+                      {role === UserType.PATIENT ? 'Patient' : role === UserType.DOCTOR ? 'Doctor' : role === UserType.ADMIN ? 'Admin' : role}
                     </span>
                   )}
                 </Menu.Button>
@@ -301,7 +310,7 @@ const Navbar: React.FC = () => {
                           </Link>
                         )}
                       </Menu.Item>
-                      {role === 'admin' && (
+                      {role === UserType.ADMIN && (
                         <Menu.Item>
                           {({ active }) => (
                             <Link
