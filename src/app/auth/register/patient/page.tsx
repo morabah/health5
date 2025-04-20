@@ -6,8 +6,13 @@ import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
 import Link from "next/link";
-import { mockRegisterUser } from "@/lib/mockApiService";
+import { initializeFirebaseClient } from "@/lib/firebaseClient";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { UserType } from "@/types/enums";
+import { useRouter } from "next/navigation";
+import { logInfo, logError, logValidation } from "@/lib/logger";
+import { trackPerformance } from "@/lib/performance";
+import Alert from "@/components/ui/Alert";
 
 export default function PatientRegisterPage() {
   const [form, setForm] = useState({
@@ -23,6 +28,9 @@ export default function PatientRegisterPage() {
     medicalHistory: ""
   });
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const router = useRouter();
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -30,41 +38,57 @@ export default function PatientRegisterPage() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setFeedback("Registering patient...");
-    
+    setErrorMsg(null);
+    setIsLoading(true);
+    const perf = trackPerformance("registerPatient");
+    logInfo("[PatientRegisterPage] Registration attempt", { email: form.email });
+
     // Basic validation
     if (!form.firstName || !form.lastName || !form.email || !form.password || !form.confirmPassword) {
-      setFeedback("Please fill in all required fields.");
+      setErrorMsg("Please fill in all required fields.");
+      setIsLoading(false);
+      perf.stop();
       return;
     }
     if (form.password !== form.confirmPassword) {
-      setFeedback("Passwords do not match.");
+      setErrorMsg("Passwords do not match.");
+      setIsLoading(false);
+      perf.stop();
       return;
     }
-    
+
     try {
-      const result = await mockRegisterUser({
+      const { app } = initializeFirebaseClient("live");
+      if (!app) {
+        setErrorMsg("Registration service unavailable.");
+        return;
+      }
+      const functionsClient = getFunctions(app);
+      const registerUserFn = httpsCallable(functionsClient, "registerUser");
+      await registerUserFn({
+        email: form.email,
+        password: form.password,
         firstName: form.firstName,
         lastName: form.lastName,
-        email: form.email,
-        phone: form.phone || null,
-        password: form.password,
+        phone: form.phone || undefined,
         userType: UserType.PATIENT,
-        // These will be added to the patient profile
-        patientData: {
-          dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth) : null,
-          gender: (["Male", "Female", "Other"].includes(form.gender) ? form.gender : null) as "Male" | "Female" | "Other" | null,
-          bloodType: form.bloodType || null,
-          medicalHistory: form.medicalHistory || null
-        }
       });
-      
-      setFeedback("Registration successful! Redirecting to login...");
-      setTimeout(() => {
-        window.location.href = "/auth/login";
-      }, 1000);
-    } catch (err: any) {
-      setFeedback(err.message === "already-exists" ? "Email already registered." : "Registration failed.");
+      logInfo("[PatientRegisterPage] Registration successful", { email: form.email });
+      logValidation("6.4", "success", "Live Patient Registration connected.");
+      router.push("/auth/pending-verification");
+    } catch (error: any) {
+      logError("[PatientRegisterPage] Registration error", { error });
+      const code = error.code || error.message;
+      if (code.includes("already-exists")) {
+        setErrorMsg("Email already registered.");
+      } else if (code.includes("invalid-argument")) {
+        setErrorMsg("Invalid registration data.");
+      } else {
+        setErrorMsg("Registration failed.");
+      }
+    } finally {
+      setIsLoading(false);
+      perf.stop();
     }
   }
 
@@ -125,8 +149,9 @@ export default function PatientRegisterPage() {
           <Input label="Password *" name="password" type="password" value={form.password} onChange={handleChange} required />
           <Input label="Confirm Password *" name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} required />
           
-          <Button type="submit" label="Register" pageName="PatientRegistration" className="w-full">Register</Button>
+          <Button type="submit" label="Register" pageName="PatientRegistration" className="w-full" disabled={isLoading}>Register</Button>
         </form>
+        {errorMsg && <Alert variant="error" message={errorMsg} isVisible={true} />}
         {feedback && <div className="mt-4 text-center text-sm text-blue-600 dark:text-blue-400">{feedback}</div>}
         <div className="mt-6 text-center">
           <Link href="/auth/login" className="text-blue-600 dark:text-blue-400 hover:underline">Back to Login</Link>
