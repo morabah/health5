@@ -2,11 +2,17 @@
  * Script to seed the live development Firestore with initial mock data.
  * Usage: npm run db:seed:dev
  * 
- * Set your actual dev Firestore URL below
  */
-// CommonJS version for Node compatibility
+// Seed script: initialize Admin SDK using scripts/serviceAccountKey.json
 const admin = require('firebase-admin');
-const serviceAccount = require('./serviceAccountKey.json');
+const serviceAccount: any = require('./serviceAccountKey.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  projectId: serviceAccount.project_id,
+});
+// Initialize Firestore client
+const db = admin.firestore();
+
 const {
   mockPatientUser,
   mockDoctorUser,
@@ -20,22 +26,17 @@ const {
   mockNotificationsArray,
 } = require('./mockDataForScripts');
 
-// Set your actual dev Firestore URL below
-const databaseURL = 'https://YOUR_PROJECT_ID.firebaseio.com';
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL,
-});
-
-const db = admin.firestore();
-
 async function main() {
   // USERS
   await Promise.all([
     db.collection('users').doc(mockPatientUser.id).set(mockPatientUser),
     db.collection('users').doc(mockDoctorUser.id).set(mockDoctorUser),
     db.collection('users').doc(mockAdminUser.id).set(mockAdminUser),
+    // Ensure admin user is also seeded with the Auth UID if provided in env or as constant
+    db.collection('users').doc(process.env.ADMIN_AUTH_UID || 'WRkSVuEF3VcUiUJGVugSvz1WnG62').set({
+      ...mockAdminUser,
+      id: process.env.ADMIN_AUTH_UID || 'WRkSVuEF3VcUiUJGVugSvz1WnG62',
+    }),
   ]);
   console.log('Seeded users');
 
