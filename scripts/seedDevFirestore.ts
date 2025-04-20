@@ -155,13 +155,28 @@ async function main() {
   }
   console.log('Seeded doctor availabilities');
 
+  // === GLOBAL BATCH: Seed doctor verification docs (max 500 writes per batch) ===
+  const allVerificationDocs: { doctorId: string; doc: any }[] = [];
   for (let i = 0; i < mockDoctors.length; i++) {
     const user = firestoreUsers.find((u: any) => u.email === mockDoctors[i].email);
     if (!user) continue;
     const doctorId = user.id;
-    for (const doc of mockVerificationDocs[i]) {
-      await db.collection('doctors').doc(doctorId).collection('verificationDocs').doc(doc.id).set(doc);
+    const docs = mockVerificationDocs[i];
+    if (!docs || docs.length === 0) continue;
+    for (const doc of docs) {
+      allVerificationDocs.push({ doctorId, doc });
     }
+  }
+  // Chunk into batches of 500
+  const chunkSize = 500;
+  for (let i = 0; i < allVerificationDocs.length; i += chunkSize) {
+    const batch = db.batch();
+    const chunk = allVerificationDocs.slice(i, i + chunkSize);
+    for (const { doctorId, doc } of chunk) {
+      const docRef = db.collection('doctors').doc(doctorId).collection('verificationDocs').doc(doc.id);
+      batch.set(docRef, doc);
+    }
+    await batch.commit();
   }
   console.log('Seeded doctor verification docs');
 
