@@ -98,7 +98,12 @@ const SettingsPage: React.FC = () => {
               <label htmlFor="emailNotifications" className="text-sm font-medium">Enable Email Notifications</label>
             </div>
             <div className="flex items-center gap-4 mt-6">
-              <Button type="submit" disabled={saving}>
+              <Button 
+                type="submit" 
+                disabled={saving}
+                label={saving ? "Saving..." : "Save Settings"}
+                pageName="admin-settings"
+              >
                 {saving ? "Saving..." : "Save Settings"}
               </Button>
               {success && <span className="text-green-600 dark:text-green-400 text-sm">Settings saved!</span>}

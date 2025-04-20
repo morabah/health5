@@ -126,8 +126,7 @@ const AppointmentListPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">{appt.reason}</td>
                     <td className="px-4 py-2 text-right">
-                      {/* Placeholder for appointment actions */}
-                      <Button size="sm" disabled>Details</Button>
+                      <Button label="Details" pageName="AdminAppointments" size="sm" disabled />
                     </td>
                   </tr>
                 ))}

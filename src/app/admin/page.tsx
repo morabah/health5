@@ -7,32 +7,49 @@ import Link from "next/link";
 import { db } from "@/lib/firebaseClient";
 import { loadAdminDashboardData } from '@/data/adminLoaders';
 
-interface UserVerification {
-  id: string;
-  name: string;
-  role: string;
-  status: string;
+interface AdminDashboardData {
+  stats: {
+    totalUsers: number;
+    totalPatients: number;
+    totalDoctors: number;
+    pendingVerifications: number;
+    activeAppointments: number;
+  };
+  pendingDoctors: {
+    id: string;
+    name: string;
+    specialty: string;
+    status: string;
+    submittedAt: string;
+  }[];
+  recentUsers: {
+    id: string;
+    name: string;
+    email: string;
+    userType: string;
+    registeredAt: string;
+  }[];
 }
 
 export default function AdminPage() {
-  const [verifications, setVerifications] = useState<UserVerification[]>([]);
+  const [dashboardData, setDashboardData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchVerifications() {
+    async function fetchDashboard() {
       setLoading(true);
       setError(null);
       try {
         const data = await loadAdminDashboardData();
-        setVerifications(data);
+        setDashboardData(data);
       } catch (err) {
-        setError("Failed to load verifications.");
+        setError("Failed to load dashboard data.");
       } finally {
         setLoading(false);
       }
     }
-    fetchVerifications();
+    fetchDashboard();
   }, []);
 
   return (
@@ -41,16 +58,17 @@ export default function AdminPage() {
       <Card className="w-full max-w-4xl mb-8 p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">User Verification Requests</h2>
-          <Button asChild>
+          <Button 
+            asChild 
+            label="View All Users" 
+            pageName="admin-dashboard"
+          >
             <Link href="/admin/lists">View All Users</Link>
           </Button>
         </div>
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}
         {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
-        {!loading && !error && verifications.length === 0 && (
-          <div className="text-gray-600 dark:text-gray-300">No verification requests.</div>
-        )}
-        {!loading && verifications.length > 0 && (
+        {!loading && dashboardData && (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
@@ -62,16 +80,29 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {verifications.map(user => (
+                {dashboardData.pendingDoctors.map(user => (
                   <tr key={user.id} className="border-b border-gray-200 dark:border-gray-700">
                     <td className="px-4 py-2">{user.name}</td>
-                    <td className="px-4 py-2">{user.role}</td>
+                    <td className="px-4 py-2">{user.specialty}</td>
                     <td className="px-4 py-2">{user.status}</td>
                     <td className="px-4 py-2 flex gap-2">
-                      <Button size="sm" onClick={() => console.log('Approve', user.id)} disabled={user.status === 'approved'}>
+                      <Button
+                        size="sm"
+                        label="Approve"
+                        pageName="admin-dashboard"
+                        onClick={() => console.log('Approve', user.id)}
+                        disabled={user.status === 'approved'}
+                      >
                         Approve
                       </Button>
-                      <Button size="sm" onClick={() => console.log('Reject', user.id)} disabled={user.status === 'rejected'} variant="secondary">
+                      <Button
+                        size="sm"
+                        label="Reject"
+                        pageName="admin-dashboard"
+                        onClick={() => console.log('Reject', user.id)}
+                        disabled={user.status === 'rejected'}
+                        variant="secondary"
+                      >
                         Reject
                       </Button>
                     </td>

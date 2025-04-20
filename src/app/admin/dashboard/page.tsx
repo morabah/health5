@@ -5,9 +5,8 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { loadAdminDashboardData } from '@/data/adminLoaders';
-import { mockGetDoctorVerificationData } from '@/lib/mockApiService';
-import { VerificationStatus } from "@/types/enums";
+import { mockGetAllUsers, mockGetDoctorVerifications, mockGetAllAppointments } from '@/lib/mockApiService';
+import { AppointmentStatus } from '@/types/enums';
 
 interface DashboardStats {
   totalUsers: number;
@@ -21,7 +20,7 @@ interface PendingDoctor {
   id: string;
   name: string;
   specialty: string;
-  status: VerificationStatus;
+  status: string;
   submittedAt: string;
 }
 
@@ -38,33 +37,43 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await loadAdminDashboardData();
-        
-        // Set stats
-        setStats({
-          totalUsers: data.stats?.totalUsers || 0,
-          totalPatients: data.stats?.totalPatients || 0,
-          totalDoctors: data.stats?.totalDoctors || 0,
-          pendingVerifications: data.stats?.pendingVerifications || 0,
-          activeAppointments: data.stats?.activeAppointments || 0
-        });
-        
-        // Set pending doctors
-        if (data.pendingDoctors && Array.isArray(data.pendingDoctors)) {
-          setPendingDoctors(data.pendingDoctors);
-        }
-      } catch (err) {
-        setError("Failed to load dashboard data.");
-      } finally {
-        setLoading(false);
-      }
+  // Fetch dashboard data dynamically
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const users = await mockGetAllUsers();
+      const totalUsers = users.length;
+      const totalPatients = users.filter(u => u.userType.toLowerCase() === 'patient').length;
+      const totalDoctors = users.filter(u => u.userType.toLowerCase() === 'doctor').length;
+      const verifications = await mockGetDoctorVerifications();
+      const pendingVerifications = verifications.length;
+      const appointments = await mockGetAllAppointments();
+      const activeAppointments = appointments.filter(a =>
+        a.status === AppointmentStatus.PENDING || a.status === AppointmentStatus.CONFIRMED
+      ).length;
+      setStats({ totalUsers, totalPatients, totalDoctors, pendingVerifications, activeAppointments });
+      setPendingDoctors(
+        verifications.map(v => ({
+          id: v.id,
+          name: v.name ?? '',
+          specialty: v.specialty ?? '',
+          status: String(v.status),
+          submittedAt: typeof v.dateSubmitted === 'string'
+            ? v.dateSubmitted
+            : 'toDate' in v.dateSubmitted
+              ? v.dateSubmitted.toDate().toISOString()
+              : v.dateSubmitted.toISOString()
+        }))
+      );
+    } catch {
+      setError('Failed to load dashboard data.');
+    } finally {
+      setLoading(false);
     }
-    
+  };
+
+  useEffect(() => {
     fetchDashboardData();
   }, []);
 
@@ -112,13 +121,25 @@ export default function AdminDashboardPage() {
         <Card className="p-6 mb-8">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Doctor Verification Requests</h2>
-            <Button 
-              label="View All Doctors"
-              pageName="admin-dashboard"
-              asChild
-            >
-              <Link href="/admin/users?filter=doctor">View All Doctors</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                label="Refresh" 
+                pageName="admin-dashboard" 
+                size="sm" 
+                variant="secondary"
+                onClick={fetchDashboardData}
+              >
+                Refresh
+              </Button>
+              <Button 
+                label="View All Doctors"
+                pageName="admin-dashboard"
+                asChild
+                size="sm"
+              >
+                <Link href="/admin/users?filter=doctor">View All Doctors</Link>
+              </Button>
+            </div>
           </div>
           
           {loading && <div className="flex justify-center py-8"><Spinner /></div>}

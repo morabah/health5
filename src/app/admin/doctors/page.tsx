@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button';
 import { mockGetDoctorVerifications } from '@/lib/mockApiService';
 import { VerificationStatus } from '@/types/enums';
 import type { DoctorVerification } from '@/types/doctor';
+import { Timestamp } from 'firebase/firestore';
 
 export default function DoctorsPage() {
   const [doctors, setDoctors] = useState<DoctorVerification[]>([]);
@@ -102,7 +103,13 @@ export default function DoctorsPage() {
                       <td className="px-4 py-3 whitespace-nowrap">{doc.name || doc.id}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{doc.specialty || 'N/A'}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(doc.dateSubmitted).toLocaleDateString()}
+                        {(() => {
+                          const d = doc.dateSubmitted;
+                          if (d instanceof Timestamp) {
+                            return d.toDate().toLocaleDateString();
+                          }
+                          return new Date(d).toLocaleDateString();
+                        })()}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span

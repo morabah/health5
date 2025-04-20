@@ -6,23 +6,13 @@ import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
 import { mockGetAllUsers, mockAddUser } from "@/lib/mockApiService";
+import { UserProfile } from '@/types/user';
 import { useRouter } from "next/navigation";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 
-interface User {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  userType: string;
-  isActive: boolean;
-  emailVerified: boolean;
-  createdAt: string;
-}
-
 export default function AdminListsPage() {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "admin" | "doctor" | "patient">("all");
@@ -41,29 +31,22 @@ export default function AdminListsPage() {
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchUsers() {
-      setLoading(true);
-      setError(null);
-      try {
-        const items = await mockGetAllUsers();
-        // Check for persisted users in localStorage
-        let loaded: User[] = items;
-        try {
-          const stored = localStorage.getItem('health_app_data_users');
-          if (stored) loaded = JSON.parse(stored) as User[];
-        } catch (e) {
-          console.error('Failed to parse persisted users', e);
-        }
-        setUsers(loaded);
-      } catch (err) {
-        setError("Failed to load users.");
-      } finally {
-        setLoading(false);
-      }
+  // Fetch users from mock API (reads localStorage)
+  const fetchUsers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const items = await mockGetAllUsers();
+      // Ensure emails are strings for UI
+      setUsers(items.map(u => ({ ...u, email: u.email ?? '' })));
+    } catch {
+      setError("Failed to load users.");
+    } finally {
+      setLoading(false);
     }
-    fetchUsers();
-  }, []);
+  };
+
+  useEffect(() => { fetchUsers(); }, []);
 
   const handleViewUserDetails = (userId: string, userType: string) => {
     if (userType.toLowerCase() === 'doctor') {
@@ -103,6 +86,31 @@ export default function AdminListsPage() {
         userType: newUser.userType,
         phone: newUser.phone || undefined
       });
+
+      // If doctor, also add to doctor verification queue (localStorage)
+      if (newUser.userType.toLowerCase() === 'doctor') {
+        try {
+          const verificationsKey = 'health_app_data_doctor_verifications';
+          const verificationsRaw = localStorage.getItem(verificationsKey);
+          let verifications = [];
+          if (verificationsRaw) {
+            verifications = JSON.parse(verificationsRaw);
+          }
+          // Avoid duplicate
+          if (!verifications.find((v: any) => v.id === addedUser.id)) {
+            verifications.push({
+              id: addedUser.id,
+              name: `${addedUser.firstName} ${addedUser.lastName}`,
+              status: 'PENDING',
+              dateSubmitted: new Date().toISOString(),
+              specialty: ''
+            });
+            localStorage.setItem(verificationsKey, JSON.stringify(verifications));
+          }
+        } catch (err) {
+          console.error('Failed to add doctor to verification queue', err);
+        }
+      }
       
       // Update the user list with the new user and persist to localStorage
       setUsers(prev => {
@@ -115,8 +123,9 @@ export default function AdminListsPage() {
         return updated;
       });
       
-      // Show success message
+      // Show success and refresh list
       setAddSuccess(`User ${newUser.firstName} ${newUser.lastName} added successfully`);
+      await fetchUsers();
       
       // Reset form
       setNewUser({

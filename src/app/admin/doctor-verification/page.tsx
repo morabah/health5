@@ -8,18 +8,7 @@ import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
 import { mockGetDoctorVerifications } from "@/lib/mockApiService";
 import { VerificationStatus } from "@/types/enums";
-
-interface DoctorVerification {
-  id: string;
-  name?: string;
-  firstName: string;
-  lastName: string;
-  specialty: string;
-  experience: number;
-  location: string;
-  status: VerificationStatus;
-  userId: string;
-}
+import type { DoctorVerification } from "@/types/doctor";
 
 /**
  * Admin Doctor Verification List Page
@@ -123,7 +112,7 @@ const DoctorVerificationListPage: React.FC = () => {
               <tbody>
                 {filtered.map(doctor => (
                   <tr key={doctor.id} className="hover:bg-gray-100 dark:hover:bg-gray-800">
-                    <td className="px-4 py-2 whitespace-nowrap">{doctor.name ?? (`${doctor.firstName ?? ''} ${doctor.lastName ?? ''}`.trim() || doctor.userId)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{doctor.name ?? doctor.id}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{doctor.specialty}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{doctor.experience} yrs</td>
                     <td className="px-4 py-2 whitespace-nowrap">{doctor.location}</td>

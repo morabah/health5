@@ -65,27 +65,13 @@ export default function DoctorVerificationPage() {
     try {
       // Save new status
       await mockSetDoctorVerificationStatus(doctorId, status, notes);
-      // Update page state
+      // Update page state and show success
       if (doctor) setDoctor({ ...doctor, status, adminNotes: notes });
-      // Sync to localStorage
-      try {
-        const key = 'health_app_data_doctor_verifications';
-        const store = localStorage.getItem(key);
-        if (store) {
-          const arr = JSON.parse(store) as any[];
-          const updated = arr.map(item =>
-            item.id === doctorId ? { ...item, status, adminNotes: notes } : item
-          );
-          localStorage.setItem(key, JSON.stringify(updated));
-        }
-      } catch (e) {
-        console.error('Failed to update doctor verifications in localStorage', e);
-      }
-      // Show success then return to list
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
-        router.push('/admin/doctor-verification');
+        // Redirect to dashboard to refresh stats
+        router.push('/admin');
       }, 2000);
     } catch {
       // Optionally set error state

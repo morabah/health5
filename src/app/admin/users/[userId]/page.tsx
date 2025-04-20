@@ -42,14 +42,18 @@ export default function UserDetailPage() {
       setError(null);
       try {
         const userData = await mockGetUserProfile(userId);
-        setUser(userData);
-        setEditedUser({
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          email: userData.email,
-          phoneNumber: userData.phoneNumber,
-          address: userData.address,
-        });
+        if (userData) {
+          setUser(userData);
+          setEditedUser({
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            email: userData.email,
+            phoneNumber: userData.phoneNumber,
+            address: userData.address,
+          });
+        } else {
+          setError("User not found.");
+        }
       } catch (err) {
         setError("Failed to load user profile.");
       } finally {

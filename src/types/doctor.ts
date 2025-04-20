@@ -172,9 +172,13 @@ export interface DoctorVerification {
   /** Current verification status */
   status: VerificationStatus;
   /** When the doctor submitted their verification materials */
-  dateSubmitted: Date | string;
+  dateSubmitted: Date | string | Timestamp;
   /** Doctor's specialty */
   specialty?: string;
+  /** Years of professional experience */
+  experience?: number;
+  /** Practice location */
+  location?: string;
 }
 
 /**
