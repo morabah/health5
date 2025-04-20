@@ -7,7 +7,7 @@
 import * as dataStore from "@/data/mockDataStore";
 import { v4 as uuidv4 } from "uuid";
 import { logInfo } from "@/lib/logger";
-import { AppointmentStatus, UserType } from "@/types/enums";
+import { AppointmentStatus, UserType, VerificationStatus } from "@/types/enums";
 import type { UserProfile } from "@/types/user";
 import type { DoctorProfile } from "@/types/doctor";
 import type { PatientProfile } from "@/types/patient";
@@ -365,30 +365,53 @@ export function persistUsers() {
  */
 export function persistDoctorProfiles() {
   try {
-    const profiles = dataStore.getDoctorProfilesStore();
+    console.log('[mockDataPersistence] Persisting doctor profiles to localStorage');
     
-    // Log doctor profiles that have mockAvailability for debugging
-    const profilesWithAvailability = profiles.filter(p => (p as any).mockAvailability);
-    if (profilesWithAvailability.length > 0) {
-      console.log(`[mockDataPersistence] Persisting ${profilesWithAvailability.length} doctor profiles with availability data`);
-      profilesWithAvailability.forEach(p => {
-        console.log(`[mockDataPersistence] Doctor ${p.userId} has ${(p as any).mockAvailability?.slots?.length || 0} availability slots`);
+    // Get a deep copy of the doctor profiles (to avoid modifying the original)
+    const profilesToSave = JSON.parse(JSON.stringify(dataStore.getDoctorProfilesStore()));
+    
+    // Log some info about the profiles to persist
+    console.log(`[mockDataPersistence] Persisting ${profilesToSave.length} doctor profiles`);
+    if (profilesToSave.length > 0) {
+      console.log('[mockDataPersistence] Doctor IDs being persisted:', 
+        profilesToSave.map((p: any) => p.userId));
+    }
+    
+    // Ensure verificationStatus is included
+    profilesToSave.forEach((profile: any) => {
+      if (!profile.verificationStatus) {
+        profile.verificationStatus = VerificationStatus.PENDING;
+      }
+    });
+    
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEYS.DOCTOR_PROFILES, JSON.stringify(profilesToSave));
+    
+    // Also save to doctor verifications key
+    try {
+      const verifications = profilesToSave.map((profile: any) => {
+        const user = dataStore.getUsersStore().find(u => u.id === profile.userId);
+        return {
+          id: profile.userId,
+          name: user ? `${user.firstName} ${user.lastName}` : undefined,
+          status: profile.verificationStatus,
+          dateSubmitted: profile.verificationData?.submissionDate ?? profile.updatedAt ?? new Date(),
+          specialty: profile.specialty,
+          experience: profile.yearsOfExperience,
+          location: profile.location || ''
+        };
       });
+      
+      localStorage.setItem('health_app_data_doctor_verifications', JSON.stringify(verifications));
+      console.log(`[mockDataPersistence] Persisted ${verifications.length} doctor verifications`);
+    } catch (error) {
+      console.error('[mockDataPersistence] Error persisting doctor verifications:', error);
     }
     
-    // Ensure we stringify the entire profile including the mockAvailability property
-    localStorage.setItem(STORAGE_KEYS.DOCTOR_PROFILES, JSON.stringify(profiles));
-    logInfo("[mockDataPersistence] Persisted doctor profiles", { count: profiles.length });
-    
-    // Double-check that the data was stored correctly
-    const storedData = localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES);
-    if (storedData) {
-      const parsed = JSON.parse(storedData);
-      const availabilityCount = parsed.filter((p: any) => p.mockAvailability).length;
-      console.log(`[mockDataPersistence] Verified storage: ${availabilityCount} doctor profiles with availability data`);
-    }
+    return true;
   } catch (error) {
-    console.error("[mockDataPersistence] Error persisting doctor profiles:", error);
+    console.error('[mockDataPersistence] Error persisting doctor profiles:', error);
+    return false;
   }
 }
 

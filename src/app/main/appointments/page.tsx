@@ -115,6 +115,8 @@ export default function AppointmentsPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [hasDrAnaAppointment, setHasDrAnaAppointment] = useState(false);
+  const [hasDrJaneLeeAppointment, setHasDrJaneLeeAppointment] = useState(false);
+  const [hasDrDavidNguyenAppointment, setHasDrDavidNguyenAppointment] = useState(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -130,9 +132,19 @@ export default function AppointmentsPage() {
           (appt: any) => appt.doctor && appt.doctor.id === 'user_doctor_005'
         );
         setHasDrAnaAppointment(!!anaAppointment);
+        
+        const janeLeeAppointment = parsedAppointments.find(
+          (appt: any) => appt.doctor && appt.doctor.id === 'user_doctor_002'
+        );
+        setHasDrJaneLeeAppointment(!!janeLeeAppointment);
+        
+        const davidNguyenAppointment = parsedAppointments.find(
+          (appt: any) => appt.doctor && appt.doctor.id === 'user_doctor_001'
+        );
+        setHasDrDavidNguyenAppointment(!!davidNguyenAppointment);
       }
     } catch (err) {
-      console.error("Error checking for Dr. Ana appointments:", err);
+      console.error("Error checking for doctor appointments:", err);
     }
   }, []);
 
@@ -172,7 +184,27 @@ export default function AppointmentsPage() {
             : appointment.appointmentDate.toDate() > new Date())
         );
         
+        // Check if user has an appointment with Dr. Jane Lee
+        const hasJaneLee = allAppointments.some(appointment => 
+          appointment.doctorId === 'user_doctor_002' && 
+          appointment.appointmentDate && 
+          (typeof appointment.appointmentDate === 'string' || appointment.appointmentDate instanceof Date
+            ? new Date(appointment.appointmentDate) > new Date()
+            : appointment.appointmentDate.toDate() > new Date())
+        );
+        
+        // Check if user has an appointment with Dr. David Nguyen
+        const hasDavidNguyen = allAppointments.some(appointment => 
+          appointment.doctorId === 'user_doctor_001' && 
+          appointment.appointmentDate && 
+          (typeof appointment.appointmentDate === 'string' || appointment.appointmentDate instanceof Date
+            ? new Date(appointment.appointmentDate) > new Date()
+            : appointment.appointmentDate.toDate() > new Date())
+        );
+        
         setHasDrAnaAppointment(hasAnaSouza);
+        setHasDrJaneLeeAppointment(hasJaneLee);
+        setHasDrDavidNguyenAppointment(hasDavidNguyen);
         setAppointments(allAppointments);
       } catch (err) {
         console.error('Failed to fetch appointments:', err);
@@ -277,6 +309,60 @@ export default function AppointmentsPage() {
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     Complete Pre-Visit Questionnaire
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Display special banner for users with Dr. Jane Lee appointments */}
+        {hasDrJaneLeeAppointment && (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-800/50 flex items-center justify-center">
+                  <CalendarIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </div>
+              </div>
+              <div className="ml-4">
+                <h3 className="font-medium text-green-800 dark:text-green-300">Appointment with Dr. Jane Lee</h3>
+                <p className="text-sm text-green-700 dark:text-green-400 mt-1">
+                  You have an upcoming appointment with Dr. Jane Lee. Please complete the dermatology questionnaire to help Dr. Lee better understand your skin concerns.
+                </p>
+                <div className="mt-3">
+                  <Link 
+                    href="/main/appointments/questionnaire/dermatology" 
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    Complete Dermatology Questionnaire
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Display special banner for users with Dr. David Nguyen appointments */}
+        {hasDrDavidNguyenAppointment && (
+          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-800/50 flex items-center justify-center">
+                  <CalendarIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                </div>
+              </div>
+              <div className="ml-4">
+                <h3 className="font-medium text-purple-800 dark:text-purple-300">Appointment with Dr. David Nguyen</h3>
+                <p className="text-sm text-purple-700 dark:text-purple-400 mt-1">
+                  You have an upcoming appointment with Dr. David Nguyen. Please complete the general health questionnaire which will help with your primary care visit.
+                </p>
+                <div className="mt-3">
+                  <Link 
+                    href="/main/appointments/questionnaire/general" 
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                  >
+                    Complete General Health Questionnaire
                   </Link>
                 </div>
               </div>

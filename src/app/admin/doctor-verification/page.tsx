@@ -9,6 +9,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { mockGetDoctorVerifications } from "@/lib/mockApiService";
 import { VerificationStatus } from "@/types/enums";
 import type { DoctorVerification } from "@/types/doctor";
+import { persistDoctorProfiles, persistAllData } from '@/lib/mockDataPersistence';
 
 /**
  * Admin Doctor Verification List Page
@@ -21,28 +22,53 @@ const DoctorVerificationListPage: React.FC = () => {
   const [filter, setFilter] = useState<VerificationStatus | "all">("all");
   const router = useRouter();
 
+  // Force persistence of doctor data on page load
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        console.log("[DoctorVerificationListPage] Ensuring data persistence");
+        persistDoctorProfiles();
+        persistAllData();
+      } catch (e) {
+        console.error('Error persisting data:', e);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     async function fetchVerifications() {
       setLoading(true);
       setError(null);
       const key = 'health_app_data_doctor_verifications';
       try {
-        // Try loading from localStorage first
-        const stored = localStorage.getItem(key);
-        if (stored) {
-          setVerifications(JSON.parse(stored));
-        } else {
-          // No stored data: fetch from API and persist
-          const items = await mockGetDoctorVerifications();
-          setVerifications(items);
-          try {
-            localStorage.setItem(key, JSON.stringify(items));
-          } catch (e) {
-            console.error('Failed to persist doctor verifications', e);
-          }
+        console.log("[DoctorVerificationListPage] Fetching doctor verifications");
+        
+        // Fetch the verifications data directly from the API
+        const items = await mockGetDoctorVerifications();
+        console.log("[DoctorVerificationListPage] Received verifications:", items);
+        setVerifications(items);
+        
+        // Also persist to localStorage for future use
+        try {
+          localStorage.setItem(key, JSON.stringify(items));
+          console.log("[DoctorVerificationListPage] Saved verifications to localStorage");
+        } catch (e) {
+          console.error('Failed to persist doctor verifications', e);
         }
       } catch (err) {
+        console.error("[DoctorVerificationListPage] Error fetching verifications:", err);
         setError('Failed to load doctor verifications.');
+        
+        // Try to load from localStorage as fallback
+        try {
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            console.log("[DoctorVerificationListPage] Loading from localStorage fallback");
+            setVerifications(JSON.parse(stored));
+          }
+        } catch (e) {
+          console.error("[DoctorVerificationListPage] Fallback loading failed:", e);
+        }
       } finally {
         setLoading(false);
       }

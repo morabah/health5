@@ -10,6 +10,7 @@ import { mockGetAllUsers, mockDeactivateUser, mockResetUserPassword, mockAddUser
 import { UserType } from "@/types/enums";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
+import { persistUsers, syncUserAdded, syncUserUpdated, syncUserDeactivated, persistAllData } from '@/lib/mockDataPersistence';
 
 interface User {
   id: string;
@@ -84,13 +85,34 @@ const UserListPage: React.FC = () => {
   const handleDeactivateUser = async (userId: string) => {
     setActionInProgress(userId);
     try {
+      // Toggle user's active status
+      const user = users.find(u => u.id === userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+      
+      const newActiveStatus = !user.isActive;
       await mockDeactivateUser(userId);
+      
       // Update the user in the local state
       setUsers(prevUsers => 
         prevUsers.map(user => 
-          user.id === userId ? { ...user, isActive: !user.isActive } : user
+          user.id === userId ? { ...user, isActive: newActiveStatus } : user
         )
       );
+      
+      // Ensure data is persisted properly
+      try {
+        // Sync deactivation across tabs
+        syncUserDeactivated(userId, newActiveStatus);
+        persistUsers();
+        persistAllData();
+        
+        console.log(`User ${userId} status updated and persisted to localStorage`);
+      } catch (error) {
+        console.error("Error persisting user status to localStorage:", error);
+      }
+      
       showSuccess(`User ${userId} status updated successfully.`);
     } catch (error) {
       setError("Failed to update user status.");
@@ -129,55 +151,56 @@ const UserListPage: React.FC = () => {
     setNewUser(prev => ({ ...prev, [name]: value }));
   };
   
-  const handleAddUserSubmit = async (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAddingUser(true);
     setAddError(null);
+    setAddingUser(true);
     
     try {
-      // Basic validation
+      // Validate required fields
       if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.userType) {
-        throw new Error("Please fill all required fields");
+        setAddError("All fields are required");
+        return;
       }
       
-      // Email validation
-      if (!/^\S+@\S+\.\S+$/.test(newUser.email)) {
-        throw new Error("Please enter a valid email address");
+      // Create the user
+      const result = await mockAddUser(newUser);
+      
+      // Ensure data is persisted properly
+      try {
+        // Sync data across tabs and ensure it's saved to localStorage
+        persistUsers();
+        persistAllData();
+        
+        console.log(`User ${result.id} created and persisted to localStorage`);
+      } catch (error) {
+        console.error("Error persisting user data to localStorage:", error);
       }
       
-      // Submit to API
-      const addedUser = await mockAddUser({
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
-        email: newUser.email,
-        userType: newUser.userType,
-        phone: newUser.phone || undefined
-      });
-      
-      // Update the user list with the new user
-      setUsers(prev => [...prev, addedUser]);
-      
-      // Show success message
-      showSuccess(`User ${newUser.firstName} ${newUser.lastName} added successfully`);
+      // Update UI
+      setUsers(prevUsers => [...prevUsers, result]);
+      setSuccessMessage(`User ${result.firstName} ${result.lastName} added successfully`);
       
       // Reset form
       setNewUser({
-        firstName: "",
-        lastName: "",
-        email: "",
-        userType: "patient",
-        phone: ""
+        firstName: '',
+        lastName: '',
+        email: '',
+        userType: 'patient',
+        phone: ''
       });
       
-      // Close modal
-      setShowAddUserModal(false);
-      
-    } catch (err: any) {
-      if (err.message === "email-already-exists") {
-        setAddError("A user with this email already exists");
-      } else {
-        setAddError(err.message || "Failed to add user");
-      }
+      // Close modal after a delay
+      setTimeout(() => {
+        setShowAddUserModal(false);
+        setSuccessMessage(null);
+      }, 2000);
+    } catch (error: any) {
+      console.error("Error adding user:", error);
+      setAddError(error.message === "email-already-exists" ? 
+        "This email is already in use" : 
+        "Failed to add user. Please try again."
+      );
     } finally {
       setAddingUser(false);
     }
@@ -334,7 +357,7 @@ const UserListPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <Card className="w-full max-w-md p-6">
             <h2 className="text-xl font-semibold mb-4">Add New User</h2>
-            <form onSubmit={handleAddUserSubmit}>
+            <form onSubmit={handleAddUser}>
               <div className="space-y-4">
                 <Input
                   label="First Name *"

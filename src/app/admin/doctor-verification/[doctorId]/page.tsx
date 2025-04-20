@@ -10,12 +10,15 @@ import { logValidation } from "@/lib/logger";
 import { mockGetDoctorVerificationDetails, mockSetDoctorVerificationStatus } from "@/lib/mockApiService";
 import { VerificationStatus } from "@/types/enums";
 import type { DoctorVerificationData } from '@/types/doctor';
+import { syncDoctorProfileUpdated, persistDoctorProfiles, persistAllData } from '@/lib/mockDataPersistence';
 
 export default function DoctorVerificationPage() {
   const params = useParams();
-  const doctorId = params?.doctorId as string;
-  console.log("Doctor verification page - params:", params);
-  console.log("Doctor verification page - doctorId:", doctorId);
+  const doctorId = Array.isArray(params?.doctorId) 
+    ? params?.doctorId[0] 
+    : params?.doctorId as string;
+  
+  console.log("Doctor verification page - doctorId:", doctorId, "type:", typeof doctorId);
   
   const [doctor, setDoctor] = useState<DoctorVerificationData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,31 +26,53 @@ export default function DoctorVerificationPage() {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  // Force persistence on initial load
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        console.log("[DoctorVerificationPage] Ensuring data persistence on load");
+        persistDoctorProfiles();
+        persistAllData();
+      } catch (e) {
+        console.error('Error persisting data on load:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     async function fetchVerification() {
       if (!doctorId) {
-        console.error("No doctorId provided");
+        console.error("[DoctorVerificationPage] No doctorId provided");
+        setError("Doctor ID is missing or invalid.");
         setLoading(false);
         return;
       }
       
       setLoading(true);
       try {
-        console.log("Fetching verification data for doctorId:", doctorId);
-        console.log("DoctorId type:", typeof doctorId);
-        console.log("Request URL would be: /api/admin/doctors/verification/" + doctorId);
+        console.log("[DoctorVerificationPage] Fetching verification data for doctorId:", doctorId);
+        
         const data = await mockGetDoctorVerificationDetails(doctorId);
-        console.log("Received verification data:", data);
+        console.log("[DoctorVerificationPage] Received verification data:", data);
+        
         if (data) {
           setDoctor(data as DoctorVerificationData);
-          setStatus(data.status || VerificationStatus.PENDING);
+          if (data.status) {
+            setStatus(data.status as VerificationStatus);
+          }
+          if (data.adminNotes) {
+            setNotes(data.adminNotes);
+          }
         } else {
-          console.error("No data returned from mockGetDoctorVerificationDetails");
+          console.error("[DoctorVerificationPage] No data returned for doctorId:", doctorId);
+          setError("Could not find verification data for this doctor.");
         }
       } catch (error) {
-        console.error("Error fetching verification data:", error);
+        console.error("[DoctorVerificationPage] Error fetching verification data:", error);
+        setError("Failed to load doctor verification data. Please try again.");
         setDoctor(null);
       } finally {
         setLoading(false);
@@ -61,20 +86,69 @@ export default function DoctorVerificationPage() {
   }, []);
 
   const handleSave = async () => {
+    if (!doctorId) {
+      setError("Doctor ID is missing. Cannot save verification status.");
+      return;
+    }
+    
     setSaving(true);
+    setError(null);
+    
     try {
+      console.log("[DoctorVerificationPage] Saving verification status:", {
+        doctorId,
+        status,
+        notes
+      });
+      
       // Save new status
-      await mockSetDoctorVerificationStatus(doctorId, status, notes);
-      // Update page state and show success
-      if (doctor) setDoctor({ ...doctor, status, adminNotes: notes });
+      const result = await mockSetDoctorVerificationStatus(doctorId, status, notes);
+      console.log("[DoctorVerificationPage] Status update result:", result);
+      
+      if (!result) {
+        throw new Error("Failed to update verification status");
+      }
+      
+      // Update page state
+      if (doctor) {
+        const updatedDoctor = { 
+          ...doctor, 
+          status, 
+          adminNotes: notes,
+          lastUpdated: new Date()
+        };
+        setDoctor(updatedDoctor);
+        
+        // Ensure changes are synced to localStorage and across tabs
+        try {
+          // Update localStorage and sync across tabs
+          syncDoctorProfileUpdated({
+            userId: doctorId,
+            verificationStatus: status,
+            verificationNotes: notes
+          });
+          
+          // Ensure all data is persisted
+          persistDoctorProfiles();
+          persistAllData();
+          
+          console.log("[DoctorVerificationPage] Doctor verification status successfully persisted");
+        } catch (error) {
+          console.error("[DoctorVerificationPage] Error persisting verification status:", error);
+        }
+      }
+      
+      // Show success message
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
-        // Redirect to dashboard to refresh stats
-        router.push('/admin');
+        // Redirect to verification list page to show updated data
+        router.push('/admin/doctor-verification');
       }, 2000);
-    } catch {
-      // Optionally set error state
+    } catch (error) {
+      console.error("[DoctorVerificationPage] Error updating doctor verification status:", error);
+      // Set error state
+      setError("Failed to update verification status. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -88,8 +162,50 @@ export default function DoctorVerificationPage() {
     );
   }
 
+  if (error && !doctor) {
+    return (
+      <div className="min-h-screen bg-background text-foreground py-8 px-4 md:px-12 lg:px-32">
+        <div className="max-w-2xl mx-auto">
+          <Card className="p-6 mb-6">
+            <div className="text-red-600 dark:text-red-400 text-center py-8">
+              <h2 className="text-xl font-bold mb-4">Error</h2>
+              <p>{error}</p>
+              <Button
+                onClick={() => router.push('/admin/doctor-verification')}
+                className="mt-4"
+                label="Return to Verification List"
+                pageName="doctor-verification-error"
+              >
+                Return to Verification List
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   if (!doctor) {
-    return <div className="text-center text-muted-foreground">Doctor not found.</div>;
+    return (
+      <div className="min-h-screen bg-background text-foreground py-8 px-4 md:px-12 lg:px-32">
+        <div className="max-w-2xl mx-auto">
+          <Card className="p-6 mb-6">
+            <div className="text-center text-muted-foreground py-8">
+              <h2 className="text-xl font-bold mb-4">Doctor Not Found</h2>
+              <p>The requested doctor verification data could not be found.</p>
+              <Button
+                onClick={() => router.push('/admin/doctor-verification')}
+                className="mt-4"
+                label="Return to Verification List"
+                pageName="doctor-verification-not-found"
+              >
+                Return to Verification List
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   // Helper to get doctor name
@@ -171,7 +287,19 @@ export default function DoctorVerificationPage() {
                 {saving ? "Saving..." : "Save Decision"}
               </Button>
               {success && <div className="text-green-600 mt-2 text-center">Decision saved and notification sent to doctor.</div>}
+              {error && <div className="text-red-600 mt-2 text-center">{error}</div>}
             </div>
+          </div>
+          
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <Button
+              variant="secondary"
+              onClick={() => router.push('/admin/doctor-verification')}
+              label="Back to List"
+              pageName="doctor-verification"
+            >
+              Back to Verification List
+            </Button>
           </div>
         </Card>
       </div>
