@@ -15,7 +15,7 @@ export default function AdminListsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "admin" | "doctor" | "patient">("all");
+  const [filter, setFilter] = useState<"all" | "ADMIN" | "DOCTOR" | "PATIENT">("all");
   const router = useRouter();
   
   // State for Add User modal
@@ -24,7 +24,7 @@ export default function AdminListsPage() {
     firstName: "",
     lastName: "",
     email: "",
-    userType: "patient",
+    userType: "PATIENT",
     phone: ""
   });
   const [addingUser, setAddingUser] = useState(false);
@@ -133,7 +133,7 @@ export default function AdminListsPage() {
         firstName: "",
         lastName: "",
         email: "",
-        userType: "patient",
+        userType: "PATIENT",
         phone: ""
       });
       
@@ -157,7 +157,7 @@ export default function AdminListsPage() {
   // Filter the users based on filter
   const filteredUsers = filter === "all" 
     ? users 
-    : users.filter(user => user.userType.toLowerCase() === filter);
+    : users.filter(user => user.userType.toUpperCase() === filter);
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 flex flex-col items-center">
@@ -172,12 +172,12 @@ export default function AdminListsPage() {
                 id="filter"
                 className="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:text-gray-100"
                 value={filter}
-                onChange={e => setFilter(e.target.value as "all" | "admin" | "doctor" | "patient")}
+                onChange={e => setFilter(e.target.value.toUpperCase() as "all" | "ADMIN" | "DOCTOR" | "PATIENT")}
               >
                 <option value="all">All</option>
-                <option value="admin">Admin</option>
-                <option value="doctor">Doctor</option>
-                <option value="patient">Patient</option>
+                <option value="ADMIN">Admin</option>
+                <option value="DOCTOR">Doctor</option>
+                <option value="PATIENT">Patient</option>
               </select>
             </div>
           </div>
@@ -299,9 +299,9 @@ export default function AdminListsPage() {
                   value={newUser.userType}
                   onChange={handleAddUserChange}
                   options={[
-                    { value: "patient", label: "Patient" },
-                    { value: "doctor", label: "Doctor" },
-                    { value: "admin", label: "Admin" }
+                    { value: "PATIENT", label: "Patient" },
+                    { value: "DOCTOR", label: "Doctor" },
+                    { value: "ADMIN", label: "Admin" }
                   ]}
                   required
                 />

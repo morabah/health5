@@ -43,17 +43,19 @@ export const CRM_API_CONFIG = {
 
 // --- API MODE ---
 export function getApiMode(): ApiMode {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(KEYS.apiMode);
-    if (stored === 'live' || stored === 'mock') return stored;
-    if (stored !== null) {
-      // Invalid value found, clean up and log
-      console.warn(`[appConfig] Invalid apiMode in localStorage: '${stored}', resetting to default.`);
-      localStorage.removeItem(KEYS.apiMode);
-    }
-    localStorage.setItem(KEYS.apiMode, DEFAULTS.apiMode);
+  // Always prefer the env variable in production (NODE_ENV === 'production')
+  if (typeof window === 'undefined' || process.env.NODE_ENV === 'production') {
     return DEFAULTS.apiMode;
   }
+  // In development, allow localStorage override for testing, else sync with env
+  const stored = localStorage.getItem(KEYS.apiMode);
+  if (stored === 'live' || stored === 'mock') return stored;
+  if (stored !== null) {
+    // Invalid value found, clean up and log
+    console.warn(`[appConfig] Invalid apiMode in localStorage: '${stored}', resetting to default.`);
+    localStorage.removeItem(KEYS.apiMode);
+  }
+  localStorage.setItem(KEYS.apiMode, DEFAULTS.apiMode);
   return DEFAULTS.apiMode;
 }
 

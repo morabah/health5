@@ -27,7 +27,7 @@ const UserListPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "admin" | "doctor" | "patient">("all");
+  const [filter, setFilter] = useState<"all" | "ADMIN" | "DOCTOR" | "PATIENT">("all");
   const [search, setSearch] = useState("");
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -38,7 +38,7 @@ const UserListPage: React.FC = () => {
     firstName: "",
     lastName: "",
     email: "",
-    userType: "patient",
+    userType: "PATIENT",
     phone: ""
   });
   const [addingUser, setAddingUser] = useState(false);
@@ -74,7 +74,7 @@ const UserListPage: React.FC = () => {
         // Apply filter from URL if present
         const urlFilter = searchParams?.get('filter');
         if (urlFilter && ['all', 'admin', 'doctor', 'patient'].includes(urlFilter)) {
-          setFilter(urlFilter as "all" | "admin" | "doctor" | "patient");
+          setFilter(urlFilter.toUpperCase() as "all" | "ADMIN" | "DOCTOR" | "PATIENT");
         }
       } catch (err) {
         setError("Failed to load users.");
@@ -87,7 +87,7 @@ const UserListPage: React.FC = () => {
 
   // Filter the users based on filter and search term
   const filteredUsers = users
-    .filter(user => filter === "all" || user.userType.toLowerCase() === filter)
+    .filter(user => filter === "all" || user.userType.toUpperCase() === filter)
     .filter(user => 
       search === "" || 
       user.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -155,7 +155,7 @@ const UserListPage: React.FC = () => {
   };
 
   const handleViewUserDetails = (userId: string, userType: string) => {
-    if (userType.toLowerCase() === 'doctor') {
+    if (userType.toUpperCase() === 'DOCTOR') {
       router.push(`/admin/doctor-verification/${userId}`);
     } else {
       router.push(`/admin/users/${userId}`);
@@ -209,7 +209,7 @@ const UserListPage: React.FC = () => {
         firstName: '',
         lastName: '',
         email: '',
-        userType: 'patient',
+        userType: 'PATIENT',
         phone: ''
       });
       
@@ -279,12 +279,12 @@ const UserListPage: React.FC = () => {
                 id="filter"
                 className="border rounded px-2 py-2 text-sm dark:bg-gray-800 dark:text-gray-100"
                 value={filter}
-                onChange={e => setFilter(e.target.value as "all" | "admin" | "doctor" | "patient")}
+                onChange={e => setFilter(e.target.value.toUpperCase() as "all" | "ADMIN" | "DOCTOR" | "PATIENT")}
               >
                 <option value="all">All</option>
-                <option value="admin">Admin</option>
-                <option value="doctor">Doctor</option>
-                <option value="patient">Patient</option>
+                <option value="ADMIN">Admin</option>
+                <option value="DOCTOR">Doctor</option>
+                <option value="PATIENT">Patient</option>
               </select>
             </div>
           </div>
@@ -417,9 +417,9 @@ const UserListPage: React.FC = () => {
                   value={newUser.userType}
                   onChange={handleAddUserChange}
                   options={[
-                    { value: "patient", label: "Patient" },
-                    { value: "doctor", label: "Doctor" },
-                    { value: "admin", label: "Admin" }
+                    { value: "PATIENT", label: "Patient" },
+                    { value: "DOCTOR", label: "Doctor" },
+                    { value: "ADMIN", label: "Admin" }
                   ]}
                   required
                 />

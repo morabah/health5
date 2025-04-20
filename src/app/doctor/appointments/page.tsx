@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import EmptyState from "@/components/ui/EmptyState";
-import { mockGetMyAppointments, mockCompleteAppointment, mockCancelAppointmentDetails } from "@/lib/mockApiService";
 import { useAuth } from "@/context/AuthContext";
 import { formatDate } from "@/utils/dateUtils";
 import { UserType, AppointmentStatus } from "@/types/enums";
@@ -14,6 +13,9 @@ import { FaCalendarCheck, FaCalendarTimes, FaHistory, FaFilter, FaSearch, FaUser
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import Textarea from "@/components/ui/Textarea";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { initializeFirebaseClient } from "@/lib/firebaseClient";
+import { AppointmentSchema } from "@/lib/zodSchemas";
 
 interface Appointment {
   id: string;
@@ -50,50 +52,31 @@ export default function DoctorAppointmentsPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      setLoading(true);
-      try {
-        // Get API mode from localStorage or fallback to environment variable
-        const apiMode = localStorage.getItem("apiMode") || process.env.NEXT_PUBLIC_API_MODE || "mock";
-        console.log("[DoctorAppointments] Fetching appointments with API mode:", apiMode);
-        
-        // Always use mock for now, but structure for future live API integration
-        const data = await mockGetMyAppointments(user?.uid || "", UserType.DOCTOR);
-        
-        // Format appointments to match component's expected format
-        const formattedAppointments = data.map((apt: any) => ({
-          id: apt.id,
-          patientName: apt.patientName || 'Unknown Patient',
-          patientId: apt.patientId,
-          appointmentDate: apt.appointmentDate || apt.date, 
-          date: apt.date,
-          startTime: apt.startTime || apt.time,
-          time: apt.time,
-          endTime: apt.endTime,
-          type: apt.appointmentType || apt.type || 'General',
-          status: apt.status || AppointmentStatus.PENDING,
-          notes: apt.notes || '',
-          reason: apt.reason || 'General consultation',
-          location: apt.location || 'Main Office'
-        }));
-        
-        console.log("[DoctorAppointments] Loaded appointments:", formattedAppointments.length);
-        setAppointments(formattedAppointments);
-      } catch (error) {
-        console.error("Error fetching appointments:", error);
-        setError("Failed to load appointments");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (user) {
-      fetchAppointments();
-    } else {
-      setError("Please log in to view your appointments");
+  async function fetchAppointments() {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // Always use live mode
+      initializeFirebaseClient('live');
+      const functions = getFunctions();
+      const getMyAppointments = httpsCallable(functions, "getMyAppointments");
+      const res = await getMyAppointments({ userId: user.uid, userType: UserType.DOCTOR });
+      if (!res.data || !Array.isArray(res.data)) throw new Error("Malformed response from backend");
+      // Zod validation for each appointment
+      const items = res.data.map((item: any) => AppointmentSchema.parse(item));
+      setAppointments(items);
+    } catch (err: any) {
+      console.error('[DoctorAppointments] Error:', err);
+      setError("Failed to load appointments.");
+      setAppointments([]);
+    } finally {
       setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    fetchAppointments();
   }, [user]);
 
   // Filter appointments based on selected filter

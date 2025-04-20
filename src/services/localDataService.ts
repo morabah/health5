@@ -164,13 +164,13 @@ export const appointmentService = {
   /**
    * Cancel an appointment
    * @param appointmentId Appointment ID
-   * @param cancelledBy Who cancelled the appointment
+   * @param cancelledBy Who cancelled the appointment (UserType)
    * @param reason Reason for cancellation
    * @returns True if successful, false otherwise
    */
   cancelAppointment: (
     appointmentId: string, 
-    cancelledBy: 'patient' | 'doctor', 
+    cancelledBy: UserType, 
     reason?: string
   ): boolean => {
     const allAppointments = getFromLocalStorage<Appointment[]>(STORAGE_KEYS.APPOINTMENTS, []) || [];
@@ -181,7 +181,7 @@ export const appointmentService = {
     }
     
     // Update status based on who cancelled
-    allAppointments[index].status = cancelledBy === 'patient' 
+    allAppointments[index].status = cancelledBy === UserType.PATIENT 
       ? AppointmentStatus.CANCELLED_BY_PATIENT 
       : AppointmentStatus.CANCELLED_BY_DOCTOR;
     

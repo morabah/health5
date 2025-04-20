@@ -94,7 +94,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, role: userProfile?.userType ?? null, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      userProfile,
+      loading,
+      // Normalize role: prefer userProfile.userType, fallback to userProfile.role, always uppercase if present
+      role: userProfile?.userType?.toUpperCase?.() || userProfile?.role?.toUpperCase?.() || null,
+      login,
+      logout
+    }}>
       {children}
     </AuthContext.Provider>
   );

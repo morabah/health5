@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { mockGetMyAppointments, mockCancelAppointment } from "@/lib/mockApiService";
 import { useAuth } from "@/context/AuthContext";
 import { UserType, AppointmentStatus } from "@/types/enums";
 import { Spinner } from "@/components/ui/Spinner";
@@ -15,6 +14,9 @@ import Link from "next/link";
 import { formatDate } from "@/utils/dateUtils";
 import { useSearchParams } from "next/navigation";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { initializeFirebaseClient } from "@/lib/firebaseClient";
+import { AppointmentSchema } from "@/lib/zodSchemas";
 
 type FilterType = "all" | "upcoming" | "past" | "cancelled";
 
@@ -39,9 +41,15 @@ export default function PatientAppointmentsPage() {
     setLoading(true);
     setError(null);
     try {
-      console.log('[PatientAppointments] Fetching with user ID:', user.uid);
-      const items = await mockGetMyAppointments(user.uid, UserType.PATIENT);
-      console.log('[PatientAppointments] Loaded appointments:', items.length);
+      // Always use live mode
+      initializeFirebaseClient('live');
+      const functions = getFunctions();
+      const getMyAppointments = httpsCallable(functions, "getMyAppointments");
+      // Force userType to string literal to avoid enum mismatch issues
+      const res = await getMyAppointments({ userId: user.uid, userType: "PATIENT" });
+      if (!res.data || !Array.isArray(res.data)) throw new Error("Malformed response from backend");
+      // Zod validation for each appointment
+      const items = res.data.map((item: any) => AppointmentSchema.parse(item));
       setAppointments(items);
     } catch (err: any) {
       console.error('[PatientAppointments] Error:', err);
