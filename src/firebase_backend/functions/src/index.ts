@@ -7,6 +7,7 @@ import { trackPerformance } from './shared/performance';
 import { createUserProfileInFirestore } from './user';
 import { createPatientProfileInFirestore } from './patient';
 import { createDoctorProfileInFirestore } from './doctor';
+import { fetchUserProfileData } from './user/userProfileManagement';
 
 // Base schema for both patient and doctor registration
 const BaseRegisterSchema = z.object({
@@ -172,4 +173,31 @@ export const debugRegisterPatient = functions.https.onCall(async (data, context)
     receivedData: { email, firstName, lastName, userType, dateOfBirth, gender },
     message: "Debug function completed successfully"
   };
+});
+
+/**
+ * HTTPS Callable to fetch the current authenticated user's combined profile data.
+ * Combines UserProfile with PatientProfile or DoctorProfile based on userType.
+ * PHI-aware logging: logs only non-sensitive identifiers.
+ */
+export const getMyUserProfileData = functions.https.onCall(async (_data, context) => {
+  const start = Date.now();
+  const uid = context.auth?.uid;
+  logInfo('[getMyUserProfileData] Called', { callerUid: uid });
+  if (!uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required to fetch profile data');
+  }
+  try {
+    const profile = await fetchUserProfileData(uid);
+    if (!profile) {
+      throw new functions.https.HttpsError('not-found', 'User profile not found');
+    }
+    return profile;
+  } catch (err: any) {
+    logError('[getMyUserProfileData] Error fetching profile', { uid, error: err });
+    throw new functions.https.HttpsError('internal', 'Internal error fetching user profile');
+  } finally {
+    const duration = Date.now() - start;
+    logInfo('[getMyUserProfileData] Completed', { callerUid: uid, duration });
+  }
 });
