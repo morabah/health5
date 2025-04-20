@@ -43,13 +43,32 @@ export default function PatientRegisterPage() {
     const perf = trackPerformance("registerPatient");
     logInfo("[PatientRegisterPage] Registration attempt", { email: form.email });
 
-    // Basic validation
-    if (!form.firstName || !form.lastName || !form.email || !form.password || !form.confirmPassword) {
-      setErrorMsg("Please fill in all required fields.");
+    // Basic validation with detailed feedback
+    const missingFields: string[] = [];
+    if (!form.firstName) missingFields.push("First Name");
+    if (!form.lastName) missingFields.push("Last Name");
+    if (!form.email) missingFields.push("Email");
+    if (!form.password) missingFields.push("Password");
+    if (!form.confirmPassword) missingFields.push("Confirm Password");
+    
+    // Remove validation for fields we're not sending to the backend
+    // if (!form.dateOfBirth) missingFields.push("Date of Birth");
+    // if (!form.gender) missingFields.push("Gender");
+    
+    if (missingFields.length > 0) {
+      setErrorMsg(`Please fill in required fields: ${missingFields.join(", ")}`);
       setIsLoading(false);
       perf.stop();
       return;
     }
+    // Enforce minimum password length
+    if (form.password.length < 8) {
+      setErrorMsg("Password must be at least 8 characters.");
+      setIsLoading(false);
+      perf.stop();
+      return;
+    }
+    // Check password match
     if (form.password !== form.confirmPassword) {
       setErrorMsg("Passwords do not match.");
       setIsLoading(false);
@@ -65,26 +84,52 @@ export default function PatientRegisterPage() {
       }
       const functionsClient = getFunctions(app);
       const registerUserFn = httpsCallable(functionsClient, "registerUser");
-      await registerUserFn({
+      
+      // Format phone number if provided (Firebase requires E.164 format)
+      let formattedPhone = form.phone ? form.phone : "";
+      if (formattedPhone && !formattedPhone.startsWith('+')) {
+        // Add US country code if missing
+        formattedPhone = "+1" + formattedPhone.replace(/\D/g, '');
+      }
+      
+      // Only send minimal required fields based on the schema we've analyzed
+      const payload = {
         email: form.email,
         password: form.password,
         firstName: form.firstName,
         lastName: form.lastName,
-        phone: form.phone || undefined,
         userType: UserType.PATIENT,
-      });
+        // Only include phone if properly formatted
+        ...(formattedPhone ? { phone: formattedPhone } : {})
+      };
+      
+      // Log the exact payload
+      console.log('Patient registration payload:', payload);
+      console.log('Patient registration payload (stringified):', JSON.stringify(payload));
+      
+      // Call the original registration function
+      const result = await registerUserFn(payload);
+      console.log('Registration result:', result);
+      
       logInfo("[PatientRegisterPage] Registration successful", { email: form.email });
       logValidation("6.4", "success", "Live Patient Registration connected.");
       router.push("/auth/pending-verification");
     } catch (error: any) {
       logError("[PatientRegisterPage] Registration error", { error });
-      const code = error.code || error.message;
-      if (code.includes("already-exists")) {
-        setErrorMsg("Email already registered.");
-      } else if (code.includes("invalid-argument")) {
-        setErrorMsg("Invalid registration data.");
+      let backendMsg = error?.message;
+      
+      // Log the entire error object for debugging
+      console.error('Full Firebase error object:', error);
+      console.error('Error details:', error?.details);
+      
+      // Extract more detailed error information if available
+      if (backendMsg && backendMsg.startsWith("Invalid registration data:")) {
+        // Show the complete error message including any details
+        setErrorMsg(`${backendMsg}\n\nFull error: ${JSON.stringify(error)}\n\nDetails: ${JSON.stringify(error?.details)}`);
+      } else if (error.code === "already-exists") {
+        setErrorMsg("A user with this email already exists.");
       } else {
-        setErrorMsg("Registration failed.");
+        setErrorMsg(`Registration failed: ${error?.message || "Unknown error"}\n\nFull error: ${JSON.stringify(error)}`);
       }
     } finally {
       setIsLoading(false);

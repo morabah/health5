@@ -1,5 +1,5 @@
+import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import * as functions from 'firebase-functions'; // For logging
 
 /** Initializes Firebase Admin SDK implicitly. Ensures it runs only once. */
 try {

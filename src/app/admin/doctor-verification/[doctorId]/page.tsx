@@ -62,11 +62,11 @@ export default function DoctorVerificationPage() {
 
   // Fetch doctor verification data with debug logging
   useEffect(() => {
-    if (!doctorId) {
+      if (!doctorId) {
       setError('No doctor ID provided');
-      setLoading(false);
-      return;
-    }
+        setLoading(false);
+        return;
+      }
     async function fetchVerification() {
       try {
         console.log('[DoctorVerificationPage] Pre-fetch localStorage doctorProfiles:', localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES));
@@ -127,10 +127,10 @@ export default function DoctorVerificationPage() {
       console.log('[DoctorVerificationPage.handleSave] Post-save inMemory doctorProfiles:', getDoctorProfilesStore());
       
       if (result) {
-        setSuccess(true);
+      setSuccess(true);
         setDoctor((prev: any) => ({ ...prev, status }));
-        setTimeout(() => {
-          setSuccess(false);
+      setTimeout(() => {
+        setSuccess(false);
         }, 3000);
       } else {
         setError('Failed to save verification decision');
@@ -422,7 +422,7 @@ export default function DoctorVerificationPage() {
                     />
                   </div>
                 )}
-              </div>
+            </div>
               
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <h3 className="text-lg font-semibold mb-4">Verification Documents</h3>
@@ -432,13 +432,13 @@ export default function DoctorVerificationPage() {
                         <li key={doc.id} className="flex items-center gap-2">
                           <span className="text-blue-600 hover:underline">
                             <a href={doc.url} target="_blank" rel="noopener noreferrer">{doc.name}</a>
-                          </span>
-                        </li>
-                      ))
-                  ) : (
-                    <li>No documents uploaded.</li>
-                  )}
-                </ul>
+                        </span>
+                      </li>
+                    ))
+                ) : (
+                  <li>No documents uploaded.</li>
+                )}
+              </ul>
               </div>
             </div>
             
@@ -446,39 +446,39 @@ export default function DoctorVerificationPage() {
             <div className="lg:col-span-1">
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <h3 className="text-lg font-semibold mb-4">Verification Status</h3>
-                <div className="mb-4">
-                  <label className="font-medium">Verification Status</label>
-                  <select
-                    className="input input-bordered w-full mt-1"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as VerificationStatus)}
-                  >
-                    <option value={VerificationStatus.PENDING}>Pending</option>
-                    <option value={VerificationStatus.APPROVED}>Approved</option>
-                    <option value={VerificationStatus.REJECTED}>Rejected</option>
-                    <option value={VerificationStatus.MORE_INFO_REQUIRED}>More Info Required</option>
-                  </select>
-                </div>
-                <div className="mb-4">
-                  <label className="font-medium">Admin Notes</label>
-                  <Textarea
-                    placeholder="Enter notes for approval/rejection (optional)"
-                    value={notes}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                <Button 
-                  label="Save Decision"
-                  pageName="doctor-verification"
-                  className="w-full" 
-                  onClick={handleSave} 
-                  disabled={saving}
-                  isLoading={saving}
+              <div className="mb-4">
+                <label className="font-medium">Verification Status</label>
+                <select
+                  className="input input-bordered w-full mt-1"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as VerificationStatus)}
                 >
-                  {saving ? "Saving..." : "Save Decision"}
-                </Button>
-                {success && <div className="text-green-600 mt-2 text-center">Decision saved and notification sent to doctor.</div>}
+                  <option value={VerificationStatus.PENDING}>Pending</option>
+                  <option value={VerificationStatus.APPROVED}>Approved</option>
+                  <option value={VerificationStatus.REJECTED}>Rejected</option>
+                  <option value={VerificationStatus.MORE_INFO_REQUIRED}>More Info Required</option>
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="font-medium">Admin Notes</label>
+                <Textarea
+                  placeholder="Enter notes for approval/rejection (optional)"
+                  value={notes}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <Button 
+                label="Save Decision"
+                pageName="doctor-verification"
+                className="w-full" 
+                onClick={handleSave} 
+                disabled={saving}
+                isLoading={saving}
+              >
+                {saving ? "Saving..." : "Save Decision"}
+              </Button>
+              {success && <div className="text-green-600 mt-2 text-center">Decision saved and notification sent to doctor.</div>}
                 {error && <div className="text-red-600 mt-2 text-center">{error}</div>}
               </div>
             </div>
