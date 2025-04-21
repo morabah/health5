@@ -1,7 +1,9 @@
 "use client";
 import React, { useEffect, useCallback } from 'react';
 import { useRouter } from "next/navigation";
-import { mockFindDoctors } from '@/lib/mockApiService';
+import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { getApiMode } from '@/config/apiConfig';
 import type { DoctorProfile } from '@/types/doctor';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -27,23 +29,16 @@ import {
 } from "@heroicons/react/24/outline";
 import { StarIcon } from '@heroicons/react/24/solid';
 
-interface Doctor {
+// Define list item shape joining profile with UI fields
+type DoctorListItem = DoctorProfile & {
   id: string;
-  userId: string;
   name: string;
-  firstName?: string;
-  lastName?: string;
-  specialty: string;
-  experience: number;
-  location: string;
-  languages: string[];
-  fee: number;
-  available: boolean;
-  profilePicUrl: string;
-  nextAvailable?: string;
-  bio?: string;
-  rating?: number;
-}
+  fee: number;           // from consultationFee
+  available: boolean;    // default true
+  profilePicUrl: string; // from profilePictureUrl
+  nextAvailable: string; // computed slot
+  rating: number;        // default 0
+};
 
 const specialtyOptions = [
   { value: "", label: "All Specialties" },
@@ -78,8 +73,8 @@ const languageOptions = [
 export default function FindDoctorPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [doctors, setDoctors] = React.useState<Doctor[]>([]);
-  const [filteredDoctors, setFilteredDoctors] = React.useState<Doctor[]>([]);
+  const [doctors, setDoctors] = React.useState<DoctorListItem[]>([]);
+  const [filteredDoctors, setFilteredDoctors] = React.useState<DoctorListItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useLocalStorage<string>('find_searchQuery', '');
@@ -90,27 +85,26 @@ export default function FindDoctorPage() {
   const [availableOnly, setAvailableOnly] = useLocalStorage<boolean>('find_availableOnly', false);
   const [sortBy, setSortBy] = React.useState<string>('rating');
 
-  // Process doctor data to ensure names are properly formatted
-  const processDoctorData = (doctorData: DoctorProfile[]): Doctor[] => {
+  // Process doctor data: compute display name and UI-specific fields
+  const processDoctorData = (doctorData: (DoctorProfile & { id: string })[]): DoctorListItem[] => {
     return doctorData.map(doctor => {
-      // Ensure proper name format
-      let displayName = doctor.name;
-      
-      if (!displayName || displayName.trim() === '') {
-        if (doctor.firstName || doctor.lastName) {
-          displayName = `Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim();
-        } else {
-          displayName = `Doctor (ID: ${doctor.id.substring(0, 8)})`;
-        }
+      // Use fullName if available, else fallback
+      let displayName = doctor.verificationData?.fullName ?? '';
+      if (!displayName.trim()) {
+        displayName = `Doctor (ID: ${doctor.id.substring(0, 8)})`;
       }
-      
-      // Add next available time if not present
-      const nextAvailable = doctor.nextAvailable || getRandomTimeSlot();
-      
+
+      // Generate a next available slot for now
+      const nextAvailable = getRandomTimeSlot();
+
       return {
         ...doctor,
         name: displayName,
-        nextAvailable
+        fee: doctor.consultationFee,
+        available: true,
+        profilePicUrl: doctor.profilePictureUrl ?? '',
+        nextAvailable,
+        rating: 0
       };
     });
   };
@@ -135,10 +129,21 @@ export default function FindDoctorPage() {
     setLoading(true);
     setError(null);
     try {
-      let results;
-      
-      // Always fetch from dynamic store via mockFindDoctors
-      results = await mockFindDoctors({ specialty: specialty || undefined, location: location || undefined });
+      // Fetch doctors from Firestore
+      const { db } = initializeFirebaseClient(getApiMode());
+      if (!db) {
+        throw new Error('Firestore not initialized');
+      }
+      const doctorsRef = collection(db, 'doctors');
+      const constraints: any[] = [];
+      if (specialty) constraints.push(where('specialty', '==', specialty));
+      if (location) constraints.push(where('location', '==', location));
+      const q = constraints.length ? query(doctorsRef, ...constraints) : doctorsRef;
+      const snapshot = await getDocs(q);
+      const results = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as DoctorProfile)
+      }));
       
       // Process and set doctor data
       const processedResults = processDoctorData(results);
@@ -159,7 +164,7 @@ export default function FindDoctorPage() {
 
   // Apply all filters to the doctor list
   const applyFilters = useCallback((
-    doctorList: Doctor[], 
+    doctorList: DoctorListItem[], 
     query: string, 
     specialty: string, 
     location: string, 
@@ -448,7 +453,7 @@ export default function FindDoctorPage() {
                             
                             <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
                               <UserIcon className="w-5 h-5 mr-3 text-gray-500 dark:text-gray-400" />
-                              <span>{doctor.experience || 0} years of experience</span>
+                              <span>{doctor.yearsOfExperience} years of experience</span>
                             </div>
                             
                             <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">

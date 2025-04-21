@@ -8,7 +8,9 @@ import {
   getMockPatientProfileData1, 
   getMockAppointments 
 } from './mockDataService';
-import { logInfo, logWarn } from '@/lib/logger';
+import { logInfo, logWarn, logError } from '@/lib/logger';
+import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import type { Appointment } from '@/types/appointment';
 
 /**
@@ -72,8 +74,22 @@ export async function loadPatientAppointments(patientId: string): Promise<Appoin
       logInfo(`[${label}] Loaded mock data`, { count: data.length });
       return data;
     } else {
-      logWarn(`[${label}] Live fetch not implemented for mode: ${mode}`);
-      return [];
+      // Live mode: fetch appointments from Firestore
+      logInfo(`[${label}] Live mode - fetching appointments from Firestore`, { patientId });
+      const { db } = initializeFirebaseClient(mode);
+      if (!db) {
+        logError(`[${label}] No Firestore database instance available`);
+        return [];
+      }
+      const appointmentsRef = collection(db, 'appointments');
+      const q = query(appointmentsRef, where('patientId', '==', patientId));
+      const snapshot = await getDocs(q);
+      const data: Appointment[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as Omit<Appointment, 'id'>)
+      }));
+      logInfo(`[${label}] Loaded live data from Firestore`, { count: data.length });
+      return data;
     }
   } catch (err) {
     logWarn(`[${label}] Error: ${(err as Error).message}`);
