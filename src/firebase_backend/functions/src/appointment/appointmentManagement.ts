@@ -1,8 +1,9 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
-import { logger, perf } from '../utils/logger';
-import { AppointmentStatus, UserType } from '../../types/enums';
+import { logInfo, logError } from '../shared/logger';
+import { trackPerformance } from '../shared/performance';
+import { AppointmentStatus, UserType } from '../types/enums';
 import { Timestamp } from 'firebase-admin/firestore';
 
 /**
@@ -28,9 +29,8 @@ export async function fetchUserAppointments(
   statusFilter?: AppointmentStatus,
   dateFilter?: 'upcoming' | 'past'
 ) {
-  const trace = perf.start('fetchUserAppointments');
-  logger.logInfo('[getMyAppointments] Fetching appointments', { userId, userType, statusFilter, dateFilter });
-  try {
+  return await trackPerformance('fetchUserAppointments', async () => {
+    logInfo('[getMyAppointments] Fetching appointments', { userId, userType, statusFilter, dateFilter });
     let query = admin.firestore().collection('appointments')
       .where(userType === 'PATIENT' ? 'patientId' : 'doctorId', '==', userId);
 
@@ -47,11 +47,15 @@ export async function fetchUserAppointments(
     } else {
       query = query.orderBy('appointmentDate', 'desc');
     }
-    const snap = await query.get();
-    const appointments = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    logger.logInfo('[getMyAppointments] Appointments fetched', { userId, count: appointments.length });
-    return appointments;
-  } finally {
-    trace.stop();
-  }
+    try {
+      const snap = await query.get();
+      const appointments = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      logInfo('[getMyAppointments] Appointments fetched', { userId, count: appointments.length });
+      return appointments;
+    } catch (error) {
+      logError('[getMyAppointments] Firestore query failed', { userId, userType, error });
+      // Return empty array to avoid 500 error on client
+      return [];
+    }
+  });
 }

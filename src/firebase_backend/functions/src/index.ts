@@ -8,6 +8,8 @@ import { createUserProfileInFirestore } from './user';
 import { createPatientProfileInFirestore } from './patient';
 import { createDoctorProfileInFirestore } from './doctor';
 import { fetchUserProfileData } from './user/userProfileManagement';
+import { fetchUserAppointments, GetAppointmentsSchema } from './appointment/appointmentManagement';
+import { AppointmentStatus } from './types/enums';
 
 // Base schema for both patient and doctor registration
 const BaseRegisterSchema = z.object({
@@ -87,7 +89,8 @@ export const registerUser = functions.https.onCall(async (data, context) => {
     );
   }
   // Only destructure fields allowed by userType
-  const { email, password, firstName, lastName, phone, userType } = parsed.data;
+  const { email, password, firstName, lastName, phone } = parsed.data;
+  const userType = parsed.data.userType.toUpperCase();
   let specialty: string | undefined;
   let licenseNumber: string | undefined;
   if (userType === 'DOCTOR') {
@@ -200,4 +203,46 @@ export const getMyUserProfileData = functions.https.onCall(async (_data, context
     const duration = Date.now() - start;
     logInfo('[getMyUserProfileData] Completed', { callerUid: uid, duration });
   }
+});
+
+/**
+ * HTTPS Callable function to get appointments for the authenticated user (patient/doctor).
+ * Validates input, checks auth, and fetches filtered appointments from Firestore.
+ * PHI-aware logging: only logs identifiers and non-sensitive fields.
+ */
+export const getMyAppointments = functions.https.onCall(async (data, context) => {
+  return await trackPerformance('getMyAppointments', async () => {
+    logInfo('[getMyAppointments] Called', { uid: context.auth?.uid });
+    if (!context.auth) {
+      logError('[getMyAppointments] Unauthenticated request', {});
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    // Zod validation
+    const parseResult = GetAppointmentsSchema.safeParse(data);
+    if (!parseResult.success) {
+      logError('[getMyAppointments] Invalid input', { error: parseResult.error });
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid input');
+    }
+    const { statusFilter, dateFilter } = parseResult.data;
+    // Fetch user type from Firestore profile
+    const userDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
+    if (!userDoc.exists) {
+      logError('[getMyAppointments] User profile not found', { uid: context.auth.uid });
+      throw new functions.https.HttpsError('not-found', 'User profile not found');
+    }
+    const userType = userDoc.get('userType');
+    logInfo('[getMyAppointments] DEBUG: userType fetched from Firestore', { uid: context.auth.uid, userType });
+    if (!userType || (userType !== 'PATIENT' && userType !== 'DOCTOR')) {
+      logError(`[getMyAppointments] Invalid userType: ${userType}`, { uid: context.auth.uid, userType });
+      throw new functions.https.HttpsError('failed-precondition', 'Invalid userType');
+    }
+    const appointments = await fetchUserAppointments(
+      context.auth.uid,
+      userType,
+      statusFilter as AppointmentStatus | undefined,
+      dateFilter as 'upcoming' | 'past' | undefined
+    );
+    logInfo('[getMyAppointments] Success', { uid: context.auth.uid, count: appointments.length });
+    return appointments;
+  });
 });

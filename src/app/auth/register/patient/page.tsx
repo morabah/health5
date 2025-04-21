@@ -50,25 +50,14 @@ export default function PatientRegisterPage() {
     if (!form.email) missingFields.push("Email");
     if (!form.password) missingFields.push("Password");
     if (!form.confirmPassword) missingFields.push("Confirm Password");
-    
-    // Remove validation for fields we're not sending to the backend
-    // if (!form.dateOfBirth) missingFields.push("Date of Birth");
-    // if (!form.gender) missingFields.push("Gender");
-    
+    if (!form.dateOfBirth) missingFields.push("Date of Birth");
+    if (!form.gender) missingFields.push("Gender");
     if (missingFields.length > 0) {
-      setErrorMsg(`Please fill in required fields: ${missingFields.join(", ")}`);
+      setErrorMsg(`Please fill in: ${missingFields.join(", ")}`);
       setIsLoading(false);
       perf.stop();
       return;
     }
-    // Enforce minimum password length
-    if (form.password.length < 8) {
-      setErrorMsg("Password must be at least 8 characters.");
-      setIsLoading(false);
-      perf.stop();
-      return;
-    }
-    // Check password match
     if (form.password !== form.confirmPassword) {
       setErrorMsg("Passwords do not match.");
       setIsLoading(false);
@@ -94,11 +83,8 @@ export default function PatientRegisterPage() {
       
       // Only send minimal required fields based on the schema we've analyzed
       const payload = {
-        email: form.email,
-        password: form.password,
-        firstName: form.firstName,
-        lastName: form.lastName,
-        userType: UserType.PATIENT,
+        ...form,
+        userType: UserType.PATIENT, // Always enforce uppercase
         // Only include phone if properly formatted
         ...(formattedPhone ? { phone: formattedPhone } : {})
       };
@@ -113,7 +99,8 @@ export default function PatientRegisterPage() {
       
       logInfo("[PatientRegisterPage] Registration successful", { email: form.email });
       logValidation("6.4", "success", "Live Patient Registration connected.");
-      router.push("/auth/pending-verification");
+      setFeedback("Registration successful! Please check your email to verify your account.");
+      setTimeout(() => router.push("/auth/pending-verification"), 2000);
     } catch (error: any) {
       logError("[PatientRegisterPage] Registration error", { error });
       let backendMsg = error?.message;

@@ -19,8 +19,8 @@ export async function createUserProfileInFirestore(
       phone: data.phone || null,
       firstName: data.firstName,
       lastName: data.lastName,
-      userType: data.userType,
-      isActive: data.userType === 'PATIENT',
+      userType: data.userType.toUpperCase(), // Always save as uppercase
+      isActive: data.userType.toUpperCase() === 'PATIENT',
       emailVerified: false,
       phoneVerified: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),

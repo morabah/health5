@@ -102,11 +102,6 @@ export default function DoctorRegisterPage() {
         setIsSubmitting(false);
         return;
       }
-      if (!licenseFile) {
-        setError("Please upload your medical license document.");
-        setIsSubmitting(false);
-        return;
-      }
       // Upload files if present (use timestamp for now; backend should move/rename after UID assignment)
       let profilePicUrl = null;
       let licenseDocUrl = null;
@@ -130,31 +125,22 @@ export default function DoctorRegisterPage() {
         return;
       }
       // Prepare registration data
-      const dataObject = {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        email: form.email,
-        phone: form.phone,
-        password: form.password,
+      const payload = {
+        ...form,
         userType: UserType.DOCTOR,
-        specialty: form.specialty,
-        licenseNumber: form.licenseNumber,
         yearsOfExperience: form.yearsOfExperience ? parseInt(form.yearsOfExperience) : 0,
-        education: form.education,
-        bio: form.bio,
-        location: form.location,
-        languages: form.languages.split(',').map(lang => lang.trim()),
         consultationFee: form.consultationFee ? parseFloat(form.consultationFee) : 0,
         profilePictureUrl: profilePicUrl,
         licenseDocumentUrl: licenseDocUrl,
         certificateUrl: certUrl,
-        verificationStatus: VerificationStatus.PENDING
+        verificationStatus: VerificationStatus.PENDING,
+        languages: form.languages.split(',').map(lang => lang.trim())
       };
-      logInfo("Doctor registration payload:", dataObject);
+      logInfo("Doctor registration payload:", payload);
       // Call backend
       const functions = getFunctions();
       const registerUser = httpsCallable(functions, "registerUser");
-      const result = await registerUser(dataObject);
+      const result = await registerUser(payload);
       logInfo("Doctor registration result:", result);
       logValidation("6.5", "success", "Live Doctor Registration connected with uploads.");
       setFeedback("Registration successful! Your account is pending verification by an administrator. Redirecting...");

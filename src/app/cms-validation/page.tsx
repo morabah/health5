@@ -86,7 +86,7 @@ const CmsValidationPage: React.FC = () => {
     
     // 1. Direct event bus emission
     appEventBus.emit('log_event', {
-      level: 'INFO' as LogLevel, // Use enum value if available
+      level: 'INFO' as 'INFO',
       message: `Test INFO log (direct emit) ${testId}`,
       timestamp: new Date().toISOString(),
       data: { source: 'cms_test_button', method: 'direct_emit', testId }
@@ -100,7 +100,7 @@ const CmsValidationPage: React.FC = () => {
     // 3. LocalStorage approach
     try {
       const localStoragePayload = {
-        level: 'INFO' as LogLevel,
+        level: 'INFO' as 'INFO',
         message: `Test INFO log (localStorage) ${testId}`,
         timestamp: new Date().toISOString(),
         data: { source: 'cms_test_button', method: 'localStorage', testId }
@@ -155,7 +155,7 @@ const CmsValidationPage: React.FC = () => {
     setTimeout(() => {
       console.log('[CMS] Emitting test event after subscription');
       appEventBus.emit('log_event', {
-        level: 'INFO' as LogLevel,
+        level: 'INFO' as 'INFO',
         message: 'Event bus subscription test',
         timestamp: new Date().toISOString(),
         data: { type: 'subscription_test' }
@@ -221,7 +221,7 @@ const CmsValidationPage: React.FC = () => {
     
     // Use direct event bus emission for reliability
     appEventBus.emit('log_event', {
-      level: 'INFO' as LogLevel,
+      level: 'INFO' as 'INFO',
       message: `CMS: Switched API Mode state to -> ${mode}`,
       timestamp: new Date().toISOString(),
       data: { previousMode: apiMode, newMode: mode }
@@ -258,7 +258,7 @@ const CmsValidationPage: React.FC = () => {
       
       // Add a "force sync" event
       const syncEvent: LogPayload = {
-        level: 'INFO' as LogLevel,
+        level: 'INFO' as 'INFO',
         message: 'Force sync with localStorage test',
         timestamp: new Date().toISOString(),
         data: { source: 'cms_page', triggered_by: 'force_sync_button' }
@@ -341,7 +341,7 @@ const CmsValidationPage: React.FC = () => {
   const statusIcons: Record<string, any> = {
     valid: faCircleCheck,
     issues: faCircleExclamation,
-    error: faCircleExclamation,
+    error: faCircleCheck,
   };
 
   const collectionSchemas = {
@@ -484,6 +484,7 @@ const CmsValidationPage: React.FC = () => {
       const table = tableRef.current;
       if (!table) return;
       function onKeyDown(e: KeyboardEvent) {
+        if (!table) return;
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           const rows = Array.from(table.querySelectorAll('tbody tr'));
           const active = document.activeElement;
@@ -538,7 +539,7 @@ const CmsValidationPage: React.FC = () => {
     }
 
     // --- Filter/sort/search logic (unchanged) ---
-    let displayResults = results;
+    let displayResults = Array.isArray(results) ? results : [];
     if (filter !== 'all') {
       displayResults = displayResults.filter((r) => r.status === filter);
     }
@@ -730,7 +731,7 @@ const CmsValidationPage: React.FC = () => {
       else if (JSON.stringify(m1[id]) !== JSON.stringify(m2[id])) changed.push({ id, from: m1[id], to: m2[id] });
     }
     // Audit/history: filter logs for this collection
-    const audit = (logs[col] || []).map((msg: string) => ({ timestamp: '', action: msg }));
+    const audit = ((logs as Record<string, string[]>)[col] || []).map((msg: string) => ({ timestamp: '', action: msg }));
     setDiffModal({ collection: col, diffs: { added, removed, changed }, audit });
   }
 
@@ -862,7 +863,7 @@ const CmsValidationPage: React.FC = () => {
     function exportDiffCSV() {
       if (!diff) return;
       let csv = 'Collection,Type,ID,Field,Offline,Online\n';
-      for (const [col, d] of Object.entries(diff)) {
+      for (const [col, d] of Object.entries(diff) as [string, { added: any[]; removed: any[]; changed: { id: string; diffs: any }[] }]) {
         d.added.forEach((doc: any) => {
           csv += `${col},Added,${doc.id || doc.userId},,,\n`;
         });
@@ -1198,13 +1199,13 @@ const CmsValidationPage: React.FC = () => {
   });
 
   // Handlers for dashboard quick actions
-  function handleValidateAll() {
+  async function handleValidateAll() {
     // TODO: Trigger validate all collections
   }
-  function handleCompareAll() {
+  async function handleCompareAll() {
     // TODO: Trigger compare all collections
   }
-  function handleSyncAll() {
+  async function handleSyncAll() {
     // TODO: Trigger sync all collections (backup + update offline mock)
   }
 
@@ -1640,7 +1641,9 @@ const CmsValidationPage: React.FC = () => {
       {mounted ? <ComparePanel /> : null}
 
       {/* Firestore Data Integrity Table */}
-      {mounted ? <FirestoreIntegrityTableLive apiMode={apiModeValue} /> : null}
+      {mounted ? (
+        <FirestoreIntegrityTableLive apiMode={apiModeValue} />
+      ) : null}
 
       {/* Data Structure Integrity Check Button */}
       <section className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1952,7 +1955,7 @@ const CmsValidationPage: React.FC = () => {
           onClick={() => {
             // Log that we're navigating to the home page
             appEventBus.emit('log_event', {
-              level: 'INFO' as LogLevel,
+              level: 'INFO' as 'INFO',
               message: 'Navigation from CMS to Home page',
               timestamp: new Date().toISOString(),
               data: { from: 'CMS', to: 'Home' }
@@ -1964,7 +1967,7 @@ const CmsValidationPage: React.FC = () => {
         <button
           onClick={() => {
             appEventBus.emit('log_event', {
-              level: 'INFO' as LogLevel,
+              level: 'INFO' as 'INFO',
               message: 'Manual log test from CMS page',
               timestamp: new Date().toISOString(),
               data: { type: 'manual_test' }
