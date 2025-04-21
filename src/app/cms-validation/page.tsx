@@ -519,7 +519,7 @@ const CmsValidationPage: React.FC = () => {
 
     // --- Drilldown modal ---
     function DocModal({ doc, issues, collection, onClose }: { doc: any, issues: any[], collection: string, onClose: () => void }) {
-  return (
+      return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg max-w-lg w-full p-6 relative">
             <button onClick={onClose} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close">&times;</button>
@@ -662,7 +662,7 @@ const CmsValidationPage: React.FC = () => {
   // --- Deep diff utility for nested objects/arrays ---
   function deepDiff(obj1: any, obj2: any) {
     // Returns { added, removed, changed } per collection
-    const result: Record<string, { added: any[]; removed: any[]; changed: { id: string, diffs: any }[] }> = {};
+    const result: Record<string, { added: any[]; removed: any[]; changed: { id: string; diffs: any }[] }> = {};
     for (const key of Array.from(new Set([...Object.keys(obj1), ...Object.keys(obj2)]))) {
       const arr1 = obj1[key] || [];
       const arr2 = obj2[key] || [];
@@ -863,18 +863,25 @@ const CmsValidationPage: React.FC = () => {
     function exportDiffCSV() {
       if (!diff) return;
       let csv = 'Collection,Type,ID,Field,Offline,Online\n';
-      for (const [col, d] of Object.entries(diff) as [string, { added: any[]; removed: any[]; changed: { id: string; diffs: any }[] }]) {
-        d.added.forEach((doc: any) => {
-          csv += `${col},Added,${doc.id || doc.userId},,,\n`;
-        });
-        d.removed.forEach((doc: any) => {
-          csv += `${col},Removed,${doc.id || doc.userId},,,\n`;
-        });
-        d.changed.forEach(({ id, diffs }: any) => {
-          for (const f in diffs) {
-            csv += `${col},Changed,${id},${f},${JSON.stringify(diffs[f].offline)},${JSON.stringify(diffs[f].online)}\n`;
-          }
-        });
+      for (const [col, d] of Object.entries(diff) as [string, any][]) {
+        if (!d) continue;
+        if (d.added && Array.isArray(d.added)) {
+          d.added.forEach((doc: any) => {
+            csv += `${col},Added,${doc.id || doc.userId},,,\n`;
+          });
+        }
+        if (d.removed && Array.isArray(d.removed)) {
+          d.removed.forEach((doc: any) => {
+            csv += `${col},Removed,${doc.id || doc.userId},,,\n`;
+          });
+        }
+        if (d.changed && Array.isArray(d.changed)) {
+          d.changed.forEach(({ id, diffs }: any) => {
+            for (const f in diffs) {
+              csv += `${col},Changed,${id},${f},${JSON.stringify(diffs[f].offline)},${JSON.stringify(diffs[f].online)}\n`;
+            }
+          });
+        }
       }
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
@@ -1489,7 +1496,7 @@ const CmsValidationPage: React.FC = () => {
               name="apiMode"
               value="mock"
               checked={apiMode === 'mock'}
-              onChange={handleApiModeChange}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleApiModeChange(e.target.value)}
               className="accent-blue-600"
               aria-label="Mock Data"
             />
@@ -1501,7 +1508,7 @@ const CmsValidationPage: React.FC = () => {
               name="apiMode"
               value="live"
               checked={apiMode === 'live'}
-              onChange={handleApiModeChange}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleApiModeChange(e.target.value)}
               className="accent-green-600"
               aria-label="Live Firestore"
             />
@@ -2102,7 +2109,10 @@ const CmsValidationPage: React.FC = () => {
                 type="file"
                 accept=".json"
                 className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                onChange={(e) => handleRestoreFromBackup(e.target.files[0])}
+                onChange={(e) => {
+                  const file = e.target.files && e.target.files[0];
+                  if (file) handleRestoreFromBackup(file);
+                }}
               />
             </div>
           </div>

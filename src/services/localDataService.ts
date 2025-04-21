@@ -5,6 +5,7 @@ import type { Appointment } from '@/types/appointment';
 import type { UserProfile } from '@/types/user';
 import type { DoctorProfile } from '@/types/doctor';
 import type { PatientProfile } from '@/types/patient';
+import { getDateObject } from '@/utils/dateUtils';
 
 // Storage keys for different data types
 const STORAGE_KEYS = {
@@ -80,14 +81,14 @@ export const appointmentService = {
       // Filter by date range
       if (options.fromDate) {
         filteredAppointments = filteredAppointments.filter(appointment => {
-          const appointmentDate = new Date(appointment.appointmentDate);
+          const appointmentDate = getDateObject(appointment.appointmentDate);
           return appointmentDate >= options.fromDate!;
         });
       }
       
       if (options.toDate) {
         filteredAppointments = filteredAppointments.filter(appointment => {
-          const appointmentDate = new Date(appointment.appointmentDate);
+          const appointmentDate = getDateObject(appointment.appointmentDate);
           return appointmentDate <= options.toDate!;
         });
       }
@@ -95,8 +96,8 @@ export const appointmentService = {
     
     // Sort by date (most recent first)
     return filteredAppointments.sort((a, b) => {
-      const dateA = new Date(a.appointmentDate);
-      const dateB = new Date(b.appointmentDate);
+      const dateA = getDateObject(a.appointmentDate);
+      const dateB = getDateObject(b.appointmentDate);
       return dateB.getTime() - dateA.getTime();
     });
   },

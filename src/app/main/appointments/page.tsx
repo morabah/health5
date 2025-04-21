@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { Appointment } from '@/types/appointment';
 import { mockGetMyAppointments } from '@/lib/mockApiService';
 import { UserType } from '@/types/enums';
+import { formatDate } from '@/utils/dateUtils';
 
 // Simple EmptyState component
 const EmptyState = ({ 
@@ -103,7 +104,7 @@ const AppointmentsList = ({
         <div key={appointment.id} className="p-4 border rounded-lg shadow-sm">
           <div className="font-medium">{appointment.doctorName || 'Unknown Doctor'}</div>
           <div className="text-sm text-gray-500">
-            {appointment.startTime && new Date(appointment.startTime).toLocaleDateString()}
+            {appointment.startTime && formatDate(appointment.startTime)}
           </div>
         </div>
       ))}
