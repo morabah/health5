@@ -38,5 +38,6 @@ yarn-error.log*
 next-env.d.ts
 
 # Firebase service account key (DO NOT COMMIT)
+serviceAccountKey.json
 scripts/serviceAccountKey.json
 service-account-key.json
