@@ -25,6 +25,7 @@ export async function fixMissingUserNames(): Promise<string> {
     const userDoc = await userRef.get();
     if (!userDoc.exists) continue;
     const user = userDoc.data();
+    if (!user) continue;
     let updateNeeded = false;
     let firstName = user.firstName;
     let lastName = user.lastName;
