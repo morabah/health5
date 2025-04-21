@@ -177,4 +177,13 @@ export function isFirebaseReady(): boolean {
 // Optional cleanup function for testing/hot module replacement
 export function cleanupFirebase(): void {
   initialized = false;
-} 
+}
+
+// Helper: get a ready Firestore instance, initializing Firebase if needed
+export async function getFirestoreDb(): Promise<Firestore> {
+  const { db } = initializeFirebaseClient();
+  if (!db) {
+    throw new Error('Firestore is not initialized');
+  }
+  return db;
+}

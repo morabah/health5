@@ -6,6 +6,8 @@ import { getApiMode } from './loaderUtils';
 import { getMockDoctorProfiles, getMockDoctorProfile, getMockDoctorAvailability, getMockDoctorForms, getMockDoctorAppointments } from './mockDataService';
 import { logInfo, logWarn, logError } from '@/lib/logger';
 import type { DoctorProfile } from '@/types/doctor';
+import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
+import { doc, getDoc } from 'firebase/firestore';
 
 /**
  * Loads all doctors for homepage or search.
@@ -80,8 +82,40 @@ export async function loadDoctorProfilePublic(id: string): Promise<DoctorProfile
       logInfo(`[${label}] Loaded mock data`, { found: !!data });
       return data || null;
     } else {
-      logWarn(`[${label}] Live fetch not implemented for mode: ${mode}`);
-      return null;
+      // Live fetch from Firestore
+      try {
+        const db = await getFirestoreDb();
+        const docRef = doc(db, 'doctors', id);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          logWarn(`[${label}] No doctor profile found for id: ${id}`);
+          return null;
+        }
+        const data = snap.data();
+        const profile: DoctorProfile = {
+          userId: snap.id,
+          specialty: data.specialty || '',
+          licenseNumber: data.licenseNumber || '',
+          yearsOfExperience: data.yearsOfExperience || 0,
+          education: data.education || '',
+          bio: data.bio || '',
+          verificationStatus: data.verificationStatus,
+          verificationNotes: data.verificationNotes || '',
+          location: data.location || '',
+          languages: data.languages || [],
+          consultationFee: data.consultationFee || 0,
+          profilePictureUrl: data.profilePictureUrl || null,
+          licenseDocumentUrl: data.licenseDocumentUrl || null,
+          certificateUrl: data.certificateUrl || null,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        };
+        logInfo(`[${label}] Loaded live data`, { found: true });
+        return profile;
+      } catch (err) {
+        logWarn(`[${label}] Live fetch error: ${(err as Error).message}`);
+        return null;
+      }
     }
   } catch (err) {
     logWarn(`[${label}] Error: ${(err as Error).message}`);
