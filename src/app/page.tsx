@@ -16,7 +16,7 @@ import { faUserMd, faCalendarCheck, faHospital, faMobileAlt, faShieldAlt, faUser
 import ApiModeLabel from './ApiModeLabel';
 import { collection, getDocs, query, where, limit, documentId } from 'firebase/firestore';
 
-const MOCK_DOCTOR_IDS = ['user_doctor_001', 'user_doctor_002', 'user_doctor_003'];
+const MOCK_DOCTOR_IDS = ['user_doctor_1', 'user_doctor_2', 'user_doctor_3', 'user_doctor_4', 'user_doctor_5'];
 
 // Extend the DoctorProfile interface to include the 'name' property
 interface ExtendedDoctorProfile extends DoctorProfile {

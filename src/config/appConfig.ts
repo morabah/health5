@@ -26,7 +26,7 @@ const KEYS = {
 };
 
 const DEFAULTS: AppConfig = {
-  apiMode: (process.env.NEXT_PUBLIC_API_MODE as ApiMode) || 'mock',
+  apiMode: (process.env.NEXT_PUBLIC_API_MODE as ApiMode) || 'live',
   theme: 'system',
   featureXEnabled: false,
 };
@@ -34,7 +34,7 @@ const DEFAULTS: AppConfig = {
 // Export API_MODE for legacy compatibility (deprecated, use getApiMode instead)
 export const API_MODE = DEFAULTS.apiMode;
 
-export const DATA_SOURCE: DataSource = 'mock'; // Change to 'crm' or 'firestore' as needed
+export const DATA_SOURCE: DataSource = 'firestore'; // Change to 'crm' or 'firestore' as needed
 
 export const CRM_API_CONFIG = {
   endpoint: process.env.NEXT_PUBLIC_CRM_API_ENDPOINT,

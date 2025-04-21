@@ -8,7 +8,7 @@
 export type ApiMode = 'live' | 'mock';
 
 const API_MODE_KEY = 'apiMode';
-const DEFAULT_MODE: ApiMode = (process.env.NEXT_PUBLIC_API_MODE as ApiMode) || 'mock';
+const DEFAULT_MODE: ApiMode = (process.env.NEXT_PUBLIC_API_MODE as ApiMode) || 'live';
 
 // Get current API mode (localStorage > env > fallback)
 export function getApiMode(): ApiMode {

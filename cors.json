@@ -1,8 +1,8 @@
 [
   {
-    "origin": ["http://localhost:3000", "https://<YOUR-HOST>.web.app"],
-    "method": ["GET", "HEAD", "POST", "PUT", "DELETE"],
+    "origin": ["http://localhost:3000", "http://localhost:5000", "http://127.0.0.1:3000", "http://127.0.0.1:5000", "https://helathcare-331f1.web.app", "https://helathcare-331f1.firebaseapp.com", "https://healthcare-frontend-test-deploy.windsurf.build"],
+    "method": ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"],
     "maxAgeSeconds": 3600,
-    "responseHeader": ["Content-Type", "Authorization"]
+    "responseHeader": ["Content-Type", "Authorization", "Content-Length", "User-Agent", "X-Requested-With", "Access-Control-Allow-Origin"]
   }
 ]

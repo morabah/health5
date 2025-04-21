@@ -13,7 +13,7 @@ export type ApiMode = 'mock' | 'live';
 
 // Constants
 const API_MODE_STORAGE_KEY = 'apiMode';
-const DEFAULT_MODE: ApiMode = (process.env.NEXT_PUBLIC_API_MODE as ApiMode) || 'mock';
+const DEFAULT_MODE: ApiMode = (process.env.NEXT_PUBLIC_API_MODE as ApiMode) || 'live';
 
 /**
  * Gets the current API mode with proper fallbacks

@@ -1,0 +1,73 @@
+[debug] [2025-04-21T08:50:17.764Z] ----------------------------------------------------------------------
+[debug] [2025-04-21T08:50:17.765Z] Command:       /Users/mohamedrabah/.nvm/versions/node/v18.20.8/bin/node /Users/mohamedrabah/.nvm/versions/node/v18.20.8/bin/firebase deploy --only firestore
+[debug] [2025-04-21T08:50:17.765Z] CLI Version:   13.35.1
+[debug] [2025-04-21T08:50:17.765Z] Platform:      darwin
+[debug] [2025-04-21T08:50:17.765Z] Node Version:  v18.20.8
+[debug] [2025-04-21T08:50:17.769Z] Time:          Mon Apr 21 2025 10:50:17 GMT+0200 (Eastern European Standard Time)
+[debug] [2025-04-21T08:50:17.769Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-04-21T08:50:17.860Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-04-21T08:50:17.860Z] > authorizing via signed-in user (morabah@gmail.com)
+[debug] [2025-04-21T08:50:17.860Z] [iam] checking project helathcare-331f1 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2025-04-21T08:50:17.861Z] Checked if tokens are valid: false, expires at: 1745209593909
+[debug] [2025-04-21T08:50:17.861Z] Checked if tokens are valid: false, expires at: 1745209593909
+[debug] [2025-04-21T08:50:17.861Z] > refreshing access token with scopes: []
+[debug] [2025-04-21T08:50:17.862Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2025-04-21T08:50:17.862Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-04-21T08:50:18.122Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2025-04-21T08:50:18.122Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2025-04-21T08:50:18.135Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/helathcare-331f1:testIamPermissions [none]
+[debug] [2025-04-21T08:50:18.135Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/helathcare-331f1:testIamPermissions x-goog-quota-user=projects/helathcare-331f1
+[debug] [2025-04-21T08:50:18.135Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/helathcare-331f1:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2025-04-21T08:50:18.952Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/helathcare-331f1:testIamPermissions 200
+[debug] [2025-04-21T08:50:18.952Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/helathcare-331f1:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[info] 
+[info] === Deploying to 'helathcare-331f1'...
+[info] 
+[info] i  deploying firestore 
+[info] i  firestore: reading indexes from firestore.indexes.json... 
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2025-04-21T08:50:18.958Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:18.958Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:18.959Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/helathcare-331f1:test [none]
+[debug] [2025-04-21T08:50:18.959Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/helathcare-331f1:test [omitted]
+[debug] [2025-04-21T08:50:19.854Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/helathcare-331f1:test 200
+[debug] [2025-04-21T08:50:19.854Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/helathcare-331f1:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2025-04-21T08:50:19.856Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:19.856Z] Checked if tokens are valid: true, expires at: 1745229017122
+[info] i  firestore: deploying indexes... 
+[debug] [2025-04-21T08:50:19.858Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:19.858Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:19.859Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/releases pageSize=10&pageToken=
+[debug] [2025-04-21T08:50:19.863Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/helathcare-331f1/databases/(default)/collectionGroups/-/indexes [none]
+[debug] [2025-04-21T08:50:20.230Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/helathcare-331f1/databases/(default)/collectionGroups/-/indexes 200
+[debug] [2025-04-21T08:50:20.231Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/helathcare-331f1/databases/(default)/collectionGroups/-/indexes {"indexes":[{"name":"projects/helathcare-331f1/databases/(default)/collectionGroups/appointments/indexes/CICAgJim14AK","queryScope":"COLLECTION","fields":[{"fieldPath":"patientId","order":"ASCENDING"},{"fieldPath":"startTime","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}],"state":"READY","density":"SPARSE_ALL"},{"name":"projects/helathcare-331f1/databases/(default)/collectionGroups/healthMetrics/indexes/CICAgOjXh4EK","queryScope":"COLLECTION","fields":[{"fieldPath":"patientId","order":"ASCENDING"},{"fieldPath":"date","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}],"state":"READY","density":"SPARSE_ALL"},{"name":"projects/helathcare-331f1/databases/(default)/collectionGroups/notifications/indexes/CICAgJj7z4EK","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}],"state":"READY","density":"SPARSE_ALL"},{"name":"projects/helathcare-331f1/databases/(default)/collectionGroups/tasks/indexes/CICAgJjF9oIK","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}],"state":"READY","density":"SPARSE_ALL"},{"name":"projects/helathcare-331f1/databases/(default)/collectionGroups/appointments/indexes/CICAgJiUpoMK","queryScope":"COLLECTION","fields":[{"fieldPath":"patientId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"startTime","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}],"state":"READY","density":"SPARSE_ALL"},{"name":"projects/helathcare-331f1/databases/(default)/collectionGroups/appointments/indexes/CICAgNi47oMK","queryScope":"COLLECTION","fields":[{"fieldPath":"doctorId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"startTime","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}],"state":"READY","density":"SPARSE_ALL"},{"name":"projects/helathcare-331f1/databases/(default)/collectionGroups/appointments/indexes/CICAgJjFqZMK","queryScope":"COLLECTION","fields":[{"fieldPath":"patientId","order":"ASCENDING"},{"fieldPath":"appointmentDate","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}],"state":"READY","density":"SPARSE_ALL"}]}
+[debug] [2025-04-21T08:50:20.232Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:20.232Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:20.232Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/helathcare-331f1/databases/(default)/collectionGroups/-/fields?filter=indexConfig.usesAncestorConfig=false OR ttlConfig:* [none]
+[debug] [2025-04-21T08:50:20.537Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/helathcare-331f1/databases/(default)/collectionGroups/-/fields?filter=indexConfig.usesAncestorConfig=false OR ttlConfig:* 200
+[debug] [2025-04-21T08:50:20.538Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/helathcare-331f1/databases/(default)/collectionGroups/-/fields?filter=indexConfig.usesAncestorConfig=false OR ttlConfig:* {"fields":[{"name":"projects/helathcare-331f1/databases/(default)/collectionGroups/__default__/fields/*","indexConfig":{"indexes":[{"queryScope":"COLLECTION","fields":[{"fieldPath":"*","order":"ASCENDING"}],"state":"READY"},{"queryScope":"COLLECTION","fields":[{"fieldPath":"*","order":"DESCENDING"}],"state":"READY"},{"queryScope":"COLLECTION","fields":[{"fieldPath":"*","arrayConfig":"CONTAINS"}],"state":"READY"}]}}]}
+[info] i  firestore: The following indexes are defined in your project but are not present in your firestore indexes file:
+	(appointments) -- (patientId,ASCENDING) (startTime,ASCENDING) 
+	(healthMetrics) -- (patientId,ASCENDING) (date,DESCENDING) 
+	(notifications) -- (userId,ASCENDING) (createdAt,DESCENDING) 
+	(tasks) -- (userId,ASCENDING) (createdAt,DESCENDING) 
+	(appointments) -- (patientId,ASCENDING) (status,ASCENDING) (startTime,ASCENDING) 
+	(appointments) -- (doctorId,ASCENDING) (status,ASCENDING) (startTime,ASCENDING) 
+	(appointments) -- (patientId,ASCENDING) (appointmentDate,DESCENDING)  
+[debug] [2025-04-21T08:50:20.730Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/releases 200
+[debug] [2025-04-21T08:50:20.730Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/releases {"releases":[{"name":"projects/helathcare-331f1/releases/cloud.firestore","rulesetName":"projects/helathcare-331f1/rulesets/9f5c7d3e-9ac8-4509-9374-ada8506730c7","createTime":"2025-04-09T06:52:24.464240Z","updateTime":"2025-04-15T06:13:40.834315Z"},{"name":"projects/helathcare-331f1/releases/firebase.storage/helathcare-331f1.firebasestorage.app","rulesetName":"projects/helathcare-331f1/rulesets/6bb936a2-5c26-44ed-8c9b-a7936a0d98d5","createTime":"2025-04-13T16:06:44.045300Z","updateTime":"2025-04-20T18:45:18.482855Z"}]}
+[debug] [2025-04-21T08:50:20.758Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:20.758Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:20.758Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/rulesets/9f5c7d3e-9ac8-4509-9374-ada8506730c7 [none]
+[debug] [2025-04-21T08:50:21.566Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/rulesets/9f5c7d3e-9ac8-4509-9374-ada8506730c7 200
+[debug] [2025-04-21T08:50:21.566Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/rulesets/9f5c7d3e-9ac8-4509-9374-ada8506730c7 [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2025-04-21T08:50:21.569Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:21.569Z] Checked if tokens are valid: true, expires at: 1745229017122
+[debug] [2025-04-21T08:50:21.569Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/rulesets [none]
+[debug] [2025-04-21T08:50:21.569Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/rulesets [omitted]
+[debug] [2025-04-21T08:50:22.168Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/rulesets 200
+[debug] [2025-04-21T08:50:22.168Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/helathcare-331f1/rulesets {"name":"projects/helathcare-331f1/rulesets/1852fe69-7334-4db4-a553-84cab602283f","source":{"files":[{"content":"rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    // Explicitly allow read access from any origin, to avoid CORS issues\n    match /{document=**} {\n      allow read: if true;\n      allow write: if request.auth != null;\n    }\n  }\n} ","name":"firestore.rules"}]},"createTime":"2025-04-21T08:50:22.146367Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2025-04-21T08:50:22.169Z] [rules] created ruleset projects/helathcare-331f1/rulesets/1852fe69-7334-4db4-a553-84cab602283f

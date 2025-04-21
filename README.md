@@ -40,6 +40,33 @@ This project uses [Prettier](https://prettier.io/) for automated code formatting
   ```
   This script formats all source files in `src/` using Prettier.
 
+## Firebase Configuration
+
+The app supports two API modes:
+- **Mock mode**: Uses localStorage for data storage (default in development)
+- **Live mode**: Uses Firebase/Firestore for backend data
+
+To use Firebase (live mode), create an `.env.local` file with the following configuration:
+
+```
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyATegnW0o6bC6NOB6OtsZI501p8_Jy5isw
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=helathcare-331f1.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=helathcare-331f1
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=helathcare-331f1.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=662603978873
+NEXT_PUBLIC_FIREBASE_APP_ID=1:662603978873:web:4b8102a82647b334419ca8
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-LN6HZTXH2R
+
+# API Mode Configuration - Set to 'live' to use Firebase/Firestore
+NEXT_PUBLIC_API_MODE=live
+
+# Logging
+NEXT_PUBLIC_LOG_LEVEL=info
+```
+
+You can also manually switch between modes in the app through the API mode indicator in the UI.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.

@@ -3,7 +3,7 @@ import React, { useEffect, useCallback } from 'react';
 import { useRouter } from "next/navigation";
 import { initializeFirebaseClient } from '@/lib/firebaseClient';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { getApiMode } from '@/config/apiConfig';
+import { getApiMode, setApiMode } from '@/config/apiConfig';
 import type { DoctorProfile } from '@/types/doctor';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
@@ -25,7 +25,9 @@ import {
   CurrencyDollarIcon,
   BriefcaseIcon,
   ClockIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon
 } from "@heroicons/react/24/outline";
 import { StarIcon } from '@heroicons/react/24/solid';
 
@@ -47,17 +49,19 @@ const specialtyOptions = [
   { value: "Pediatrics", label: "Pediatrics" },
   { value: "Neurology", label: "Neurology" },
   { value: "Orthopedics", label: "Orthopedics" },
+  { value: "Oncology", label: "Oncology" },
   { value: "Psychiatry", label: "Psychiatry" },
-  { value: "General", label: "General Practice" },
+  { value: "Radiology", label: "Radiology" },
+  { value: "General Surgery", label: "General Surgery" },
+  { value: "Family Medicine", label: "Family Medicine" },
 ];
 
 const locationOptions = [
   { value: "", label: "All Locations" },
   { value: "New York", label: "New York" },
-  { value: "Los Angeles", label: "Los Angeles" },
-  { value: "Chicago", label: "Chicago" },
-  { value: "Boston", label: "Boston" },
   { value: "San Francisco", label: "San Francisco" },
+  { value: "Chicago", label: "Chicago" },
+  { value: "Houston", label: "Houston" },
 ];
 
 const languageOptions = [
@@ -88,23 +92,33 @@ export default function FindDoctorPage() {
   // Process doctor data: compute display name and UI-specific fields
   const processDoctorData = (doctorData: (DoctorProfile & { id: string })[]): DoctorListItem[] => {
     return doctorData.map(doctor => {
-      // Use fullName if available, else fallback
-      let displayName = doctor.verificationData?.fullName ?? '';
-      if (!displayName.trim()) {
-        displayName = `Doctor (ID: ${doctor.id.substring(0, 8)})`;
+      // Extract all data including any extra fields from Firestore
+      const docData = doctor as any;
+      
+      // Use firstName + lastName if available in the document data
+      let displayName = '';
+      
+      if (docData.firstName && docData.lastName) {
+        displayName = `Dr. ${docData.firstName} ${docData.lastName}`;
+      } else {
+        // Fallback to user record attached info if available
+        displayName = doctor.verificationData?.fullName ?? `Doctor (ID: ${doctor.id.substring(0, 8)})`;
       }
 
       // Generate a next available slot for now
       const nextAvailable = getRandomTimeSlot();
 
+      // Ensure consultationFee is present
+      const fee = doctor.consultationFee || 100;
+
       return {
         ...doctor,
         name: displayName,
-        fee: doctor.consultationFee,
+        fee: fee,
         available: true,
         profilePicUrl: doctor.profilePictureUrl ?? '',
         nextAvailable,
-        rating: 0
+        rating: Math.floor(Math.random() * 5) + 1 // Random rating 1-5 for demo
       };
     });
   };
@@ -129,29 +143,89 @@ export default function FindDoctorPage() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch doctors from Firestore
-      const { db } = initializeFirebaseClient(getApiMode());
-      if (!db) {
-        throw new Error('Firestore not initialized');
-      }
-      const doctorsRef = collection(db, 'doctors');
-      const constraints: any[] = [];
-      if (specialty) constraints.push(where('specialty', '==', specialty));
-      if (location) constraints.push(where('location', '==', location));
-      const q = constraints.length ? query(doctorsRef, ...constraints) : doctorsRef;
-      const snapshot = await getDocs(q);
-      const results = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as DoctorProfile)
-      }));
+      // ALWAYS use live mode and Firebase for the /find route
+      console.log('[FindDoctorPage] Forcing LIVE mode for /find route');
       
-      // Process and set doctor data
-      const processedResults = processDoctorData(results);
-      setDoctors(processedResults);
-      applyFilters(processedResults, searchQuery, specialty, location, language, availableOnly);
+      // Force API mode to live for this route
+      const originalMode = getApiMode();
+      if (originalMode !== 'live') {
+        console.log(`[FindDoctorPage] Temporarily overriding API mode from ${originalMode} to live`);
+        setApiMode('live');
+      }
+      
+      // Initialize Firebase with forced 'live' mode
+      const { db } = initializeFirebaseClient('live');
+      console.log(`[FindDoctorPage] Firebase/Firestore initialized: ${!!db}`);
+      
+      // If Firestore is available, use it
+      if (db) {
+        console.log('[FindDoctorPage] Using Firestore to fetch doctors');
+        try {
+          const doctorsRef = collection(db, 'doctors');
+          const constraints: any[] = [];
+          if (specialty) constraints.push(where('specialty', '==', specialty));
+          if (location) constraints.push(where('location', '==', location));
+          const q = constraints.length ? query(doctorsRef, ...constraints) : doctorsRef;
+          
+          console.log('[FindDoctorPage] Executing Firestore query...');
+          const snapshot = await getDocs(q);
+          
+          console.log(`[FindDoctorPage] Firestore query returned ${snapshot.size} results`);
+          
+          if (snapshot.empty) {
+            console.log('[FindDoctorPage] No doctors found in Firestore');
+            // Set empty state instead of using mock data
+            setDoctors([]);
+            setFilteredDoctors([]);
+          } else {
+            // Process Firestore results
+            console.log('[FindDoctorPage] Processing Firestore results');
+            const results = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...(doc.data() as DoctorProfile)
+            }));
+            
+            // Process and set doctor data
+            const processedResults = processDoctorData(results);
+            setDoctors(processedResults);
+            applyFilters(processedResults, searchQuery, specialty, location, language, availableOnly);
+            console.log('[FindDoctorPage] Successfully loaded doctors from Firestore');
+          }
+          
+          // Restore original API mode if it was changed
+          if (originalMode !== 'live') {
+            console.log(`[FindDoctorPage] Restoring API mode to ${originalMode}`);
+            setApiMode(originalMode);
+          }
+          
+          return;
+        } catch (firestoreError) {
+          console.error('[FindDoctorPage] Firestore query error:', firestoreError);
+          // Show error instead of using mock data
+          setError('Failed to fetch doctors from database');
+          setDoctors([]);
+          setFilteredDoctors([]);
+          
+          // Restore original API mode if it was changed
+          if (originalMode !== 'live') {
+            console.log(`[FindDoctorPage] Restoring API mode to ${originalMode}`);
+            setApiMode(originalMode);
+          }
+          
+          return;
+        }
+      } else {
+        console.warn('[FindDoctorPage] Firestore not initialized, showing error');
+        // Show error instead of using mock data
+        setError('Firebase database not available. Please try again later.');
+        setDoctors([]);
+        setFilteredDoctors([]);
+      }
     } catch (err) {
-      console.error('Error fetching doctors:', err);
-      setError('Failed to load doctors. Please try again later.');
+      console.error('[FindDoctorPage] Error fetching doctors:', err);
+      setError('Failed to load doctors. Please check your connection and try again.');
+      setDoctors([]);
+      setFilteredDoctors([]);
     } finally {
       setLoading(false);
     }
@@ -370,18 +444,25 @@ export default function FindDoctorPage() {
               {/* Empty State */}
               {!error && filteredDoctors.length === 0 && (
                 <EmptyState
-                  title="No doctors found"
-                  message="Try adjusting your filters or search query"
+                  icon={<InformationCircleIcon className="w-16 h-16 text-blue-500" />}
+                  title="No Data Available in Database"
+                  message="There are currently no doctors in our Firestore database. This page is configured to display real data from Firebase, but no records exist yet."
                   action={
-                    <Button 
-                      onClick={handleResetFilters}
-                      variant="primary"
-                      label="Reset Filters"
-                      pageName="FindDoctorPage"
-                    >
-                      Reset Filters
-                    </Button>
+                    <div className="flex flex-col items-center">
+                      <p className="mb-4 text-sm text-gray-600 dark:text-gray-400 max-w-md">
+                        If you're an administrator, you can add doctor records to the Firestore 'doctors' collection.
+                      </p>
+                      <Button 
+                        onClick={fetchDoctors}
+                        variant="primary"
+                        label="Refresh Data"
+                        pageName="FindDoctorPage"
+                      >
+                        Refresh Data
+                      </Button>
+                    </div>
                   }
+                  className="p-10"
                 />
               )}
               
