@@ -31,13 +31,13 @@ import { logInfo, logWarn } from './logger';
 // Firebase config for the Healthcare App
 // Hardcode critical values to avoid env typo issues
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY as string,
-  authDomain: 'healthcare-331f1.firebaseapp.com',
-  projectId: 'healthcare-331f1',
-  storageBucket: 'healthcare-331f1.appspot.com',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID as string,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID as string,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID as string,
+  apiKey: "AIzaSyATegnW0o6bC6NOB6OtsZI501p8_Jy5isw",
+  authDomain: "helathcare-331f1.firebaseapp.com",
+  projectId: "helathcare-331f1",
+  storageBucket: "helathcare-331f1.firebasestorage.app",
+  messagingSenderId: "662603978873",
+  appId: "1:662603978873:web:4b8102a82647b334419ca8",
+  measurementId: "G-LN6HZTXH2R"
 };
 
 let app: FirebaseApp | null = null;
