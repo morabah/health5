@@ -4,7 +4,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Spinner from "@/components/ui/Spinner";
 import Link from "next/link";
-import { db } from "@/lib/firebaseClient";
+import { db } from '@/lib/improvedFirebaseClient';
 import { loadAdminDashboardData } from '@/data/adminLoaders';
 
 interface AdminDashboardData {

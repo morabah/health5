@@ -49,8 +49,8 @@ async function getFirestoreDb() {
     return null;
   }
   try {
-    const { initializeFirebaseClient } = await import('@/lib/firebaseClient');
-    const { db } = initializeFirebaseClient(currentMode);
+    const { initializeFirebaseClient, isFirebaseReady } = await import('@/lib/improvedFirebaseClient');
+    const { db, status } = initializeFirebaseClient(currentMode);
     return db;
   } catch (err) {
     console.error('[Home] Error initializing or importing Firebase:', err);
@@ -202,9 +202,9 @@ export default function Home() {
     async function initializeFirebase() {
       if (apiMode === 'live') {
         try {
-          const { initializeFirebaseClient } = await import('@/lib/firebaseClient');
-          const { db } = initializeFirebaseClient(apiMode);
-          console.log('[Home] Firebase initialized for mode:', apiMode, 'DB instance:', !!db);
+          const { initializeFirebaseClient, isFirebaseReady } = await import('@/lib/improvedFirebaseClient');
+          const { db, status } = initializeFirebaseClient(apiMode);
+          console.log('[Home] Firebase initialized for mode:', apiMode, 'DB instance:', !!db, 'Status:', status);
           setFirebaseInitialized(!!db);
         } catch (err) {
           console.error('[Home] Error initializing Firebase:', err);

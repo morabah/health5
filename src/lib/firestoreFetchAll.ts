@@ -1,7 +1,7 @@
 // NOTE: This file is for CMS/validation tooling only. Do NOT use in production app logic. Use loader abstraction for all Firestore access.
 // throw new Error("firestoreFetchAll.ts is deprecated. Use data loader abstraction instead.");
 
-import { app, db } from "@/lib/firebaseClient";
+import { app, db } from '@/lib/improvedFirebaseClient';
 import { collection, getDocs } from "firebase/firestore";
 
 /**

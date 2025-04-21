@@ -1,0 +1,14 @@
+# Node modules and build directories
+node_modules/
+build/
+dist/
+.next/
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Firebase config file (we're replacing this with improved version)
+src/lib/firebaseClient.ts 

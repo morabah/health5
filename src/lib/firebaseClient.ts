@@ -97,20 +97,20 @@ export function initializeFirebaseClient(currentApiMode: string): { app: Firebas
       logInfo('Initializing Firestore with optimal settings...');
       try {
         const settings = {
-          experimentalForceLongPolling: true, // Use long polling instead of WebSockets
+          // Remove conflicting configuration - don't use both force and auto-detect
+          // experimentalForceLongPolling: true, // Removed conflicting setting
           ignoreUndefinedProperties: true,
-          cacheSizeBytes: CACHE_SIZE_UNLIMITED, // Use maximum cache for better offline support
-          experimentalAutoDetectLongPolling: true, // Auto-detect best connection method
+          // Use a more reasonable cache size instead of unlimited
+          cacheSizeBytes: 50 * 1024 * 1024, // 50MB instead of UNLIMITED
+          experimentalAutoDetectLongPolling: true,
+          // Use cache settings instead of enableIndexedDbPersistence
+          cache: {
+            persistenceEnabled: true,
+            tabSizeBytes: 50 * 1024 * 1024 // 50MB tab size
+          }
         };
         
         db = initializeFirestore(app, settings);
-        
-        // Enable persistence for offline support
-        if (typeof window !== 'undefined') {
-          enableIndexedDbPersistence(db).catch((err) => {
-            logWarn('Firestore persistence could not be enabled:', { error: err });
-          });
-        }
       } catch (firestoreError) {
         logError('Failed to initialize Firestore with optimal settings:', { error: firestoreError });
         

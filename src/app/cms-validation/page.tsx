@@ -19,7 +19,7 @@ import { UserProfileSchema, PatientProfileSchema, DoctorProfileSchema, DoctorAva
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleCheck, faCircleExclamation, faSearch, faDownload, faSpinner, faCodeCompare } from '@fortawesome/free-solid-svg-icons';
 import { getApiMode, setApiMode, type ApiMode } from '@/config/apiMode';
-import { db } from '@/lib/firebaseClient';
+import { db } from '@/lib/improvedFirebaseClient';
 import { doc, updateDoc } from 'firebase/firestore';
 import ApiModeLabel from './ApiModeLabel';
 

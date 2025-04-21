@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "next lint && npm run validate:firebase",
     "type-check": "tsc --noEmit",
     "test": "jest --passWithNoTests",
     "format": "prettier --write src/**/*.{js,ts,jsx,tsx}",
@@ -28,7 +28,9 @@
     "seed:firebase:clear": "node ./scripts/seed-firebase.js --clear",
     "seed:firebase:users": "node ./scripts/seed-firebase.js --collections=users",
     "seed:firebase:patients": "node ./scripts/seed-firebase.js --collections=patients",
-    "seed:firebase:appointments": "node ./scripts/seed-firebase.js --collections=appointments"
+    "seed:firebase:appointments": "node ./scripts/seed-firebase.js --collections=appointments",
+    "validate:firebase": "node scripts/validate-firebase-config.js",
+    "apply:firebase-best-practices": "node scripts/apply-firebase-best-practices.js"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.5.0",

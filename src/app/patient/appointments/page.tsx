@@ -15,7 +15,7 @@ import { formatDate } from "@/utils/dateUtils";
 import { useSearchParams } from "next/navigation";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { initializeFirebaseClient } from "@/lib/firebaseClient";
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import { AppointmentSchema } from "@/lib/zodSchemas";
 
 type FilterType = "all" | "upcoming" | "past" | "cancelled";

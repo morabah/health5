@@ -14,7 +14,7 @@ import Link from "next/link";
 import { toast } from "react-hot-toast";
 import Textarea from "@/components/ui/Textarea";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { initializeFirebaseClient } from "@/lib/firebaseClient";
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import { AppointmentSchema } from "@/lib/zodSchemas";
 
 interface Appointment {

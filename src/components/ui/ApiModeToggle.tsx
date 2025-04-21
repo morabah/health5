@@ -1,27 +1,30 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useState, useEffect } from "react";
 import { getApiMode, setApiMode } from "@/config/appConfig";
 import { ApiMode } from "@/config/appConfig";
 
-/**
- * Hydration-safe API mode label and toggle for Navbar.
- * Ensures SSR/CSR text mismatch does not occur.
- */
-export default function ApiModeLabel() {
+interface ApiModeToggleProps {
+  className?: string;
+}
+
+export function ApiModeToggle({ className = "" }: ApiModeToggleProps) {
   const [mode, setMode] = useState<ApiMode>("mock");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Only run on client to avoid hydration mismatch
     setMode(getApiMode());
     setMounted(true);
 
-    // Listen for API mode changes
+    // Listen for API mode changes from other sources
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === "apiMode" && (event.newValue === "live" || event.newValue === "mock")) {
         setMode(event.newValue as ApiMode);
       }
     };
 
+    // Custom event for same-tab updates
     const handleApiModeChange = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail?.mode && (customEvent.detail.mode === "live" || customEvent.detail.mode === "mock")) {
@@ -44,35 +47,28 @@ export default function ApiModeLabel() {
     setMode(newMode);
   };
 
-  if (!mounted) {
-    // Avoid rendering until after hydration
-    return null;
-  }
-
-  const modeColor = mode === "live" 
-    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300" 
-    : "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300";
+  // Don't render anything during SSR to prevent hydration mismatch
+  if (!mounted) return null;
 
   return (
-    <div className="flex items-center space-x-2">
-      <span className={`font-mono text-xs px-2 py-1 rounded ${modeColor}`}>
-        {mode.toUpperCase()}
-      </span>
+    <div className={`flex items-center space-x-2 ${className}`}>
       <button
-        className={`relative inline-flex h-5 w-10 items-center rounded-full ${
+        className={`relative inline-flex h-6 w-11 items-center rounded-full ${
           mode === "live" ? "bg-blue-600" : "bg-gray-300"
         }`}
         onClick={toggleApiMode}
         aria-pressed={mode === "live"}
-        title={`Switch to ${mode === "live" ? "mock" : "live"} mode`}
       >
         <span className="sr-only">Toggle API Mode</span>
         <span
           className={`${
-            mode === "live" ? "translate-x-5" : "translate-x-1"
-          } inline-block h-3 w-3 transform rounded-full bg-white transition`}
+            mode === "live" ? "translate-x-6" : "translate-x-1"
+          } inline-block h-4 w-4 transform rounded-full bg-white transition`}
         />
       </button>
+      <span className="text-sm font-medium cursor-pointer" onClick={toggleApiMode}>
+        {mode === "live" ? "Live API" : "Mock API"}
+      </span>
     </div>
   );
-}
+} 

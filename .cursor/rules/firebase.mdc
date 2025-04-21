@@ -1,0 +1,64 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+
+⌘K to generate a command
+i want to upload lessoed learning to cursor rules
+
+Let's create a Cursor rules file to formalize the API mode and Firebase best practices:
+Let's also create a simplified .cursorignore file to exclude certain directories from these rules:
+Now, let's create a script that automatically validates the Firebase configuration against the rules:
+Lastly, let's update the package.json to add a script for running the validation:
+Perfect! I've created a comprehensive set of Cursor rules and validation tools to formalize and enforce the lessons learned about Firebase and API mode configuration. Here's what I've set up:
+Cursor Rules File (.cursor/rules.json):
+Provides warnings and errors for common issues like direct localStorage access
+Encourages use of the improved Firebase client
+Checks for conflicting Firestore settings
+Enforces hydration safety patterns
+Validation Script (scripts/validate-firebase-config.js):
+Validates that the Firebase client implementation follows best practices
+Scans the codebase for rule violations
+Identifies files still using the old Firebase client
+Provides detailed, colorful output with severity levels
+Cursor Ignore File (.cursorignore):
+Excludes certain directories and files from the rules
+Specifically ignores the old firebaseClient.ts since we're replacing it
+Package.json Update:
+Added a new npm script: validate:firebase
+Updated the lint script to also run Firebase validation
+These tools will help ensure that all team members follow the best practices established from the lessons learned, reducing errors and improving code quality.
+To use these tools:
+Run npm run validate:firebase to check for Firebase-related issues
+The Cursor editor will automatically highlight issues based on the rules
+The validation script can be integrated into CI/CD pipelines
+/Generate Cursor Rules
+
+Firebase Best Practices - Cursor Rules
+The following Cursor rules have been generated and saved to .cursor/rules.json:
+Current Rules
+use-getApiMode (warning)
+Prevents direct localStorage access for API mode
+Enforces use of getApiMode() from appConfig.ts
+use-setApiMode (warning)
+Prevents direct localStorage setting for API mode
+Enforces use of setApiMode() for proper event handling
+firebase-cache-settings (warning)
+Flags use of CACHE_SIZE_UNLIMITED and enableIndexedDbPersistence
+Encourages modern cache configuration
+conflicting-firebase-settings (error)
+Detects conflicting Firestore polling settings
+Prevents using both experimental settings simultaneously
+hydration-safety (warning)
+Ensures components handle SSR/hydration correctly
+Checks for mounted state before using API mode
+firebase-readiness-check (warning)
+Checks for null assertion operators on Firebase services
+Promotes safe access patterns
+use-improved-firebase-client (suggestion)
+Encourages migration to the improved client implementation
+Flags imports from the old client
+check-firebase-status (suggestion)
+Ensures status object is extracted when initializing Firebase
+Promotes service state awareness

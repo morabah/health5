@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import type { UserProfile } from '@/types/user';
 import type { UserType } from '@/types/enums';
 import { logInfo, logWarn, logError } from '@/lib/logger';

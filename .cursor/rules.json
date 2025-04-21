@@ -1,0 +1,99 @@
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "name": "use-getApiMode",
+      "description": "Always use getApiMode() function for consistent API mode access",
+      "message": "Direct localStorage access for API mode can cause inconsistencies. Use getApiMode() from appConfig.ts instead.",
+      "severity": "warning",
+      "include": ["**/*.ts", "**/*.tsx"],
+      "exclude": ["**/appConfig.ts"],
+      "pattern": "localStorage\\.getItem\\(['\"]apiMode['\"]\\)"
+    },
+    {
+      "name": "use-setApiMode",
+      "description": "Always use setApiMode() function for setting API mode",
+      "message": "Direct localStorage setting for API mode bypasses event handling. Use setApiMode() from appConfig.ts instead.",
+      "severity": "warning",
+      "include": ["**/*.ts", "**/*.tsx"],
+      "exclude": ["**/appConfig.ts", "**/ClientInit.tsx"],
+      "pattern": "localStorage\\.setItem\\(['\"]apiMode['\"]"
+    },
+    {
+      "name": "firebase-cache-settings",
+      "description": "Use recommended cache settings for Firestore",
+      "message": "Avoid using CACHE_SIZE_UNLIMITED and use modern cache configuration instead of enableIndexedDbPersistence()",
+      "severity": "warning",
+      "include": ["**/firebase*.ts"],
+      "pattern": "(CACHE_SIZE_UNLIMITED|enableIndexedDbPersistence)"
+    },
+    {
+      "name": "conflicting-firebase-settings",
+      "description": "Avoid conflicting Firestore configuration settings",
+      "message": "Don't use both experimentalForceLongPolling and experimentalAutoDetectLongPolling together",
+      "severity": "error",
+      "include": ["**/firebase*.ts"],
+      "pattern": "experimentalForceLongPolling.+experimentalAutoDetectLongPolling|experimentalAutoDetectLongPolling.+experimentalForceLongPolling"
+    },
+    {
+      "name": "hydration-safety",
+      "description": "Ensure UI components using API mode handle SSR/hydration correctly",
+      "message": "Components using API mode should check for mounted state to prevent hydration mismatches",
+      "severity": "warning",
+      "include": ["**/*.tsx"],
+      "exclude": ["**/layout.tsx", "**/page.tsx"],
+      "pattern": "getApiMode\\(\\).+return [^n]"
+    },
+    {
+      "name": "firebase-readiness-check",
+      "description": "Always check Firebase services availability before use",
+      "message": "Always check if Firebase services are initialized before using them",
+      "severity": "warning",
+      "include": ["**/*.tsx", "**/*.ts"],
+      "exclude": ["**/firebase*.ts"],
+      "pattern": "(db|auth|firestore)\\!\\."
+    },
+    {
+      "name": "use-improved-firebase-client",
+      "description": "Use the improved Firebase client implementation",
+      "message": "Import from improvedFirebaseClient.ts instead of firebaseClient.ts for better error handling",
+      "severity": "suggestion",
+      "include": ["**/*.tsx", "**/*.ts"],
+      "exclude": ["**/firebase*.ts", "**/improvedFirebaseClient.ts"],
+      "pattern": "import.+['\"]@/lib/firebaseClient['\"]"
+    },
+    {
+      "name": "check-firebase-status",
+      "description": "Check Firebase status object for service availability",
+      "message": "Always check the status object returned from initializeFirebaseClient() to understand service state",
+      "severity": "suggestion",
+      "include": ["**/*.tsx", "**/*.ts"],
+      "exclude": ["**/firebase*.ts", "**/improvedFirebaseClient.ts"],
+      "pattern": "const\\s+\\{\\s*app,\\s*auth,\\s*db.+\\}\\s*=\\s*initializeFirebaseClient\\((?![^)]*status)"
+    }
+  ],
+  "configurations": {
+    "default": {
+      "extends": "recommended",
+      "rules": {
+        "use-getApiMode": true,
+        "use-setApiMode": true,
+        "firebase-cache-settings": true,
+        "conflicting-firebase-settings": true,
+        "hydration-safety": true,
+        "firebase-readiness-check": true,
+        "use-improved-firebase-client": true,
+        "check-firebase-status": true
+      }
+    },
+    "strict": {
+      "extends": "default",
+      "rules": {
+        "use-getApiMode": { "severity": "error" },
+        "use-setApiMode": { "severity": "error" },
+        "firebase-readiness-check": { "severity": "error" },
+        "use-improved-firebase-client": { "severity": "warning" }
+      }
+    }
+  }
+} 

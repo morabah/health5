@@ -1,8 +1,12 @@
-import { getDoctorDataSource } from '@/config/appConfig';
-import { getMockDoctorAvailability } from './mockDataService';
-import { getMockDoctorUser } from './mockDataService';
-// import { db } from '@/lib/firebaseClient';
-// import { collection, getDocs } from 'firebase/firestore';
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+
+interface WeeklySlot {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  isAvailable: boolean;
+}
 
 export interface DoctorAvailabilitySlot {
   id: string;
@@ -12,51 +16,55 @@ export interface DoctorAvailabilitySlot {
 }
 
 /**
- * Loads doctor availability slots with dates converted to display format.
- * Takes weekly recurring slots and generates specific dates for the next 2 weeks.
+ * Gets a properly initialized Firebase Firestore instance
  */
-export async function loadDoctorAvailability(): Promise<DoctorAvailabilitySlot[]> {
-  const dataSource = getDoctorDataSource();
-  
-  if (dataSource === 'mock') {
-    // In mock mode, get the weekly availability slots
-    const doctorUser = getMockDoctorUser();
-    const weeklySlots = getMockDoctorAvailability(doctorUser.id);
-    
-    // Convert weekly slots to specific dates for the next 14 days
+async function getFirestoreDb() {
+  const { db } = initializeFirebaseClient('live');
+  if (!db) {
+    throw new Error('Firebase Firestore is not available');
+  }
+  return db;
+}
+
+/**
+ * Loads doctor availability slots from Firestore and generates dates for the next 14 days.
+ */
+export async function loadDoctorAvailability(doctorId: string): Promise<DoctorAvailabilitySlot[]> {
+  try {
+    const db = await getFirestoreDb();
+    const scheduleQuery = query(
+      collection(db, 'doctorSchedules'),
+      where('doctorId', '==', doctorId)
+    );
+    const snapshot = await getDocs(scheduleQuery);
+    if (snapshot.empty) {
+      console.warn(`No availability schedule found for doctor ${doctorId}`);
+      return [];
+    }
     const displaySlots: DoctorAvailabilitySlot[] = [];
     const today = new Date();
-    
-    // Generate specific date slots for the next 14 days
-    for (let i = 0; i < 14; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-      
-      // Find slots for this day of the week
-      const matchingSlots = weeklySlots.filter(slot => slot.dayOfWeek === dayOfWeek);
-      
-      // Create display slots for each matching time slot
-      matchingSlots.forEach(slot => {
-        const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
-        
-        displaySlots.push({
-          id: `${slot.id}_${formattedDate}`,
-          date: formattedDate,
-          time: slot.startTime,
-          available: slot.isAvailable
+    snapshot.forEach(doc => {
+      const scheduleData = doc.data();
+      const weeklySlots = (scheduleData.slots || []) as WeeklySlot[];
+      for (let i = 0; i < 14; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        const dayOfWeek = date.getDay();
+        const matchingSlots = weeklySlots.filter((slot: WeeklySlot) => slot.dayOfWeek === dayOfWeek);
+        matchingSlots.forEach((slot: WeeklySlot) => {
+          const formattedDate = date.toISOString().split('T')[0];
+          displaySlots.push({
+            id: `${slot.id}_${formattedDate}`,
+            date: formattedDate,
+            time: slot.startTime,
+            available: slot.isAvailable
+          });
         });
-      });
-    }
-    
+      }
+    });
     return displaySlots;
+  } catch (error) {
+    console.error('Error loading doctor availability from Firestore:', error);
+    throw error;
   }
-  
-  // Uncomment and implement Firestore logic as needed
-  // if (dataSource === 'firestore') {
-  //   const snapshot = await getDocs(collection(db, 'mockDoctorAvailability'));
-  //   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as DoctorAvailabilitySlot[];
-  // }
-  
-  throw new Error('No valid data source configured for doctor availability.');
 }

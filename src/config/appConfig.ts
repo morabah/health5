@@ -122,7 +122,14 @@ export function getDoctorDataSource(): DataSource {
   const mode = getApiMode();
   if (mode === 'mock') return 'mock';
   // You can add logic here for Firestore if needed
-  return 'crm';
+  return 'firestore';
+}
+
+export function getPatientDataSource(): DataSource {
+  const mode = getApiMode();
+  if (mode === 'mock') return 'mock';
+  // You can add logic here for Firestore if needed
+  return 'firestore';
 }
 
 // --- EXTENSIBILITY ---

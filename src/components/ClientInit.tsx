@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { initDataPersistence, cleanupDataPersistence } from '@/lib/mockDataPersistence';
-import { API_MODE, setApiMode } from '@/config/appConfig';
-import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import { API_MODE, setApiMode, getApiMode } from '@/config/appConfig';
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import { usePathname } from 'next/navigation';
 
 /**
@@ -33,13 +33,13 @@ export default function ClientInit() {
         }
         
         // Get current API mode after potential updates
-        const currentApiMode = localStorage.getItem('apiMode') || API_MODE;
+        const currentApiMode = getApiMode() || API_MODE;
         
         // For /find route, ensure we pre-initialize Firebase regardless of mode
         if (isSpecialRoute || currentApiMode === 'live') {
           console.log('[ClientInit] Pre-initializing Firebase...');
           // Force initialization with 'live' mode
-          const { app, auth, db, analytics } = initializeFirebaseClient('live');
+          const { app, auth, db, analytics, status } = initializeFirebaseClient('live');
           console.log('[ClientInit] Firebase initialization result:', { 
             appInitialized: !!app, 
             authInitialized: !!auth, 

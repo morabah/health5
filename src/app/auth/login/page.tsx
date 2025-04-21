@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { initializeFirebaseClient } from "@/lib/firebaseClient";
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import { logInfo, logError, logValidation } from "@/lib/logger";
 import { trackPerformance } from "@/lib/performance";
 import type { UserProfile } from "@/types/user";

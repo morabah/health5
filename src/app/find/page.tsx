@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useCallback } from 'react';
 import { useRouter } from "next/navigation";
-import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import { initializeFirebaseClient, isFirebaseReady } from '@/lib/improvedFirebaseClient';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { getApiMode, setApiMode } from '@/config/apiConfig';
 import type { DoctorProfile } from '@/types/doctor';
@@ -154,11 +154,11 @@ export default function FindDoctorPage() {
       }
       
       // Initialize Firebase with forced 'live' mode
-      const { db } = initializeFirebaseClient('live');
+      const { db, status } = initializeFirebaseClient('live');
       console.log(`[FindDoctorPage] Firebase/Firestore initialized: ${!!db}`);
       
       // If Firestore is available, use it
-      if (db) {
+      if (isFirebaseReady()) {
         console.log('[FindDoctorPage] Using Firestore to fetch doctors');
         try {
           const doctorsRef = collection(db, 'doctors');

@@ -4,6 +4,7 @@
  * supporting debugging, observability, and CMS integration.
  */
 import mitt, { Emitter, Handler, EventType } from 'mitt';
+import { getApiMode, setApiMode } from '@/config/appConfig';
 
 // Flag to enable/disable verbose debugging
 const DEBUG_EVENT_BUS = false;
@@ -108,7 +109,7 @@ export function syncApiModeChange(newMode: string, source: string, preventAutoSy
 
   try {
     // Get current value
-    const oldMode = localStorage.getItem('apiMode') || 'mock';
+    const oldMode = getApiMode() || 'mock';
     
     // Only update if the mode is actually changing
     if (newMode === oldMode && source !== 'force_refresh') {
@@ -118,8 +119,8 @@ export function syncApiModeChange(newMode: string, source: string, preventAutoSy
     
     if (DEBUG_EVENT_BUS) console.log(`[EVENT_BUS] Syncing API mode: ${oldMode} -> ${newMode} (source: ${source})`);
     
-    // Update localStorage - this will trigger a 'storage' event in other tabs
-    localStorage.setItem('apiMode', newMode);
+    // Use the centralized API mode setter to update mode and trigger events
+    setApiMode(newMode as 'live' | 'mock');
     
     // Generate consistent timestamp for all channels
     const timestamp = new Date().toISOString();
@@ -305,7 +306,7 @@ export function setupApiModeSyncListener() {
         if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] Received BroadcastChannel API mode change:', event.data.mode);
         
         // Only update localStorage if the value is different (prevents loop)
-        const currentMode = localStorage.getItem('apiMode');
+        const currentMode = getApiMode();
         if (currentMode !== event.data.mode) {
           localStorage.setItem('apiMode', event.data.mode);
         }

@@ -6,7 +6,7 @@ import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
 import Link from "next/link";
-import { initializeFirebaseClient } from "@/lib/firebaseClient";
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { UserType } from "@/types/enums";
 import { useRouter } from "next/navigation";
@@ -66,7 +66,7 @@ export default function PatientRegisterPage() {
     }
 
     try {
-      const { app } = initializeFirebaseClient("live");
+      const { app, status } = initializeFirebaseClient("live");
       if (!app) {
         setErrorMsg("Registration service unavailable.");
         return;

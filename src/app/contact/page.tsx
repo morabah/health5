@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMapMarkerAlt, faPhone, faEnvelope } from '@fortawesome/free-solid-svg-icons';
 import { logInfo } from '@/lib/logger';
-import { db } from '@/lib/firebaseClient';
+import { db } from '@/lib/improvedFirebaseClient';
 import type { Firestore } from 'firebase/firestore';
 import { doc, getDoc } from 'firebase/firestore';
 

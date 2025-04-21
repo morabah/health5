@@ -14,7 +14,7 @@ import type { PatientProfile } from "@/types/patient";
 import type { Appointment } from "@/types/appointment";
 import type { Notification } from "@/types/notification";
 import { getApiMode } from '@/config/apiConfig';
-import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import { collection, getDocs } from 'firebase/firestore';
 const mode = getApiMode();
 
