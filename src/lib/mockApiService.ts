@@ -20,6 +20,8 @@ import { getMockDoctorUser, getMockPatientUser } from "@/data/mockDataService";
 import { initDataPersistence, persistAllData, persistDoctorProfiles, syncUserUpdated, syncUserAdded, syncUserDeactivated } from '@/lib/mockDataPersistence';
 import { syncDoctorProfileUpdated, syncPatientProfileUpdated, syncAvailabilityUpdated } from './mockDataPersistence';
 import { STORAGE_KEYS } from '@/lib/mockDataPersistence';
+import { getApiMode } from '@/config/apiConfig';
+const mode = getApiMode();
 
 // Mutable stores (for direct mutation)
 import * as dataStore from "@/data/mockDataStore";
@@ -31,80 +33,64 @@ const logApiCall = (functionName: string, params: any) => {
 
 const delay = () => simulateDelay();
 
-// Initialize data persistence on client (hydrate stores from localStorage)
-if (typeof window !== 'undefined') initDataPersistence();
-
-/** Simulates a random network delay (100-300ms) */
+/**
+ * Simulates a random network delay (100-300ms)
+ */
 function simulateDelay() {
   return new Promise(res => setTimeout(res, 100 + Math.random() * 200));
 }
 
-// Initialize doctor availability slots on module load
-(function initializeDoctorAvailability() {
-  logInfo("[mockApiService] Initializing doctor availability slots");
-  
-  // Get all doctor profiles
-  const doctorProfiles = getDoctorProfilesStore();
-  
-  // For each doctor profile, set up default availability if not already set
-  doctorProfiles.forEach(doctor => {
-    // Skip if already has availability
-    if ((doctor as any).mockAvailability) {
-      return;
-    }
-    
-    // Generate dates for the next 30 days
-    const availableDates = [];
-    const today = new Date();
-    
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      
-      // Skip weekends for some doctors to create variation
-      const dayOfWeek = date.getDay();
-      if ((doctor.userId === 'user_doctor_002' || doctor.userId === 'user_doctor_004') && (dayOfWeek === 0 || dayOfWeek === 6)) {
-        continue;
+/**
+ * Initializes all mock data services and doctor availability (only in mock mode).
+ * Call this ONCE and ONLY when getApiMode() === 'mock'.
+ */
+export function initMockApiService() {
+  if (getApiMode() !== 'mock') return;
+  if (typeof window !== 'undefined') initDataPersistence();
+
+  // Initialize doctor availability slots
+  (function initializeDoctorAvailability() {
+    logInfo("[mockApiService] Initializing doctor availability slots");
+    const doctorProfiles = getDoctorProfilesStore();
+    doctorProfiles.forEach(doctor => {
+      if ((doctor as any).mockAvailability) return;
+      const availableDates = [];
+      const today = new Date();
+      for (let i = 0; i < 30; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        const dayOfWeek = date.getDay();
+        if ((doctor.userId === 'user_doctor_002' || doctor.userId === 'user_doctor_004') && (dayOfWeek === 0 || dayOfWeek === 6)) continue;
+        availableDates.push(date.toISOString().split('T')[0]);
       }
-      
-      availableDates.push(date.toISOString().split('T')[0]);
-    }
-    
-    // Generate time slots
-    const timeSlots = [
-      { startTime: '09:00', endTime: '09:30' },
-      { startTime: '09:30', endTime: '10:00' },
-      { startTime: '10:00', endTime: '10:30' },
-      { startTime: '10:30', endTime: '11:00' },
-      { startTime: '11:00', endTime: '11:30' },
-      { startTime: '11:30', endTime: '12:00' },
-      { startTime: '13:00', endTime: '13:30' },
-      { startTime: '13:30', endTime: '14:00' },
-      { startTime: '14:00', endTime: '14:30' },
-      { startTime: '14:30', endTime: '15:00' },
-      { startTime: '15:00', endTime: '15:30' },
-      { startTime: '15:30', endTime: '16:00' },
-    ];
-    
-    // Randomly block some dates to create variation
-    const blockedDates: string[] = [];
-    for (let i = 0; i < 5; i++) {
-      const randomIndex = Math.floor(Math.random() * availableDates.length);
-      const dateToBlock = availableDates[randomIndex];
-      if (!blockedDates.includes(dateToBlock)) {
-        blockedDates.push(dateToBlock);
+      const timeSlots = [
+        { startTime: '09:00', endTime: '09:30' },
+        { startTime: '09:30', endTime: '10:00' },
+        { startTime: '10:00', endTime: '10:30' },
+        { startTime: '10:30', endTime: '11:00' },
+        { startTime: '11:00', endTime: '11:30' },
+        { startTime: '11:30', endTime: '12:00' },
+        { startTime: '13:00', endTime: '13:30' },
+        { startTime: '13:30', endTime: '14:00' },
+        { startTime: '14:00', endTime: '14:30' },
+        { startTime: '14:30', endTime: '15:00' },
+        { startTime: '15:00', endTime: '15:30' },
+        { startTime: '15:30', endTime: '16:00' },
+      ];
+      const blockedDates: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        const randomIndex = Math.floor(Math.random() * availableDates.length);
+        const dateToBlock = availableDates[randomIndex];
+        if (!blockedDates.includes(dateToBlock)) blockedDates.push(dateToBlock);
       }
-    }
-    
-    // Assign availability to doctor profile
-    (doctor as any).mockAvailability = {
-      slots: timeSlots,
-      blockedDates: blockedDates
-    };
-    
-    logInfo(`[mockApiService] Set up availability for doctor ${doctor.userId}`);
-  });
-})();
+      (doctor as any).mockAvailability = {
+        slots: timeSlots,
+        blockedDates: blockedDates
+      };
+      logInfo(`[mockApiService] Set up availability for doctor ${doctor.userId}`);
+    });
+  })();
+}
 
 /**
  * Registers a new user (patient/doctor). Checks for email conflict, creates user/profile, adds to stores.

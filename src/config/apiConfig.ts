@@ -22,6 +22,11 @@ const DEFAULT_MODE: ApiMode = (process.env.NEXT_PUBLIC_API_MODE as ApiMode) || '
  * - Defaults to 'mock' if all else fails
  */
 export function getApiMode(): ApiMode {
+  // If environment forces live, always use live, bypassing localStorage
+  if (DEFAULT_MODE === 'live') {
+    logInfo('API mode forced to live by environment', { mode: DEFAULT_MODE });
+    return 'live';
+  }
   // Server-side always uses environment variable
   if (typeof window === 'undefined') {
     return DEFAULT_MODE;

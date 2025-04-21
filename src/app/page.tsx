@@ -14,6 +14,7 @@ import Spinner from '@/components/ui/Spinner';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserMd, faCalendarCheck, faHospital, faMobileAlt, faShieldAlt, faUserPlus } from '@fortawesome/free-solid-svg-icons';
 import ApiModeLabel from './ApiModeLabel';
+import { collection, getDocs, query, where, limit, documentId } from 'firebase/firestore';
 
 const MOCK_DOCTOR_IDS = ['user_doctor_001', 'user_doctor_002', 'user_doctor_003'];
 
@@ -134,7 +135,7 @@ async function fetchDoctors(
     
     const q = query(
       collection(firestoreDb, 'doctors'),
-      where('userId', 'in', doctorIds),
+      where(documentId(), 'in', doctorIds),
       limit(5)
     );
     
@@ -250,6 +251,9 @@ export default function Home() {
     const updateApiModeState = (newMode: string, source: string) => {
       console.log(`[Home] API mode change detected from ${source}: ${newMode}`);
       
+      // Get the current mode BEFORE updating state to log the 'from' value
+      const oldMode = apiMode;
+      
       // Safe cast to our union type
       const typedMode = newMode === 'live' ? 'live' : 'mock';
       
@@ -259,15 +263,16 @@ export default function Home() {
       // Update the global state + localStorage
       setGlobalApiMode(typedMode);
       
-      // Broadcast the change to CMS
-      logApiModeChange(typedMode, source);
+      // Broadcast the change to CMS with both old and new modes
+      logApiModeChange(oldMode, typedMode, source);
     };
     
     // Event handler for in-memory event bus
     const handleApiModeChangeEvent = (payload: ApiModePayload) => {
-      const { mode, source } = payload;
-      console.log(`[Home] Received api_mode_change event from ${source || 'unknown'}: ${mode}`);
-      updateApiModeState(mode, source || 'event');
+      // Access payload.newMode instead of payload.mode
+      const { newMode, source } = payload;
+      console.log(`[Home] Received api_mode_change event from ${source || 'unknown'}: ${newMode}`);
+      updateApiModeState(newMode, source || 'event');
     };
     
     // Register with in-memory event bus

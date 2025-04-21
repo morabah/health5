@@ -1,8 +1,8 @@
 // NOTE: This file is for CMS/validation tooling only. Do NOT use in production app logic. Use loader abstraction for all Firestore access.
 // throw new Error("firestoreFetchAll.ts is deprecated. Use data loader abstraction instead.");
 
-import { app } from "@/lib/firebaseClient";
-import { getFirestore, collection, getDocs } from "firebase/firestore";
+import { app, db } from "@/lib/firebaseClient";
+import { collection, getDocs } from "firebase/firestore";
 
 /**
  * Fetches all main Firestore collections and returns them in the offlineMockData.json structure.
@@ -11,13 +11,8 @@ import { getFirestore, collection, getDocs } from "firebase/firestore";
  */
 export async function getAllFirestoreData(): Promise<Record<string, any[]>> {
   try {
-    if (!app) {
-      // Log a warning and return an empty result for mock mode or missing env
-      if (process.env.NEXT_PUBLIC_API_MODE !== 'live') {
-        console.warn("[firestoreFetchAll] Firebase app not initialized: API mode is not 'live'. Returning empty Firestore data.");
-        return {};
-      }
-      throw new Error("Firebase app is not initialized (API mode may be 'mock' or missing env vars)");
+    if (!db) {
+      throw new Error("Firestore is not initialized. Make sure firebaseClient.ts initializes Firestore with long polling.");
     }
     const collections = [
       "users",
@@ -28,7 +23,6 @@ export async function getAllFirestoreData(): Promise<Record<string, any[]>> {
       "availability",
       "verificationDocs",
     ];
-    const db = getFirestore(app);
     const data: Record<string, any[]> = {};
     for (const col of collections) {
       try {

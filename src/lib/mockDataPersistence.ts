@@ -13,6 +13,10 @@ import type { DoctorProfile } from "@/types/doctor";
 import type { PatientProfile } from "@/types/patient";
 import type { Appointment } from "@/types/appointment";
 import type { Notification } from "@/types/notification";
+import { getApiMode } from '@/config/apiConfig';
+import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import { collection, getDocs } from 'firebase/firestore';
+const mode = getApiMode();
 
 // Storage keys for localStorage
 export const STORAGE_KEYS = {
@@ -60,6 +64,11 @@ let broadcastChannel: BroadcastChannel | null = null;
  * Initialize the data persistence mechanism
  */
 export function initDataPersistence(): void {
+  if (mode === 'live') {
+    // Skip mock persistence in live mode
+    return;
+  }
+
   if (typeof window === 'undefined') return;
 
   logInfo('[mockDataPersistence] Initializing data persistence');
@@ -105,6 +114,10 @@ export function initDataPersistence(): void {
  * Clean up resources when the component is unmounted
  */
 export function cleanupDataPersistence() {
+  if (mode === 'live') {
+    return;
+  }
+
   if (broadcastChannel) {
     broadcastChannel.close();
     broadcastChannel = null;
@@ -458,6 +471,10 @@ export function persistNotifications() {
  * Persist all data to localStorage at once
  */
 export function persistAllData() {
+  if (mode === 'live') {
+    return;
+  }
+
   logInfo("[mockDataPersistence] Starting persistAllData");
   console.log("[mockDataPersistence] persistAllData invoked");
   try {

@@ -19,7 +19,8 @@ import { UserProfileSchema, PatientProfileSchema, DoctorProfileSchema, DoctorAva
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleCheck, faCircleExclamation, faSearch, faDownload, faSpinner, faCodeCompare } from '@fortawesome/free-solid-svg-icons';
 import { getApiMode, setApiMode, type ApiMode } from '@/config/apiMode';
-import { initializeFirebaseClient } from '@/lib/firebaseClient';
+import { db } from '@/lib/firebaseClient';
+import { doc, updateDoc } from 'firebase/firestore';
 import ApiModeLabel from './ApiModeLabel';
 
 /**
@@ -1469,7 +1470,10 @@ const CmsValidationPage: React.FC = () => {
   useEffect(() => {
     // Only call with a valid ApiMode
     if (apiMode === 'live' || apiMode === 'mock') {
-      initializeFirebaseClient(apiMode as ApiMode);
+      if (!db) {
+        logWarn('CMS: Firestore not initialized');
+        alert('Firestore is not initialized.');
+      }
     }
   }, [apiMode]);
 
@@ -1659,14 +1663,11 @@ const CmsValidationPage: React.FC = () => {
           onClick={async () => {
             logInfo('CMS: Data structure integrity check started');
             try {
-              const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
-              const { app } = await import('@/lib/firebaseClient');
-              if (!app) {
-                logWarn('CMS: Firebase app not initialized during data structure integrity check');
-                alert('Firebase app is not initialized.');
+              if (!db) {
+                logWarn('CMS: Firestore not initialized');
+                alert('Firestore is not initialized.');
                 return;
               }
-              const db = getFirestore(app);
               const zodSchemas = await import('@/lib/zodSchemas');
               const schemaMap: Record<string, any> = {
                 users: zodSchemas.UserProfileSchema,
@@ -1742,14 +1743,11 @@ const CmsValidationPage: React.FC = () => {
           onClick={async () => {
             logInfo('CMS: User data integrity auto-fix started');
             try {
-              const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
-              const { app } = await import('@/lib/firebaseClient');
-              if (!app) {
-                logWarn('CMS: Firebase app not initialized during user auto-fix');
-                alert('Firebase app is not initialized.');
+              if (!db) {
+                logWarn('CMS: Firestore not initialized');
+                alert('Firestore is not initialized.');
                 return;
               }
-              const db = getFirestore(app);
               const getAllFirestoreData = (window as any).getAllFirestoreData;
               if (typeof getAllFirestoreData !== 'function') {
                 logWarn('CMS: Cannot fetch Firestore data during user auto-fix');
@@ -1813,14 +1811,11 @@ const CmsValidationPage: React.FC = () => {
           onClick={async () => {
             logInfo('CMS: All data integrity auto-fix started');
             try {
-              const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
-              const { app } = await import('@/lib/firebaseClient');
-              if (!app) {
-                logWarn('CMS: Firebase app not initialized during all-collection auto-fix');
-                alert('Firebase app is not initialized.');
+              if (!db) {
+                logWarn('CMS: Firestore not initialized');
+                alert('Firestore is not initialized.');
                 return;
               }
-              const db = getFirestore(app);
               const zodSchemas = await import('@/lib/zodSchemas');
               const schemaMap: Record<string, any> = {
                 users: zodSchemas.UserProfileSchema,
