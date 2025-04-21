@@ -11,49 +11,21 @@ import { Timestamp } from 'firebase/firestore';
  */
 export function formatDate(
   date: Date | Timestamp | string | undefined | null,
-  options: Intl.DateTimeFormatOptions = { 
-    year: 'numeric', 
-    month: 'short', 
+  options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   }
 ): string {
   if (!date) return 'Not scheduled';
-  
-  // Convert to Date object if needed
-  let dateObj: Date;
-  
-  try {
-    if (typeof date === 'string') {
-      dateObj = new Date(date);
-    } else if (
-      date && 
-      typeof date === 'object' && 
-      'toDate' in date && 
-      typeof date.toDate === 'function'
-    ) {
-      // Safer check for Timestamp objects
-      dateObj = date.toDate();
-    } else if (date instanceof Date) {
-      dateObj = date;
-    } else {
-      console.warn('Unknown date format:', date);
-      return 'Invalid date format';
-    }
-    
-    // Check if the date is valid
-    if (!dateObj || isNaN(dateObj.getTime())) {
-      console.warn('Invalid date provided to formatDate:', date);
-      return 'Invalid date';
-    }
-    
-    // Format using Intl.DateTimeFormat for localization
-    return new Intl.DateTimeFormat('en-US', options).format(dateObj);
-  } catch (error) {
-    console.error('Error formatting date:', error, date);
-    return 'Date error';
+  const dateObj = getDateObject(date);
+  if (isNaN(dateObj.getTime())) {
+    console.warn('Invalid date provided to formatDate:', date);
+    return 'Invalid date';
   }
+  return new Intl.DateTimeFormat('en-US', options).format(dateObj);
 }
 
 /**
@@ -61,42 +33,16 @@ export function formatDate(
  * @param date Date, Timestamp, or ISO string
  * @returns true if the date is in the past
  */
-export function isPastDate(date: Date | Timestamp | string | undefined | null): boolean {
+export function isPastDate(
+  date: Date | Timestamp | string | undefined | null
+): boolean {
   if (!date) return false;
-  
-  // Convert to Date object if needed
-  let dateObj: Date;
-  
-  try {
-    if (typeof date === 'string') {
-      dateObj = new Date(date);
-    } else if (
-      date && 
-      typeof date === 'object' && 
-      'toDate' in date && 
-      typeof date.toDate === 'function'
-    ) {
-      // Safer check for Timestamp objects
-      dateObj = date.toDate();
-    } else if (date instanceof Date) {
-      dateObj = date;
-    } else {
-      console.warn('Unknown date format in isPastDate:', date);
-      return false;
-    }
-    
-    // Check if the date is valid
-    if (!dateObj || isNaN(dateObj.getTime())) {
-      console.warn('Invalid date provided to isPastDate:', date);
-      return false;
-    }
-    
-    // Compare with current date
-    return dateObj < new Date();
-  } catch (error) {
-    console.error('Error checking if date is past:', error, date);
+  const dateObj = getDateObject(date);
+  if (isNaN(dateObj.getTime())) {
+    console.warn('Invalid date provided to isPastDate:', date);
     return false;
   }
+  return dateObj < new Date();
 }
 
 /**
@@ -125,13 +71,13 @@ export function getDateObject(dateInput: Date | Timestamp | any): Date {
     if (typeof dateInput.toDate === 'function') {
       return dateInput.toDate();
     }
-    
-    // Special handling for serialized Timestamp or date objects
-    if ('seconds' in dateInput && 'nanoseconds' in dateInput) {
-      return new Date(dateInput.seconds * 1000);
+    // Special handling for serialized Timestamp (_seconds/_nanoseconds or seconds/nanoseconds)
+    const sec = (dateInput.seconds as number | undefined) ?? (dateInput._seconds as number | undefined);
+    if (typeof sec === 'number') {
+      return new Date(sec * 1000);
     }
   }
 
   // Default fallback
   return new Date();
-} 
+}
