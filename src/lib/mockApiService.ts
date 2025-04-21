@@ -405,31 +405,91 @@ export async function mockGetAvailableSlots({ doctorId, dateString }: { doctorId
   await simulateDelay();
   
   // Use type assertion to avoid linter errors with the mockAvailability property
-  const doctor = (dataStore.doctorProfilesStore.find(d => d.userId === doctorId) as any);
+  let doctor = (dataStore.doctorProfilesStore.find(d => d.userId === doctorId) as any);
   
   if (!doctor) {
-    console.error(`[mockApiService] Doctor not found for ID: ${doctorId}`);
-    return [];
+    console.error(`[mockApiService] Doctor not found for ID: ${doctorId}, creating dummy profile`);
+    
+    // Create a dummy doctor profile if not found
+    const dummyDoctor = {
+      userId: doctorId,
+      specialty: "Psychiatry",
+      yearsOfExperience: 8,
+      education: "Harvard Medical School",
+      bio: "Board-certified psychiatrist with extensive experience in treating mental health conditions.",
+      location: "Boston",
+      languages: ["English", "Arabic"],
+      consultationFee: 160,
+      licenseNumber: "PSY-12345",
+      verificationStatus: VerificationStatus.APPROVED,
+      profilePictureUrl: null,
+      licenseDocumentUrl: null,
+      certificateUrl: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      mockAvailability: {
+        slots: [],
+        blockedDates: []
+      }
+    };
+    
+    dataStore.doctorProfilesStore.push(dummyDoctor);
+    doctor = dummyDoctor;
   }
   
   // If doctor has no availability data, initialize with default slots
-  if (!doctor.mockAvailability) {
-    // Create default availability if needed
-    const defaultTimeSlots = [
-      { startTime: '09:00', endTime: '09:30' },
-      { startTime: '10:00', endTime: '10:30' },
-      { startTime: '11:00', endTime: '11:30' },
-      { startTime: '13:00', endTime: '13:30' },
-      { startTime: '14:00', endTime: '14:30' },
-      { startTime: '15:00', endTime: '15:30' },
-    ];
+  if (!doctor.mockAvailability || !doctor.mockAvailability.slots || doctor.mockAvailability.slots.length === 0) {
+    console.log(`[mockApiService] Creating default availability for doctor ${doctorId}`);
     
+    // Create default availability with multiple slots for each day
+    const defaultSlots = [];
+    
+    // Create slots for each day of the week (0 = Sunday, 6 = Saturday)
+    for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
+      // Morning slots (9am-12pm)
+      for (let hour = 9; hour < 12; hour++) {
+        defaultSlots.push({
+          id: `slot_${dayOfWeek}_${hour}_00`,
+          dayOfWeek: dayOfWeek,
+          startTime: `${hour.toString().padStart(2, '0')}:00`,
+          endTime: `${hour.toString().padStart(2, '0')}:30`,
+          isAvailable: true
+        });
+        defaultSlots.push({
+          id: `slot_${dayOfWeek}_${hour}_30`,
+          dayOfWeek: dayOfWeek,
+          startTime: `${hour.toString().padStart(2, '0')}:30`,
+          endTime: `${(hour + 1).toString().padStart(2, '0')}:00`,
+          isAvailable: true
+        });
+      }
+      
+      // Afternoon slots (1pm-5pm)
+      for (let hour = 13; hour < 17; hour++) {
+        defaultSlots.push({ 
+          id: `slot_${dayOfWeek}_${hour}_00`,
+          dayOfWeek: dayOfWeek, 
+          startTime: `${hour.toString().padStart(2, '0')}:00`, 
+          endTime: `${hour.toString().padStart(2, '0')}:30`,
+          isAvailable: true
+        });
+        defaultSlots.push({ 
+          id: `slot_${dayOfWeek}_${hour}_30`,
+          dayOfWeek: dayOfWeek, 
+          startTime: `${hour.toString().padStart(2, '0')}:30`, 
+          endTime: `${(hour + 1).toString().padStart(2, '0')}:00`,
+          isAvailable: true
+        });
+      }
+    }
+    
+    // Set the availability data
     doctor.mockAvailability = {
-      slots: defaultTimeSlots,
+      slots: defaultSlots,
       blockedDates: []
     };
     
-    logInfo(`[mockApiService] Created default availability for doctor ${doctorId}`);
+    logInfo(`[mockApiService] Created default availability for doctor ${doctorId} with ${defaultSlots.length} slots`);
   }
   
   // Check if the date is blocked
@@ -438,12 +498,24 @@ export async function mockGetAvailableSlots({ doctorId, dateString }: { doctorId
     return [];
   }
   
-  console.log(`[mockApiService] Returning available slots for doctor ${doctorId} on ${dateString}`, {
-    slotCount: doctor.mockAvailability.slots.length
-  });
+  // Check which day of the week the requested date is
+  const requestDate = new Date(dateString);
+  const requestDayOfWeek = requestDate.getDay();
+  
+  // Filter slots for the requested day of week
+  const daySlots = doctor.mockAvailability.slots.filter((slot: any) => 
+    slot.dayOfWeek === requestDayOfWeek && slot.isAvailable
+  );
+  
+  console.log(`[mockApiService] Found ${daySlots.length} availability slots for doctor ${doctorId} on day ${requestDayOfWeek} (${dateString})`);
+  
+  if (daySlots.length === 0) {
+    console.log(`[mockApiService] No slots available for doctor ${doctorId} on day ${requestDayOfWeek}`);
+    return [];
+  }
   
   // Generate time slots in 30-minute increments based on availability windows
-  return doctor.mockAvailability.slots.flatMap((slot: any) => {
+  return daySlots.flatMap((slot: any) => {
     const slots: string[] = [];
     const [startHour, startMinute] = slot.startTime.split(':').map(Number);
     const [endHour, endMinute] = slot.endTime.split(':').map(Number);

@@ -203,6 +203,39 @@ function generateDoctorData(index, authUsers = []) {
     sunday: [] // No appointments on Sunday
   };
   
+  // Generate availability for the next 7 days (flattened array)
+  const today = new Date();
+  const availability = [];
+  const availableDatesSet = new Set();
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    const slots = weeklySchedule[dayName] || [];
+    slots.forEach(slot => {
+      availability.push({
+        date: date.toISOString().split('T')[0],
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        isAvailable: true
+      });
+      availableDatesSet.add(date.toISOString().split('T')[0]);
+    });
+  }
+  // Guarantee at least one slot is present
+  if (availability.length === 0) {
+    // Add a default slot for tomorrow if none exist
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    availability.push({
+      date: tomorrow.toISOString().split('T')[0],
+      startTime: '09:00',
+      endTime: '09:30',
+      isAvailable: true
+    });
+    availableDatesSet.add(tomorrow.toISOString().split('T')[0]);
+  }
+  const availableDates = Array.from(availableDatesSet);
+  
   // Create education history
   const educationHistory = [
     {
@@ -270,6 +303,8 @@ function generateDoctorData(index, authUsers = []) {
     ],
     consultationFee: 100 + (index * 10),
     weeklySchedule,
+    availability,
+    availableDates,
     profilePictureUrl: `https://randomuser.me/api/portraits/${index % 2 === 0 ? 'men' : 'women'}/${(index % 50) + 1}.jpg`,
     licenseDocumentUrl: 'https://example.com/license.pdf',
     certificateUrl: 'https://example.com/certificate.pdf',
@@ -314,6 +349,7 @@ function generateDaySchedule(startHour, endHour, minuteIncrement) {
 async function seedDoctors() {
   try {
     const doctorsCollection = db.collection('doctors');
+    const usersCollection = db.collection('users');
     
     // Get auth users if linking is requested
     const authUsers = args.linkAuthUsers ? getAuthUsers() : [];
@@ -333,6 +369,7 @@ async function seedDoctors() {
     if (args.clear) {
       console.log('Clearing existing doctors...');
       const snapshot = await doctorsCollection.get();
+      const userSnap = await usersCollection.get();
       
       const batchSize = 500;
       const batches = [];
@@ -342,24 +379,34 @@ async function seedDoctors() {
       snapshot.forEach(doc => {
         batch.delete(doc.ref);
         operationCount++;
-        
         if (operationCount >= batchSize) {
           batches.push(batch.commit());
           batch = db.batch();
           operationCount = 0;
         }
       });
-      
+      // Also clear seeded doctor users
+      userSnap.forEach(doc => {
+        const data = doc.data();
+        if (data && data.role === 'doctor') {
+          batch.delete(doc.ref);
+          operationCount++;
+          if (operationCount >= batchSize) {
+            batches.push(batch.commit());
+            batch = db.batch();
+            operationCount = 0;
+          }
+        }
+      });
       if (operationCount > 0) {
         batches.push(batch.commit());
       }
-      
       await Promise.all(batches);
-      console.log(`Cleared ${snapshot.size} existing doctors`);
+      console.log(`Cleared ${snapshot.size} existing doctors and matching doctor user profiles`);
     }
     
-    // Add new doctors
-    console.log(`Creating ${args.count} doctors...`);
+    // Add new doctors and user profiles
+    console.log(`Creating ${args.count} doctors and user profiles...`);
     
     const batchSize = 500;
     const batches = [];
@@ -368,30 +415,36 @@ async function seedDoctors() {
     
     for (let i = 0; i < args.count; i++) {
       const doctorData = generateDoctorData(i, authUsers);
-      
-      // If linking to auth users, use the userId as the document ID
-      // Otherwise, use auto-generated ID
+      // --- Create user profile for doctor ---
+      const userProfile = {
+        id: doctorData.userId,
+        firstName: doctorData.firstName,
+        lastName: doctorData.lastName,
+        email: `${doctorData.firstName.toLowerCase()}.${doctorData.lastName.toLowerCase()}@health5.com`,
+        role: 'doctor',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      const userRef = usersCollection.doc(doctorData.userId);
+      batch.set(userRef, userProfile);
+      operationCount++;
+      // --- Create doctor profile ---
       const docRef = args.linkAuthUsers && i < authUsers.length
         ? doctorsCollection.doc(doctorData.userId)
         : doctorsCollection.doc();
-      
       batch.set(docRef, doctorData);
       operationCount++;
-      
       if (operationCount >= batchSize) {
         batches.push(batch.commit());
         batch = db.batch();
         operationCount = 0;
       }
     }
-    
     if (operationCount > 0) {
       batches.push(batch.commit());
     }
-    
     await Promise.all(batches);
-    console.log(`Successfully added ${args.count} doctors to Firestore`);
-    
+    console.log(`Successfully added ${args.count} doctors and user profiles to Firestore`);
   } catch (error) {
     console.error('Error seeding doctors:', error);
   } finally {

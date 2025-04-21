@@ -82,6 +82,7 @@ const Navbar: React.FC = () => {
           <Link href="/admin/lists" className="hover:text-primary font-medium transition-colors">User Lists</Link>
           <Link href="/admin/profile" className="hover:text-primary font-medium transition-colors">Profile</Link>
           <Link href="/admin/doctor-verification" className="hover:text-primary font-medium transition-colors">Doctor Verification</Link>
+          <Link href="/admin/tools" className="hover:text-primary font-medium transition-colors">Admin Tools</Link>
           <Link href="/cms-validation" className="hover:text-primary font-medium transition-colors">CMS Validation</Link>
         </>
       );

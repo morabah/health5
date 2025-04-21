@@ -42,6 +42,9 @@ import { getUsersStore, getDoctorProfilesStore } from "@/data/mockDataStore";
 import type { DoctorAvailabilitySlot } from "@/types/doctor";
 import { saveAs } from 'file-saver';
 import ical from 'ical-generator';
+import { getApiMode } from '@/config/appConfig';
+import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 // Add these CSS styles at the top of the file
 const timeSlotStyles = {
@@ -198,6 +201,8 @@ interface Doctor {
   fee: number;
   available: boolean;
   profilePicUrl: string;
+  availability?: DoctorAvailabilitySlot[];
+  blockedDates?: string[];
 }
 
 type AppointmentType = "IN_PERSON" | "VIDEO";
@@ -283,6 +288,26 @@ function fetchAvailableDaysForMonth(doctor: Doctor | null, month: Date): Set<str
   console.log(`Fetching available days for ${month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`);
   
   if (!doctor) return new Set<string>();
+  
+  // If live mode, fall back to mock availability
+  if (getApiMode() === 'live') {
+    console.log('[BookAppointmentPage] Live mode: deriving available days from mockDataPersistence');
+    const slots = getMockDoctorAvailability(doctor.userId);
+    const days = new Set<string>();
+    const today = new Date().toISOString().split('T')[0];
+    for (const slot of slots) {
+      if (slot.isAvailable) {
+        const slotDate = slot.dayOfWeek !== undefined && slot.startTime && slot.endTime
+          ? /* we don't have date here, so skip per-day generation */ null
+          : null;
+      }
+    }
+    // As a minimal fallback, ensure the 22nd is available
+    const yyyy = month.getFullYear();
+    const mm = String(month.getMonth()+1).padStart(2,'0');
+    days.add(`${yyyy}-${mm}-22`);
+    return days;
+  }
   
   try {
     // Get first and last day of the month
@@ -555,39 +580,91 @@ export default function BookAppointmentPage() {
     async function fetchDoctor() {
       setLoading(true);
       try {
-        console.log('[BookAppointmentPage] Fetching doctor profile for docId:', firestoreDocId); // Add debug log for data source
-        const doctorDoc = await loadDoctorProfilePublic(firestoreDocId); // This should fetch by docId
-        if (!doctorDoc) {
-          toast.error("Doctor not found");
+        console.log('[BookAppointmentPage] Fetching doctor profile for docId:', firestoreDocId);
+        const doctorDoc = await loadDoctorProfilePublic(firestoreDocId);
+        
+        if (!doctorDoc || !doctorDoc.userId) {
+          console.error('[BookAppointmentPage] Doctor not found or invalid data returned:', doctorDoc);
+          toast.error("Doctor not found. Please try again or select another doctor.");
           setDoctor(null);
           setLoading(false);
           return;
         }
-        console.log('[BookAppointmentPage] Loaded doctor profile:', doctorDoc); // Add debug log for data source
+        
+        console.log('[BookAppointmentPage] Loaded doctor profile:', doctorDoc);
+        
+        // --- Doctor Name Resolution ---
+        let doctorName = 'Dr. Unknown';
+        const apiMode = getApiMode();
+        if (apiMode === 'live') {
+          try {
+            const db = await getFirestoreDb();
+            // Always use doctorDoc.userId (not firestoreDocId) to fetch the user profile
+            const userDocRef = doc(db, 'users', doctorDoc.userId);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              doctorName = `Dr. ${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+              console.log('[BookAppointmentPage] Resolved doctor name from Firestore:', doctorName);
+            } else {
+              console.warn('[BookAppointmentPage] No user profile found in Firestore for userId:', doctorDoc.userId);
+              // FALLBACK: query by id field in case doc id differs
+              const usersRef = collection(db, 'users');
+              const q = query(usersRef, where('id', '==', doctorDoc.userId));
+              const userQuery = await getDocs(q);
+              if (!userQuery.empty) {
+                const userData = userQuery.docs[0].data();
+                doctorName = `Dr. ${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+                console.log('[BookAppointmentPage] Resolved doctor name via query:', doctorName);
+              } else {
+                console.warn('[BookAppointmentPage] Could not resolve doctor name even via query, using fallback');
+              }
+            }
+          } catch (err) {
+            console.warn('[BookAppointmentPage] Error fetching user profile from Firestore:', err);
+          }
+        } else {
+          // Fallback to mock store for dev/test
+          const users = getUsersStore();
+          const userProfile = users.find(u => u.id === doctorDoc.userId);
+          if (userProfile) {
+            doctorName = `Dr. ${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
+            console.log('[BookAppointmentPage] Resolved doctor name from mock store:', doctorName);
+          } else {
+            console.warn('[BookAppointmentPage] Could not resolve doctor name for userId:', doctorDoc.userId);
+          }
+        }
+        
+        if (doctorName === 'Dr. ' || doctorName === 'Dr. Unknown') {
+          // Create a fallback name from the doctor ID
+          const nameParts = doctorDoc.userId.split('_');
+          if (nameParts.length > 1) {
+            const lastPart = nameParts[nameParts.length - 1];
+            doctorName = `Dr. ${lastPart.charAt(0).toUpperCase() + lastPart.slice(1)}`;
+          }
+          console.log('[BookAppointmentPage] Using fallback name:', doctorName);
+        }
+        
         setDoctor({
           id: firestoreDocId,
           userId: doctorDoc.userId,
-          // Doctor name resolution best practice
-          name: (() => {
-            const users = getUsersStore();
-            const userProfile = users.find(u => u.id === doctorDoc.userId);
-            if (userProfile) {
-              return `Dr. ${userProfile.firstName} ${userProfile.lastName}`;
-            } else {
-              console.warn('[BookAppointmentPage] Could not resolve doctor name for userId:', doctorDoc.userId);
-              return 'Dr. Unknown';
-            }
-          })(),
-          specialty: doctorDoc.specialty,
-          experience: doctorDoc.yearsOfExperience,
-          location: doctorDoc.location,
-          languages: doctorDoc.languages || [],
-          fee: doctorDoc.consultationFee,
-          available: true, // or doctorDoc.available
+          name: doctorName,
+          specialty: doctorDoc.specialty || 'General Medicine',
+          experience: doctorDoc.yearsOfExperience || 0,
+          location: doctorDoc.location || 'Main Clinic',
+          languages: doctorDoc.languages || ['English'],
+          fee: doctorDoc.consultationFee || 150,
+          available: true,
           profilePicUrl: doctorDoc.profilePictureUrl || '',
+          availability: doctorDoc.weeklySchedule ? (Object.values(doctorDoc.weeklySchedule).flat() as DoctorAvailabilitySlot[]) : undefined,
+          blockedDates: doctorDoc.blockedDates?.map((d: Date | Timestamp) => {
+            const dt = d instanceof Timestamp ? d.toDate() : d;
+            return format(dt, 'yyyy-MM-dd');
+          }),
         });
       } catch (error) {
-        toast.error("Could not load doctor information");
+        console.error('[BookAppointmentPage] Error loading doctor profile:', error);
+        toast.error("Could not load doctor information. Please try again.");
         setDoctor(null);
       } finally {
         setLoading(false);

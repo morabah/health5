@@ -93,7 +93,8 @@ export async function loadDoctorProfilePublic(id: string): Promise<DoctorProfile
         }
         const data = snap.data();
         const profile: DoctorProfile = {
-          userId: snap.id,
+          // Use the userId stored in Firestore, falling back to the doc id
+          userId: (data.userId as string) || snap.id,
           specialty: data.specialty || '',
           licenseNumber: data.licenseNumber || '',
           yearsOfExperience: data.yearsOfExperience || 0,

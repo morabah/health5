@@ -6,11 +6,14 @@ import { getMockDoctorAvailability } from '@/data/mockDataService';
 import { getDoctorProfilesStore } from '@/data/mockDataStore';
 import Spinner from '@/components/ui/Spinner';
 import { toast } from 'react-hot-toast';
+import type { DoctorAvailabilitySlot } from '@/types/doctor';
 
 interface Doctor {
   id?: string;
   userId: string;
   specialty?: string;
+  availability?: DoctorAvailabilitySlot[];
+  blockedDates?: string[];
 }
 
 interface DoctorAvailabilityCalendarProps {
@@ -44,17 +47,26 @@ export function DoctorAvailabilityCalendar({
       const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
       const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       
-      // Get doctor's weekly availability slots and blocked dates
-      const doctorAvailability = getMockDoctorAvailability(doctor.userId);
-      const profiles = getDoctorProfilesStore();
-      const profile = profiles.find(p => p.userId === doctor.userId) as any;
-      const blockedDates: string[] = profile?.mockAvailability?.blockedDates || [];
+      // Determine availability slots and blocked dates (Firestore vs mock)
+      let doctorAvailability: DoctorAvailabilitySlot[] = [];
+      let blockedDatesList: string[] = [];
+
+      if (doctor.availability) {
+        doctorAvailability = doctor.availability;
+        blockedDatesList = doctor.blockedDates || [];
+      } else {
+        console.log('[mockDataService] Getting mock doctor availability', { doctorId: doctor.userId });
+        doctorAvailability = getMockDoctorAvailability(doctor.userId);
+        const profiles = getDoctorProfilesStore();
+        const profile = profiles.find(p => p.userId === doctor.userId) as any;
+        blockedDatesList = profile?.mockAvailability?.blockedDates || [];
+      }
       console.log(`Retrieved ${doctorAvailability.length} availability slots for doctor`);
       
       // Get the days of week where the doctor is available
       const availableDaysOfWeek = doctorAvailability
-        .filter((slot: { isAvailable: boolean }) => slot.isAvailable)
-        .map((slot: { dayOfWeek: number }) => slot.dayOfWeek);
+        .filter((slot: DoctorAvailabilitySlot) => slot.isAvailable)
+        .map((slot: DoctorAvailabilitySlot) => slot.dayOfWeek);
       
       console.log(`Doctor is available on days of week: ${availableDaysOfWeek.join(', ')}`);
       
@@ -74,7 +86,7 @@ export function DoctorAvailabilityCalendar({
         if (
           availableDaysOfWeek.includes(currentDay.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6) &&
           (!disablePastDates || currentDay > today) &&
-          !blockedDates.includes(dateStr)
+          !blockedDatesList.includes(dateStr)
         ) {
           availableDays.add(dateStr);
         }
