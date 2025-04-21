@@ -126,29 +126,16 @@ export async function loadDoctorProfilePublic(id: string): Promise<DoctorProfile
 }
 
 /**
- * Loads doctor availability slots (mock only).
+ * Loads doctor availability slots (live).
  */
+import { loadDoctorAvailability as loadDoctorAvailabilityLive } from './loadDoctorAvailability';
+
 export async function loadDoctorAvailability(doctorId: string): Promise<any[]> {
   const label = 'loadDoctorAvailability';
   const mode = getApiMode();
-  logInfo(`[${label}] start`, { doctorId, mode });
-  const start = performance.now();
-  try {
-    if (mode === 'mock') {
-      await new Promise(res => setTimeout(res, 150));
-      const data = getMockDoctorAvailability();
-      logInfo(`[${label}] Loaded mock data`, { count: data.length });
-      return data;
-    } else {
-      logWarn(`[${label}] Live fetch not implemented for mode: ${mode}`);
-      return [];
-    }
-  } catch (err) {
-    logWarn(`[${label}] Error: ${(err as Error).message}`);
-    return [];
-  } finally {
-    logInfo(`[${label}] finished`, { duration: performance.now() - start });
-  }
+  console.log(`[doctorLoaders] API mode: ${mode}, forcing Firestore loader`);
+  // Always use Firestore loader for availability
+  return await loadDoctorAvailabilityLive(doctorId);
 }
 
 /**

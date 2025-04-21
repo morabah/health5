@@ -3,7 +3,7 @@
  * Initializes the Admin SDK using serviceAccountKey.json
  */
 import admin from 'firebase-admin';
-import serviceAccount from '../../serviceAccountKey.json';
+const serviceAccount = require('/Volumes/Rabah_SSD/enrpreneurship/Health 5/health-appointment-system/service-account-key.json');
 
 // Prevent reinitialization
 if (!admin.apps.length) {

@@ -4,13 +4,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loadDoctors } from '@/data/loadDoctors';
 import { mockFindDoctors } from "@/lib/mockApiService";
+import { loadDoctorAvailability, DoctorAvailabilitySlot } from '@/data/loadDoctorAvailability';
+import { formatDate, formatTimeString } from '@/utils/helpers';
 import Spinner from "@/components/ui/Spinner";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import { debounce } from "@/utils/helpers";
-import { formatTimeString } from "@/utils/helpers";
 import EmptyState from "@/components/ui/EmptyState";
 import ApiModeIndicator from "@/components/ui/ApiModeIndicator";
 import { useAuth } from "@/context/AuthContext";
@@ -114,10 +115,6 @@ export default function FindDoctorsPage() {
       // mockFindDoctors should already provide a 'name' field
       let displayName = (profile as any).name || `Doctor (ID: ${profile.userId.substring(0, 8)})`; // Use name from profile, fallback if missing
 
-      // Add mock next available time if not present
-      const nextAvailable = (profile as any).nextAvailable || getRandomTimeSlot(); // Placeholder
-      const rating = (profile as any).rating || (Math.random() * 1.5 + 3.5).toFixed(1); // Mock rating 3.5-5.0
-
       // Map DoctorProfile to local Doctor interface
       return {
         id: profile.userId,
@@ -133,25 +130,9 @@ export default function FindDoctorsPage() {
         available: true, // Mock availability
         profilePicUrl: profile.profilePictureUrl || null,
         bio: profile.bio,
-        rating: parseFloat(rating),
-        nextAvailable
+        rating: (profile as any).rating || (Math.random() * 1.5 + 3.5).toFixed(1), // Mock rating 3.5-5.0
       } as Doctor;
     });
-  };
-
-  // Generate a random time slot for demonstration
-  const getRandomTimeSlot = () => {
-    const hours = Math.floor(Math.random() * 8) + 9; // 9 AM to 5 PM
-    const minutes = Math.random() > 0.5 ? '00' : '30';
-    const daysAhead = Math.floor(Math.random() * 5) + 1; // 1-5 days ahead
-    
-    const date = new Date();
-    date.setDate(date.getDate() + daysAhead);
-    
-    const month = date.toLocaleString('default', { month: 'short' });
-    const day = date.getDate();
-    
-    return `${month} ${day}, ${hours}:${minutes}`;
   };
 
   // Fetch all doctors initially
@@ -192,6 +173,43 @@ export default function FindDoctorsPage() {
   // Rerun fetch whenever specialty or location filters change as mockFindDoctors uses them
   // searchQuery and language are applied locally in applyFilters
   }, [specialty, location]);
+
+  // Fetch nextAvailable for each doctor from Firestore
+  useEffect(() => {
+    async function enrichNext() {
+      const now = new Date();
+      try {
+        const updates = await Promise.all(doctors.map(async doctor => {
+          const slots: DoctorAvailabilitySlot[] = await loadDoctorAvailability(doctor.userId);
+          const upcoming = slots
+            .filter(slot => slot.available)
+            .map(slot => ({ ...slot, dateTime: new Date(`${slot.date}T${slot.time}`) }))
+            .filter(slot => slot.dateTime > now)
+            .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
+          const next = upcoming.length > 0
+            ? `${formatDate(upcoming[0].dateTime, 'medium')} ${formatTimeString(upcoming[0].time)}`
+            : null;
+          return { id: doctor.id, nextAvailable: next };
+        }));
+        setDoctors(prev => prev.map(doc => {
+          const found = updates.find(u => u.id === doc.id);
+          if (found) {
+            // nextAvailable should be string | undefined, never null
+            const nextAvailable = found.nextAvailable ?? undefined;
+            return {
+              ...doc,
+              nextAvailable,
+              available: !!nextAvailable
+            };
+          }
+          return doc;
+        }));
+      } catch (err) {
+        console.error('Error fetching next available slots for doctors', err);
+      }
+    }
+    if (doctors.length > 0) enrichNext();
+  }, [doctors]);
 
   // Apply filters whenever filter parameters change or the base doctor list updates
   const applyFilters = useCallback((doctorList: Doctor[], query: string, currentSpecialty: string, currentLocation: string, currentLanguage: string) => {

@@ -189,9 +189,8 @@ const DebugInfo = ({ doctorId }: { doctorId: string }) => {
 
 interface Doctor {
   id: string;
+  userId: string;
   name: string;
-  firstName: string;
-  lastName: string;
   specialty: string;
   experience: number;
   location: string;
@@ -199,7 +198,6 @@ interface Doctor {
   fee: number;
   available: boolean;
   profilePicUrl: string;
-  userId: string;
 }
 
 type AppointmentType = "IN_PERSON" | "VIDEO";
@@ -227,7 +225,7 @@ const AppointmentSuccessScreen = ({
         
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Appointment Confirmed!</h2>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
-          Your appointment with Dr. {doctor.lastName} has been scheduled successfully.
+          Your appointment with Dr. {doctor.name} has been scheduled successfully.
         </p>
         
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6 text-left">
@@ -336,9 +334,9 @@ function fetchAvailableDaysForMonth(doctor: Doctor | null, month: Date): Set<str
 
 export default function BookAppointmentPage() {
   const params = useParams();
-  const doctorId = params?.doctorId as string || "";
+  const firestoreDocId = params?.doctorId as string || "";
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
@@ -427,18 +425,18 @@ export default function BookAppointmentPage() {
       calendar.createEvent({
         start: appointmentDate,
         end: endDate,
-        summary: `Appointment with Dr. ${doctor.lastName}`,
+        summary: `Appointment with Dr. ${doctor.name}`,
         description: `${bookedAppointment.appointmentType} appointment${bookedAppointment.reason ? ': ' + bookedAppointment.reason : ''}`,
         location: doctor.location,
         organizer: {
-          name: `Dr. ${doctor.firstName} ${doctor.lastName}`,
+          name: `Dr. ${doctor.name}`,
           email: 'appointments@healthsystem.example'
         }
       });
       
       // Generate and download the .ics file
       const blob = new Blob([calendar.toString()], { type: 'text/calendar;charset=utf-8' });
-      saveAs(blob, `appointment-dr-${doctor.lastName.toLowerCase()}-${format(appointmentDate, 'yyyyMMdd')}.ics`);
+      saveAs(blob, `appointment-dr-${doctor.name.toLowerCase()}-${format(appointmentDate, 'yyyyMMdd')}.ics`);
       
       // Show confirmation toast
       toast.success("Calendar invite downloaded!");
@@ -470,8 +468,8 @@ export default function BookAppointmentPage() {
       
       // Create the appointment data object matching expected interface
       const appointmentData = {
-        doctorId: doctor.id,
-        patientId: user.id,
+        doctorId: doctor.userId,
+        patientId: userProfile?.id || user?.uid,
         appointmentDate: appointmentTimestamp, // Renamed from 'date' to 'appointmentDate'
         startTime: selectedTime,
         endTime: endTime,
@@ -488,7 +486,7 @@ export default function BookAppointmentPage() {
         // Store the booked appointment data for the success screen
         setBookedAppointment({
           id: result.appointmentId,
-          doctorId: doctor.id,
+          doctorId: doctor.userId,
           date: selectedDate,
           startTime: selectedTime,
           endTime: endTime,
@@ -508,8 +506,18 @@ export default function BookAppointmentPage() {
           existingAppointments.push({
             id: result.appointmentId,
             doctor: {
-              id: doctor.id,
-              name: doctor.name,
+              id: doctor.userId,
+              name: (() => {
+                // Doctor name resolution best practice
+                const users = getUsersStore();
+                const userProfile = users.find(u => u.id === doctor.userId);
+                if (userProfile) {
+                  return `Dr. ${userProfile.firstName} ${userProfile.lastName}`;
+                } else {
+                  console.warn('[BookAppointmentPage] Could not resolve doctor name for userId:', doctor.userId);
+                  return 'Dr. Unknown';
+                }
+              })(),
               specialty: doctor.specialty
             },
             date: selectedDate.toISOString(),
@@ -542,257 +550,73 @@ export default function BookAppointmentPage() {
     }
   }, [user, router]);
 
-  // Load doctor profile
+  // Fetch doctor by Firestore doc ID, then get userId
   useEffect(() => {
     async function fetchDoctor() {
       setLoading(true);
       try {
-        console.log(`Attempting to load doctor with ID: ${doctorId}`);
-        
-        // First check if the doctor exists in the user store
-          const users = getUsersStore();
-          const doctorUser = users.find(u => u.id === doctorId);
-          
-        if (!doctorUser) {
-          console.warn(`Doctor user not found in users store: ${doctorId}`);
-        } else {
-          console.log(`Found doctor user in store: ${doctorUser.firstName} ${doctorUser.lastName}`);
-        }
-        
-        // Next try to load the doctor profile
-        const data = await loadDoctorProfilePublic(doctorId);
-        
-        if (data) {
-          console.log(`Successfully loaded doctor profile for ID: ${doctorId}`, data);
-          
-          // Set the proper doctor name using the user data if available
-          let doctorName = "Dr. Unknown";
-          if (doctorUser && doctorUser.firstName && doctorUser.lastName) {
-            doctorName = `Dr. ${doctorUser.firstName} ${doctorUser.lastName}`;
-          }
-          
-          // Convert to Doctor format with proper fallback values
-          const doctorData: Doctor = {
-            id: data.userId || doctorId,
-            userId: data.userId || doctorId,
-            name: doctorName,
-            firstName: doctorUser?.firstName || '',
-            lastName: doctorUser?.lastName || '',
-            specialty: data.specialty || 'General Practice',
-            experience: data.yearsOfExperience || 0,
-            location: data.location || 'Not specified',
-            languages: data.languages || ['English'],
-            fee: data.consultationFee || 0,
-            available: true,
-            profilePicUrl: data.profilePictureUrl || '',
-          };
-          
-          setDoctor(doctorData);
-          console.log("Doctor loaded:", doctorData);
-        } else {
-          console.warn(`Doctor profile not found for ID: ${doctorId}`);
-          
-          // No profile found, check if we can use the user data to create a temporary doctor
-          if (doctorUser) {
-            console.log("Creating temporary doctor from user data");
-            
-            const doctorName = `Dr. ${doctorUser.firstName} ${doctorUser.lastName}`;
-            
-            // Create a doctor object with minimal data
-            const tempDoctorData: Doctor = {
-              id: doctorId,
-              userId: doctorId,
-              name: doctorName,
-              firstName: doctorUser.firstName || '',
-              lastName: doctorUser.lastName || '',
-              specialty: 'General Practice',
-              experience: 5,
-              location: 'Main Hospital',
-              languages: ['English'],
-              fee: 100,
-              available: true,
-              profilePicUrl: '',
-            };
-            
-            setDoctor(tempDoctorData);
-            console.log("Created temporary doctor:", tempDoctorData);
-          } else {
-            // No user or profile found, handle gracefully
+        console.log('[BookAppointmentPage] Fetching doctor profile for docId:', firestoreDocId); // Add debug log for data source
+        const doctorDoc = await loadDoctorProfilePublic(firestoreDocId); // This should fetch by docId
+        if (!doctorDoc) {
           toast.error("Doctor not found");
           setDoctor(null);
-          }
+          setLoading(false);
+          return;
         }
+        console.log('[BookAppointmentPage] Loaded doctor profile:', doctorDoc); // Add debug log for data source
+        setDoctor({
+          id: firestoreDocId,
+          userId: doctorDoc.userId,
+          // Doctor name resolution best practice
+          name: (() => {
+            const users = getUsersStore();
+            const userProfile = users.find(u => u.id === doctorDoc.userId);
+            if (userProfile) {
+              return `Dr. ${userProfile.firstName} ${userProfile.lastName}`;
+            } else {
+              console.warn('[BookAppointmentPage] Could not resolve doctor name for userId:', doctorDoc.userId);
+              return 'Dr. Unknown';
+            }
+          })(),
+          specialty: doctorDoc.specialty,
+          experience: doctorDoc.yearsOfExperience,
+          location: doctorDoc.location,
+          languages: doctorDoc.languages || [],
+          fee: doctorDoc.consultationFee,
+          available: true, // or doctorDoc.available
+          profilePicUrl: doctorDoc.profilePictureUrl || '',
+        });
       } catch (error) {
-        console.error("Error fetching doctor:", error);
         toast.error("Could not load doctor information");
         setDoctor(null);
       } finally {
         setLoading(false);
       }
     }
+    fetchDoctor();
+  }, [firestoreDocId]);
 
-    if (doctorId) {
-      fetchDoctor();
+  // Update all availability queries to use doctor.userId
+  const fetchAvailableSlots = useCallback(async () => {
+    if (!selectedDate || !doctor) {
+      return;
     }
-  }, [doctorId]);
+    console.log('[BookAppointmentPage] Fetching available slots for doctor.userId:', doctor.userId); // Add debug log for data source
+    const slots = await mockGetAvailableSlots({ 
+      doctorId: doctor.userId, 
+      dateString: format(selectedDate, 'yyyy-MM-dd') 
+    });
+    console.log('[BookAppointmentPage] Slots loaded:', slots); // Add debug log for data source
+    setAvailableSlots(slots);
+  }, [doctor, selectedDate]);
 
-  // Load available slots when selected date changes
   useEffect(() => {
-    async function fetchAvailableSlots() {
-      if (!selectedDate || !doctor) {
-        console.log("Cannot fetch slots: missing date or doctor", { 
-          selectedDate: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null, 
-          doctor: doctor?.id
-        });
-        return;
-      }
-      
-      // Check cache first
-      const cacheKey = `${doctor.userId}-${dateString}`;
-      console.log(`Checking cache for slots with key: ${cacheKey}`);
-      
-      if (slotsCacheRef.current[cacheKey]) {
-        console.log(`Using cached slots for ${cacheKey} - found ${slotsCacheRef.current[cacheKey].length} slots`);
-        setAvailableSlots(slotsCacheRef.current[cacheKey]);
-        return;
-      }
-      
-      setLoadingSlots(true);
-      setSelectedTime(null);
-      
-      try {
-        const dateString = format(selectedDate, 'yyyy-MM-dd');
-        console.log(`Fetching available slots for doctor ${doctor.userId} on ${dateString}`);
-        
-        // Get the day of week (0-6, where 0 is Sunday)
-        const dayOfWeek = selectedDate.getDay();
-        console.log(`Selected date ${dateString} is day of week: ${dayOfWeek}`);
-        
-        // Get doctor's weekly availability slots
-        console.log(`Getting availability for doctor: ${doctor.userId}`);
-        let doctorAvailability: DoctorAvailabilitySlot[] = [];
-        
-        try {
-          doctorAvailability = getMockDoctorAvailability(doctor.userId);
-          console.log(`Retrieved ${doctorAvailability.length} availability slots for doctor`);
-        } catch (error) {
-          console.error(`Error getting doctor availability: ${error}`);
-          // Create fallback availability if function fails
-          doctorAvailability = [
-            {
-              id: `fallback_${doctor.userId}_1`,
-              doctorId: doctor.userId,
-              dayOfWeek: dayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6,
-              startTime: '09:00',
-              endTime: '17:00',
-              isAvailable: true
-            }
-          ];
-          console.log("Using fallback availability:", doctorAvailability);
-        }
-        
-        // Exclude dates blocked by doctor
-        const profiles = getDoctorProfilesStore();
-        const profile = profiles.find(p => p.userId === doctor.userId) as any;
-        const blockedDates: string[] = profile?.mockAvailability?.blockedDates || [];
-        if (blockedDates.includes(dateString)) {
-          console.log(`Selected date ${dateString} is blocked`);
-          setAvailableSlots([]);
-          setLoadingSlots(false);
-          return;
-        }
-        
-        // Check if doctor is available on this day of week
-        const availableDaysForDoctor = doctorAvailability.filter(slot => 
-          slot.dayOfWeek === dayOfWeek && slot.isAvailable
-        );
-        
-        console.log(`Doctor has ${availableDaysForDoctor.length} availability entries for this day:`, availableDaysForDoctor);
-        
-        // If doctor is not available on this day, return empty slots
-        if (availableDaysForDoctor.length === 0) {
-          console.log(`Doctor ${doctor.userId} not available on day ${dayOfWeek}`);
-          setAvailableSlots([]);
-          setLoadingSlots(false);
-          return;
-        }
-        
-        // If doctor is available on this day, get slots that don't conflict with appointments
-        console.log(`Getting available slots for doctor ${doctor.userId} on ${dateString}`);
-        let slots: string[] = [];
-        
-        try {
-          slots = await mockGetAvailableSlots({ 
-          doctorId: doctor.userId, 
-          dateString 
-        });
-          console.log(`Retrieved ${slots.length} available slots from API`);
-        } catch (error) {
-          console.error(`Error getting available slots: ${error}`);
-          // Create fallback slots if API fails
-          const hours = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00'];
-          slots = hours;
-          console.log("Using fallback slots:", slots);
-        }
-        
-        // Filter slots based on doctor's availability hours for this day
-        console.log("Filtering slots based on doctor's availability windows");
-        const filteredSlots = slots.filter(timeSlot => {
-          const [hour, minute] = timeSlot.split(':').map(Number);
-          
-          // Check if this time slot is within any of the doctor's available time ranges for this day
-          return availableDaysForDoctor.some(availableSlot => {
-            const [startHour, startMinute] = availableSlot.startTime.split(':').map(Number);
-            const [endHour, endMinute] = availableSlot.endTime.split(':').map(Number);
-            
-            // Convert all to minutes for easier comparison
-            const slotMinutes = hour * 60 + minute;
-            const startMinutes = startHour * 60 + startMinute;
-            const endMinutes = endHour * 60 + endMinute;
-            
-            // Check if slot is within the available range
-            return slotMinutes >= startMinutes && slotMinutes < endMinutes;
-          });
-        });
-        
-        console.log(`Found ${filteredSlots.length} available slots after filtering by doctor schedule`);
-        
-        // Additional filtering to remove past time slots for today
-        if (isSameDay(selectedDate, new Date())) {
-          const currentHour = new Date().getHours();
-          const currentMinute = new Date().getMinutes();
-          
-          // Filter out time slots that have already passed
-          const filteredForToday = filteredSlots.filter(timeSlot => {
-            const [slotHour, slotMinute] = timeSlot.split(':').map(Number);
-            return (slotHour > currentHour) || 
-                   (slotHour === currentHour && slotMinute > currentMinute + 30); // Add 30 min buffer
-          });
-          
-          console.log(`Filtered out past slots for today, remaining: ${filteredForToday.length}`);
-          slotsCacheRef.current[cacheKey] = filteredForToday;
-          setAvailableSlots(filteredForToday);
-        } else {
-        slotsCacheRef.current[cacheKey] = filteredSlots;
-        setAvailableSlots(filteredSlots);
-        }
-      } catch (error) {
-        console.error(`Error in fetchAvailableSlots: ${error}`);
-        toast.error("Could not load available time slots");
-        setAvailableSlots([]);
-      } finally {
-        setLoadingSlots(false);
-      }
+    if (doctor && selectedDate) {
+      fetchAvailableSlots();
     }
-    
-    fetchAvailableSlots();
-  }, [dateString, doctor, selectedDate]);
+  }, [doctor, selectedDate, fetchAvailableSlots]);
 
-  const goBack = useCallback(() => {
-    router.push('/main/find-doctors');
-  }, [router]);
-
-  // Add effect to load available days when doctor changes or month changes
+  // Also update fetchAvailableDaysForMonth to use doctor.userId if needed
   useEffect(() => {
     if (doctor) {
       const days = fetchAvailableDaysForMonth(doctor, currentMonth);
@@ -833,24 +657,32 @@ export default function BookAppointmentPage() {
     
     // Extract information from doctor ID if possible
     let doctorNumber = "Unknown";
-    const match = doctorId.match(/doctor_(\d+)/);
+    const match = firestoreDocId.match(/doctor_(\d+)/);
     if (match) {
       doctorNumber = match[1];
     }
     
     // Create a fallback doctor object
     const fallbackDoctor: Doctor = {
-      id: doctorId,
-      userId: doctorId,
-      name: `Dr. Doctor ${doctorNumber}`,
-      firstName: "",
-      lastName: "",
+      id: firestoreDocId,
+      userId: firestoreDocId,
+      // Doctor name resolution best practice
+      name: (() => {
+        const users = getUsersStore();
+        const userProfile = users.find(u => u.id === firestoreDocId);
+        if (userProfile) {
+          return `Dr. ${userProfile.firstName} ${userProfile.lastName}`;
+        } else {
+          console.warn('[BookAppointmentPage] Could not resolve doctor name for userId:', firestoreDocId);
+          return 'Dr. Unknown';
+        }
+      })(),
       specialty: "General Practice",
       experience: 5,
       location: "Main Hospital",
       languages: ["English"],
       fee: 100,
-      available: true,
+      available: true, // or doctorDoc.available
       profilePicUrl: ""
     };
     
@@ -862,7 +694,7 @@ export default function BookAppointmentPage() {
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-4">
               <button 
-                onClick={goBack}
+                onClick={() => router.push('/main/find-doctors')}
                 className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
                 <ChevronLeftIcon className="h-6 w-6" />
@@ -885,7 +717,7 @@ export default function BookAppointmentPage() {
                 </p>
                 <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside">
                   <li>Try again later</li>
-                  <li>Browse our <button onClick={goBack} className="text-yellow-800 underline">other doctors</button></li>
+                  <li>Browse our <button onClick={() => router.push('/main/find-doctors')} className="text-yellow-800 underline">other doctors</button></li>
                   <li>Or continue with limited information about this doctor</li>
                 </ul>
                 <div className="mt-4">
@@ -902,7 +734,7 @@ export default function BookAppointmentPage() {
             </div>
           </div>
           
-          <DebugInfo doctorId={doctorId} />
+          <DebugInfo doctorId={firestoreDocId} />
           </div>
         </main>
       );
@@ -921,14 +753,14 @@ export default function BookAppointmentPage() {
       )}
       
       {/* Add debug component at the top */}
-      <DebugInfo doctorId={doctorId} />
+      <DebugInfo doctorId={firestoreDocId} />
       
       <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-4">
               <button 
-                onClick={goBack}
+                onClick={() => router.push('/main/find-doctors')}
                 className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
                 <ChevronLeftIcon className="h-6 w-6" />
@@ -1013,7 +845,10 @@ export default function BookAppointmentPage() {
                   
                   {/* Step 1: Select Date */}
                   <div className="mb-8">
-                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 tracking-wide">1. Select a Date</h4>
+                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+                      <CalendarIcon className="w-5 h-5 mr-2 text-blue-500" />
+                      1. Select a Date
+                    </h4>
                     <div className="flex justify-center">
                       <DoctorAvailabilityCalendar 
                         doctor={doctor}
@@ -1034,7 +869,7 @@ export default function BookAppointmentPage() {
                       
                       {doctor && doctor.specialty === "Neurology" && (
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 italic">
-                          Dr. {doctor.lastName} typically offers 30-minute consultations for neurological assessments.
+                          Dr. {doctor.name} typically offers 30-minute consultations for neurological assessments.
                         </p>
                       )}
                       
@@ -1052,7 +887,7 @@ export default function BookAppointmentPage() {
                             <span className="font-medium text-yellow-700 dark:text-yellow-300">No available slots</span>
                           </div>
                           <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                            Dr. {doctor?.lastName || 'The doctor'} doesn't have any available appointments on this date. 
+                            Dr. {doctor?.name || 'The doctor'} doesn't have any available appointments on this date. 
                             Please select another date to view availability.
                           </p>
                         </div>
@@ -1177,7 +1012,7 @@ export default function BookAppointmentPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             {appointmentType === "IN_PERSON" ? (
-                              <span>In-person visits are conducted at Dr. {doctor?.lastName || "the doctor's"} office in {doctor?.location || "their location"}. Please arrive 15 minutes before your appointment time.</span>
+                              <span>In-person visits are conducted at Dr. {doctor?.name || "the doctor's"} office in {doctor?.location || "their location"}. Please arrive 15 minutes before your appointment time.</span>
                             ) : (
                               <span>Video consultations are conducted through our secure platform. You'll receive a link to join 15 minutes before your appointment.</span>
                             )}
@@ -1207,7 +1042,7 @@ export default function BookAppointmentPage() {
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                           </svg>
-                          Your information is private and secure. Only Dr. {doctor?.lastName || "the doctor"} and authorized staff will have access.
+                          Your information is private and secure. Only Dr. {doctor?.name || "the doctor"} and authorized staff will have access.
                         </p>
                       </div>
                     </div>

@@ -158,7 +158,7 @@ export default function FindDoctorPage() {
       console.log(`[FindDoctorPage] Firebase/Firestore initialized: ${!!db}`);
       
       // If Firestore is available, use it
-      if (isFirebaseReady()) {
+      if (isFirebaseReady() && db) {
         console.log('[FindDoctorPage] Using Firestore to fetch doctors');
         try {
           const doctorsRef = collection(db, 'doctors');

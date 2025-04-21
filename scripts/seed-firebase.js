@@ -137,6 +137,7 @@ const generators = {
     ];
     
     const availability = [];
+    const availableDates = [];
     // Generate availability for next 7 days
     for (let i = 0; i < 7; i++) {
       const date = new Date();
@@ -167,6 +168,8 @@ const generators = {
           date: admin.firestore.Timestamp.fromDate(date),
           slots
         });
+        // Add available date as YYYY-MM-DD string
+        availableDates.push(date.toISOString().slice(0, 10));
       }
     }
     
@@ -186,6 +189,7 @@ const generators = {
       experience: faker.number.int({ min: 1, max: 30 }),
       bio: faker.lorem.paragraph(3),
       availability,
+      availableDates,
       rating: faker.number.float({ min: 3.5, max: 5, precision: 0.1 }),
       reviewCount: faker.number.int({ min: 5, max: 500 }),
       appointments: [],
@@ -419,128 +423,169 @@ async function clearCollections() {
 // Seed data
 async function seedData() {
   console.log('Seeding data...');
-  
+
   // Calculate counts for each collection
   const counts = {};
   for (const collection of collections) {
     counts[collection] = countsMap[collection] || DEFAULT_COUNTS[collection] || 10;
   }
-  
+
   // Create documents in order (for proper references)
   const createdData = {};
-  
+  const summary = { users: 0, doctors: 0, patients: 0, appointments: 0, notifications: 0, errors: [] };
+
   // 1. Create users first
   if (collections.includes('users')) {
     const users = [];
     console.log(`Creating ${counts.users} users...`);
-    
     for (let i = 0; i < counts.users; i++) {
       const userData = generators.users();
       users.push(userData);
-      
       try {
         await db.collection('users').doc(userData.uid).set(userData);
       } catch (error) {
         console.error(`Error creating user document:`, error);
+        summary.errors.push(`User ${userData.uid}: ${error.message}`);
       }
     }
-    
     createdData.users = users;
+    summary.users = users.length;
     console.log(`Created ${users.length} users`);
   }
-  
+
   // 2. Create doctors
   if (collections.includes('doctors')) {
     const doctors = [];
     console.log(`Creating ${counts.doctors} doctors...`);
-    
-    for (let i = 0; i < counts.doctors; i++) {
-      const doctorData = generators.doctors(createdData.users);
+    const doctorUsers = (createdData.users || []).filter(u => u.roles && u.roles.doctor);
+    const numToCreate = Math.min(counts.doctors, doctorUsers.length);
+    if (doctorUsers.length === 0) {
+      const msg = `No users with doctor role found. No doctors will be created.`;
+      console.warn(msg);
+      summary.errors.push(msg);
+    } else if (numToCreate < counts.doctors) {
+      const msg = `Warning: Requested ${counts.doctors} doctors but only ${doctorUsers.length} users with doctor role are available. Only ${numToCreate} doctors will be created.`;
+      console.warn(msg);
+      summary.errors.push(msg);
+    }
+    for (let i = 0; i < numToCreate; i++) {
+      const user = doctorUsers[i];
+      const doctorData = generators.doctors([user]);
+      doctorData.userId = user.uid;
       doctors.push(doctorData);
-      
       try {
         await db.collection('doctors').doc(doctorData.id).set(doctorData);
       } catch (error) {
         console.error(`Error creating doctor document:`, error);
+        summary.errors.push(`Doctor ${doctorData.id}: ${error.message}`);
       }
     }
-    
     createdData.doctors = doctors;
+    summary.doctors = doctors.length;
     console.log(`Created ${doctors.length} doctors`);
   }
-  
+
   // 3. Create patients
   if (collections.includes('patients')) {
     const patients = [];
     console.log(`Creating ${counts.patients} patients...`);
-    
-    for (let i = 0; i < counts.patients; i++) {
-      const patientData = generators.patients(createdData.users);
+    const patientUsers = (createdData.users || []).filter(u => u.roles && u.roles.patient);
+    const numToCreate = Math.min(counts.patients, patientUsers.length);
+    if (patientUsers.length === 0) {
+      const msg = `No users with patient role found. No patients will be created.`;
+      console.warn(msg);
+      summary.errors.push(msg);
+    } else if (numToCreate < counts.patients) {
+      const msg = `Warning: Requested ${counts.patients} patients but only ${patientUsers.length} users with patient role are available. Only ${numToCreate} patients will be created.`;
+      console.warn(msg);
+      summary.errors.push(msg);
+    }
+    for (let i = 0; i < numToCreate; i++) {
+      const user = patientUsers[i];
+      const patientData = generators.patients([user]);
+      patientData.userId = user.uid;
       patients.push(patientData);
-      
       try {
         await db.collection('patients').doc(patientData.id).set(patientData);
       } catch (error) {
         console.error(`Error creating patient document:`, error);
+        summary.errors.push(`Patient ${patientData.id}: ${error.message}`);
       }
     }
-    
     createdData.patients = patients;
+    summary.patients = patients.length;
     console.log(`Created ${patients.length} patients`);
   }
-  
+
   // 4. Create appointments (requires doctors and patients)
-  if (collections.includes('appointments') && createdData.doctors && createdData.patients) {
+  if (collections.includes('appointments')) {
     const appointments = [];
-    console.log(`Creating ${counts.appointments} appointments...`);
-    
-    for (let i = 0; i < counts.appointments; i++) {
-      try {
-        const appointmentData = generators.appointments(createdData.doctors, createdData.patients);
-        appointments.push(appointmentData);
-        
-        await db.collection('appointments').doc(appointmentData.id).set(appointmentData);
-        
-        // Update doctor and patient with appointment reference
-        const doctorRef = db.collection('doctors').doc(appointmentData.doctorId);
-        const patientRef = db.collection('patients').doc(appointmentData.patientId);
-        
-        await doctorRef.update({
-          appointments: admin.firestore.FieldValue.arrayUnion(appointmentData.id)
-        });
-        
-        await patientRef.update({
-          appointments: admin.firestore.FieldValue.arrayUnion(appointmentData.id)
-        });
-      } catch (error) {
-        console.error(`Error creating appointment:`, error);
+    if (!createdData.doctors || createdData.doctors.length === 0 || !createdData.patients || createdData.patients.length === 0) {
+      const msg = `No doctors or patients found in Firestore. Appointments will not be created.`;
+      console.warn(msg);
+      summary.errors.push(msg);
+    } else {
+      console.log(`Creating ${counts.appointments} appointments...`);
+      for (let i = 0; i < counts.appointments; i++) {
+        try {
+          const appointmentData = generators.appointments(createdData.doctors, createdData.patients);
+          appointments.push(appointmentData);
+          await db.collection('appointments').doc(appointmentData.id).set(appointmentData);
+          const doctorRef = db.collection('doctors').doc(appointmentData.doctorId);
+          const patientRef = db.collection('patients').doc(appointmentData.patientId);
+          await doctorRef.update({
+            appointments: admin.firestore.FieldValue.arrayUnion(appointmentData.id)
+          });
+          await patientRef.update({
+            appointments: admin.firestore.FieldValue.arrayUnion(appointmentData.id)
+          });
+        } catch (error) {
+          console.error(`Error creating appointment:`, error);
+          summary.errors.push(`Appointment: ${error.message}`);
+        }
       }
+      summary.appointments = appointments.length;
+      createdData.appointments = appointments;
+      console.log(`Created ${appointments.length} appointments`);
     }
-    
-    createdData.appointments = appointments;
-    console.log(`Created ${appointments.length} appointments`);
   }
-  
+
   // 5. Create notifications (requires users)
-  if (collections.includes('notifications') && createdData.users) {
+  if (collections.includes('notifications')) {
     const notifications = [];
-    console.log(`Creating ${counts.notifications} notifications...`);
-    
-    for (let i = 0; i < counts.notifications; i++) {
-      try {
-        const notificationData = generators.notifications(createdData.users, createdData.appointments);
-        notifications.push(notificationData);
-        
-        await db.collection('notifications').doc(notificationData.id).set(notificationData);
-      } catch (error) {
-        console.error(`Error creating notification:`, error);
+    if (!createdData.users || createdData.users.length === 0) {
+      const msg = `No users found in Firestore. Notifications will not be created.`;
+      console.warn(msg);
+      summary.errors.push(msg);
+    } else {
+      console.log(`Creating ${counts.notifications} notifications...`);
+      for (let i = 0; i < counts.notifications; i++) {
+        try {
+          const notificationData = generators.notifications(createdData.users, createdData.appointments);
+          notifications.push(notificationData);
+          await db.collection('notifications').doc(notificationData.id).set(notificationData);
+        } catch (error) {
+          console.error(`Error creating notification:`, error);
+          summary.errors.push(`Notification: ${error.message}`);
+        }
       }
+      summary.notifications = notifications.length;
+      createdData.notifications = notifications;
+      console.log(`Created ${notifications.length} notifications`);
     }
-    
-    createdData.notifications = notifications;
-    console.log(`Created ${notifications.length} notifications`);
   }
-  
+
+  // Print summary
+  console.log('\n=== Seeding Summary ===');
+  console.log(`Users: ${summary.users}`);
+  console.log(`Doctors: ${summary.doctors}`);
+  console.log(`Patients: ${summary.patients}`);
+  console.log(`Appointments: ${summary.appointments}`);
+  console.log(`Notifications: ${summary.notifications}`);
+  if (summary.errors.length > 0) {
+    console.log('\nErrors/Warnings:');
+    summary.errors.forEach(msg => console.log(`- ${msg}`));
+  }
   console.log('Seeding completed successfully!');
 }
 
