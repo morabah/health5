@@ -155,7 +155,11 @@ export const VerificationDocumentSchema = z.object({
 export const VerificationDocumentsSchema = z.object({
   licenseDocument: z.string().nullable().optional(),
   medicalCertificates: z.array(z.string()).optional().default([]),
-  identityProof: z.string().nullable().optional()
+  identityProof: z.string().nullable().optional(),
+  // Legacy field compatibility
+  licenseUrl: z.string().nullable().optional(),
+  certificateUrl: z.string().nullable().optional(),
+  identificationUrl: z.string().nullable().optional()
 });
 
 // Schema for detailed doctor verification data
@@ -174,7 +178,15 @@ export const DoctorVerificationDataSchema = z.object({
   // Legacy field compatibility
   verificationStatus: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'pending', 'approved', 'rejected']).optional(),
   notes: z.string().optional(),
-  updatedAt: timestampSchema // For backward compatibility
+  updatedAt: timestampSchema, // For backward compatibility
+  // Additional profile fields that might exist
+  profilePictureUrl: z.string().nullable().optional(),
+  experience: z.number().optional(),
+  location: z.string().optional(),
+  languages: z.array(z.string()).optional(),
+  fee: z.number().optional(),
+  // Migration tracking
+  _migratedAt: timestampSchema.optional()
 });
 
 // Schema for simplified doctor verification data in admin listing
@@ -191,7 +203,13 @@ export const DoctorVerificationSchema = z.object({
   lastUpdated: timestampSchema,
   verificationNotes: z.string().optional(),
   notes: z.string().optional(),
-  adminNotes: z.string().optional()
+  adminNotes: z.string().optional(),
+  // Additional listing fields
+  dateSubmitted: timestampSchema.optional(),
+  experience: z.number().optional(),
+  location: z.string().optional(),
+  // Migration tracking
+  _migratedAt: timestampSchema.optional()
 });
 
 // Schema for verification request
