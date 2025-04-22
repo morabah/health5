@@ -3,7 +3,18 @@ import {
   DoctorProfileSchema, 
   PatientProfileSchema, 
   AppointmentSchema,
-  NotificationSchema
+  NotificationSchema,
+  DoctorVerificationDataSchema,
+  DoctorVerificationSchema, 
+  VerificationDocumentSchema, 
+  DoctorAvailabilitySlotSchema,
+  TimeSlotSchema, 
+  WeeklyScheduleSchema, 
+  VerificationRequestSchema,
+  VerificationHistoryEntrySchema, 
+  SystemLogSchema, 
+  EducationEntrySchema,
+  ExperienceEntrySchema
 } from '@/lib/zodSchemas';
 import { collection, getDocs } from 'firebase/firestore';
 import { getFirestoreDb } from '@/lib/improvedFirebaseClient';

@@ -7,12 +7,14 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import { logValidation } from "@/lib/logger";
-import { doc, getDoc, updateDoc, collection, getFirestore } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getFirestore, query, where, getDocs } from 'firebase/firestore';
 import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
 import { VerificationStatus } from '@/types/enums';
-import type { DoctorVerificationData } from '@/types/doctor';
+import { DoctorVerificationDataSchema } from '@/lib/zodSchemas';
 import type { UserProfile } from '@/types/user';
 import type { VerificationDocument } from '@/types/verificationDocument';
+import Link from "next/link";
+import useEventTracking from "@/hooks/useEventTracking";
 
 /**
  * Admin Doctor Verification Detail Page
@@ -21,6 +23,7 @@ import type { VerificationDocument } from '@/types/verificationDocument';
 export default function DoctorVerificationPage() {
   const { doctorId } = useParams() as { doctorId: string };
   const router = useRouter();
+  const { createClickHandler } = useEventTracking({ pageName: "doctor-verification" });
   
   const [loading, setLoading] = useState(true);
   const [doctor, setDoctor] = useState<any>({});
@@ -62,7 +65,17 @@ export default function DoctorVerificationPage() {
           setLoading(false);
           return;
         }
-        const verificationData = verificationDoc.data() as DoctorVerificationData;
+        const verificationData = verificationDoc.data() as DoctorVerificationDataSchema.type;
+        
+        // Add a log for debugging the data structure
+        console.log('[DoctorVerificationPage] Verification data:', verificationData);
+        
+        // Create a properly shaped object - doctorId is the canonical ID
+        if (!verificationData.doctorId) {
+          console.warn('[DoctorVerificationPage] Document missing doctorId, using document ID');
+          verificationData.doctorId = doctorId;
+        }
+        
         setDoctor(verificationData);
         setStatus(verificationData.status || VerificationStatus.PENDING);
         setNotes(verificationData.notes || '');
@@ -74,9 +87,18 @@ export default function DoctorVerificationPage() {
           setUserProfileData(null);
         }
         // Fetch supporting verificationDocs for this doctor
-        const docsSnap = await db.collection('verificationDocs').where('doctorId', '==', doctorId).get();
-        const docsList: VerificationDocument[] = docsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setVerificationDocs(docsList);
+        try {
+          // Using the correct Firestore client SDK syntax
+          const verificationDocsRef = collection(db, 'verificationDocs');
+          const q = query(verificationDocsRef, where('doctorId', '==', doctorId));
+          const docsSnap = await getDocs(q);
+          const docsList: VerificationDocument[] = docsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setVerificationDocs(docsList);
+        } catch (verificationDocsError) {
+          console.warn('[DoctorVerificationPage] Error fetching verification docs:', verificationDocsError);
+          // Don't fail the entire page load if just the supporting docs can't be fetched
+          setVerificationDocs([]);
+        }
         setLoading(false);
       } catch (e: any) {
         setError('Failed to load verification data');
@@ -433,14 +455,13 @@ export default function DoctorVerificationPage() {
           </div>
           
           <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <Button
-              variant="secondary"
-              onClick={() => router.push('/admin/doctor-verification')}
-              label="Back to List"
-              pageName="doctor-verification"
+            <Link
+              href="/admin/dashboard"
+              className="rounded bg-blue-700 hover:bg-blue-900 text-white px-2 py-1 text-sm transition-all duration-300 ease-in-out"
+              onClick={createClickHandler("Back to Admin Manager")}
             >
-              Back to Verification List
-            </Button>
+              Back to Admin Manager
+            </Link>
           </div>
         </Card>
       </div>

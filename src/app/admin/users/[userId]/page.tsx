@@ -224,12 +224,12 @@ export default function UserDetailPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">User Profile</h1>
           <Button
-            label="Back to Users"
+            label="Back to Admin Manager"
             pageName="admin-user-detail"
             size="sm"
             asChild
           >
-            <Link href="/admin/doctor-verification">Back to Admin Manager</Link>
+            <Link href="/admin/dashboard">Back to Admin Manager</Link>
           </Button>
         </div>
 
