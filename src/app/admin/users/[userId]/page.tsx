@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
 import { UserType } from '@/types/enums';
 import type { UserProfile } from '@/types/user';
@@ -78,7 +78,10 @@ export default function UserDetailPage() {
     setActionInProgress('deactivate');
     try {
       const db = await getFirestoreDb();
-      await getDoc(doc(db, 'users', userId));
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        isActive: !user.isActive
+      });
       // Update the user in the local state
       setUser((prev: UserProfile | null) => {
         if (!prev) return null;
@@ -122,15 +125,38 @@ export default function UserDetailPage() {
       // Update basic user profile
       const db = await getFirestoreDb();
       const userRef = doc(db, 'users', userId);
-      await getDoc(userRef);
-      // Implement update user profile logic using Firestore
+      
+      // Create an object with only the fields that were edited
+      const userUpdates: Partial<UserProfile> = {};
+      if (editedUser.firstName !== undefined) userUpdates.firstName = editedUser.firstName;
+      if (editedUser.lastName !== undefined) userUpdates.lastName = editedUser.lastName;
+      if (editedUser.email !== undefined) userUpdates.email = editedUser.email;
+      if (editedUser.phone !== undefined) userUpdates.phone = editedUser.phone;
+      
+      // Only update if we have changes
+      if (Object.keys(userUpdates).length > 0) {
+        await updateDoc(userRef, userUpdates);
+      }
+      
       // If patient, also update patient-specific profile
       let patientResult = { success: true };
       if (user?.userType === UserType.PATIENT && patientProfile) {
         const patientRef = doc(db, 'patients', userId);
-        await getDoc(patientRef);
-        // Implement update patient profile logic using Firestore
-        patientResult = { success: true };
+        
+        // Create an object with only the fields that were edited
+        const patientUpdates: Record<string, any> = {};
+        const fields = ['dateOfBirth', 'gender', 'bloodType', 'medicalHistory', 'allergies', 'medications', 'emergencyContact'];
+        
+        fields.forEach(field => {
+          if (editedPatientProfile[field] !== undefined) {
+            patientUpdates[field] = editedPatientProfile[field];
+          }
+        });
+        
+        // Only update if we have changes
+        if (Object.keys(patientUpdates).length > 0) {
+          await updateDoc(patientRef, patientUpdates);
+        }
       }
       
       if (patientResult.success) {
@@ -148,19 +174,15 @@ export default function UserDetailPage() {
         });
         
         if (user?.userType === UserType.PATIENT && patientProfile) {
-          setPatientProfile(prev => {
-            if (!prev) return null;
-            return { ...prev, ...editedPatientProfile };
-          });
+          setPatientProfile(prev => ({ ...prev, ...editedPatientProfile }));
         }
         
+        showSuccess('Profile updated successfully.');
         setEditing(false);
-        showSuccess("User profile updated successfully.");
-      } else {
-        setError("Failed to update user profile.");
       }
     } catch (error) {
-      setError("Failed to update user profile.");
+      setError('Failed to update profile.');
+      console.error('Update error:', error);
     } finally {
       setActionInProgress(null);
     }

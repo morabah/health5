@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { db } from '@/lib/firebase';
+import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { AppointmentStatus } from '@/types/enums';
 
@@ -51,13 +51,14 @@ export default function AdminDashboardPage() {
     setLoading(true);
     setError(null);
     try {
+      const db = await getFirestoreDb();
       const usersRef = collection(db, 'users');
       const usersQuery = query(usersRef);
       const usersSnapshot = await getDocs(usersQuery);
       const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const totalUsers = users.length;
-      const totalPatients = users.filter(u => u.userType.toLowerCase() === 'patient').length;
-      const totalDoctors = users.filter(u => u.userType.toLowerCase() === 'doctor').length;
+      const totalPatients = users.filter(u => u.userType?.toLowerCase() === 'patient').length;
+      const totalDoctors = users.filter(u => u.userType?.toLowerCase() === 'doctor').length;
 
       const verificationsRef = collection(db, 'doctorVerifications');
       const verificationsQuery = query(verificationsRef, where('status', '==', 'pending'));
