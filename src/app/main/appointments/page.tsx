@@ -17,6 +17,7 @@ import { Appointment } from '@/types/appointment';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import { AppointmentSchema } from '@/lib/zodSchemas';
+import { safeValidateWithZod } from '@/lib/zodValidator';
 import { formatDate } from '@/utils/dateUtils';
 
 // Simple EmptyState component
@@ -160,39 +161,47 @@ export default function AppointmentsPage() {
       const getMyAppointments = httpsCallable(functions, 'getMyAppointments');
       const res = await getMyAppointments({ statusFilter: filter });
       if (!res.data || !Array.isArray(res.data)) throw new Error('Malformed response from backend');
+      
+      // Transform and validate each appointment
       const items = res.data.map((item: any, idx: number) => {
         // Ensure appointmentDate is always present and valid for Appointment type
         let appointmentDate = item.appointmentDate;
-        if (!appointmentDate) {
-          // Fallback: try to parse from startTime if possible
-          if (item.startTime) {
-            appointmentDate = new Date(item.startTime);
-          } else {
-            // Default to now if no date info at all (should not happen in prod)
-            appointmentDate = new Date();
-          }
-        }
-        // Normalize status to AppointmentStatus enum value
-        let status = item.status;
+        
+        // Normalize the status field
+        let status = item.status || 'PENDING';
         if (typeof status === 'string') {
-          // Convert to enum if possible (case-insensitive)
           const normalized = status.toUpperCase();
-          if ([
-            'PENDING', 'CONFIRMED', 'SCHEDULED', 'CANCELLED', 'CANCELLED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'COMPLETED', 'NO_SHOW', 'RESCHEDULED'
-          ].includes(normalized)) {
+          if (['PENDING', 'CONFIRMED', 'SCHEDULED', 'CANCELLED', 'COMPLETED', 'NO_SHOW', 'RESCHEDULED'].includes(normalized)) {
             status = normalized;
           } else {
             status = 'PENDING';
           }
         }
-        return {
-          ...AppointmentSchema.parse({ ...item, appointmentDate, status }),
-          id: item.id ?? item.appointmentId ?? `appt-${idx}`,
-          appointmentDate, // Ensure always present
+        
+        // Create the base appointment object with required fields
+        const appointmentData = {
+          ...item,
+          appointmentDate,
           status,
+          id: item.id ?? item.appointmentId ?? `appt-${idx}`
         };
-      });
-      setAppointments(items as Appointment[]);
+        
+        // Validate with Zod
+        const validationResult = safeValidateWithZod(
+          AppointmentSchema, 
+          appointmentData,
+          { contextName: 'appointments-list' }
+        );
+        
+        if (!validationResult.success) {
+          console.warn(`[Appointments] Invalid appointment data:`, validationResult.error);
+          return null;
+        }
+        
+        return validationResult.data;
+      }).filter(Boolean) as Appointment[];
+      
+      setAppointments(items);
     } catch (err: any) {
       console.error('[Appointments] Error:', err);
       setError('Failed to load appointments.');

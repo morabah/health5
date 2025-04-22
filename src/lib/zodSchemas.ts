@@ -153,39 +153,45 @@ export const VerificationDocumentSchema = z.object({
 
 // Schema for nested documents object in DoctorVerificationData
 export const VerificationDocumentsSchema = z.object({
-  licenseUrl: z.string().nullable(),
-  certificateUrl: z.string().nullable(),
-  identificationUrl: z.string().nullable()
+  licenseDocument: z.string().nullable().optional(),
+  medicalCertificates: z.array(z.string()).optional().default([]),
+  identityProof: z.string().nullable().optional()
 });
 
 // Schema for detailed doctor verification data
 export const DoctorVerificationDataSchema = z.object({
-  doctorId: z.string(),
-  fullName: z.string(),
-  specialty: z.string(),
-  licenseNumber: z.string(),
-  licenseAuthority: z.string(),
-  status: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'pending', 'approved', 'rejected', 'more_info_required']),
-  documents: VerificationDocumentsSchema,
+  doctorId: z.string().optional(),
+  userId: z.string().optional(), // Some documents may use userId instead of doctorId
+  fullName: z.string().optional().default(''),
+  specialty: z.string().optional().default(''),
+  licenseNumber: z.string().optional().default(''),
+  licenseAuthority: z.string().optional().default(''),
+  status: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'pending', 'approved', 'rejected', 'more_info_required']).optional().default('PENDING'),
+  documents: VerificationDocumentsSchema.optional().default({}),
   submissionDate: timestampSchema,
   lastUpdated: timestampSchema,
-  adminNotes: z.string().optional(),
-  profilePictureUrl: z.string().nullable().optional(),
-  experience: z.number().optional(),
-  location: z.string().optional(),
-  languages: z.array(z.string()).optional(),
-  fee: z.number().optional()
+  adminNotes: z.string().optional().default(''),
+  // Legacy field compatibility
+  verificationStatus: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'pending', 'approved', 'rejected']).optional(),
+  notes: z.string().optional(),
+  updatedAt: timestampSchema // For backward compatibility
 });
 
 // Schema for simplified doctor verification data in admin listing
 export const DoctorVerificationSchema = z.object({
-  id: z.string(),
-  name: z.string().optional(),
-  status: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'pending', 'approved', 'rejected', 'more_info_required']),
-  dateSubmitted: timestampSchema,
-  specialty: z.string().optional(),
-  experience: z.number().optional(),
-  location: z.string().optional()
+  id: z.string().optional(),
+  userId: z.string().optional(),
+  doctorId: z.string().optional(),
+  specialty: z.string().optional().default(''),
+  licenseNumber: z.string().optional().default(''),
+  verificationStatus: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'pending', 'approved', 'rejected']).optional().default('PENDING'),
+  status: z.enum(['PENDING', 'VERIFIED', 'REJECTED', 'pending', 'approved', 'rejected']).optional(),
+  name: z.string().nullable().optional(),
+  submissionDate: timestampSchema,
+  lastUpdated: timestampSchema,
+  verificationNotes: z.string().optional(),
+  notes: z.string().optional(),
+  adminNotes: z.string().optional()
 });
 
 // Schema for verification request
@@ -248,6 +254,96 @@ export const NotificationSchema = z.object({
   message: z.string(),
   isRead: z.boolean().default(false),
   createdAt: timestampSchema,
-  type: z.enum(['APPOINTMENT', 'SYSTEM', 'VERIFICATION', 'appointment_booked', 'verification_approved', 'system']).optional().default('SYSTEM'),
+  // Accept all notification types, but document the main ones
+  type: z.string().describe("E.g. 'appointment_booked', 'verification_approved', 'system', 'appointment_reminder', etc.").optional().default('system'),
   relatedId: z.string().nullable().optional(), // ID of related resource (appointment, etc)
+});
+
+// Authentication Schemas
+export const LoginSchema = z.object({
+  email: z.string().email('Please provide a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  rememberMe: z.boolean().optional().default(false),
+});
+
+// Base registration fields without the discriminator
+const registerBaseObject = {
+  email: z.string().email('Please provide a valid email address'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  confirmPassword: z.string(),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  phone: z.string().optional(),
+  acceptTerms: z.boolean().refine(val => val === true, {
+    message: 'You must accept the terms and conditions',
+  })
+};
+
+// Create standalone schemas without inheritance
+
+// Patient registration schema
+export const PatientRegisterSchema = z.object({
+  ...registerBaseObject,
+  userType: z.literal('PATIENT'),
+  dateOfBirth: z.string().optional(),
+  gender: z.enum(['Male', 'Female', 'Other']).optional(),
+}).refine(data => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
+// Doctor registration schema
+export const DoctorRegisterSchema = z.object({
+  ...registerBaseObject,
+  userType: z.literal('DOCTOR'),
+  specialty: z.string().min(1, 'Specialty is required'),
+  licenseNumber: z.string().min(1, 'License number is required'),
+}).refine(data => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
+// Combined schema using discriminated union
+export const RegisterSchema = z.union([
+  PatientRegisterSchema,
+  DoctorRegisterSchema
+]);
+
+export const PasswordResetRequestSchema = z.object({
+  email: z.string().email('Please provide a valid email address'),
+});
+
+export const PasswordResetConfirmSchema = z.object({
+  code: z.string().min(6, 'Verification code must be at least 6 characters'),
+  newPassword: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  confirmPassword: z.string(),
+}).refine(data => data.newPassword === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
+export const ContactFormSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Please provide a valid email address'),
+  subject: z.string().min(1, 'Subject is required'),
+  message: z.string().min(10, 'Message must be at least 10 characters'),
+});
+
+export const DoctorSearchSchema = z.object({
+  specialty: z.string().optional(),
+  location: z.string().optional(),
+  date: z.string().optional(),
+  gender: z.enum(['Male', 'Female', 'Other']).optional(),
+  nameFilter: z.string().optional(),
+  sortBy: z.enum(['rating', 'experience', 'price']).optional(),
+  page: z.number().optional().default(1),
+  limit: z.number().optional().default(10),
 });

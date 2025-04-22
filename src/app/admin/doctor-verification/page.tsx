@@ -11,6 +11,7 @@ import type { DoctorVerification } from "@/types/doctor";
 import { collection, getDocs, getFirestore, updateDoc, doc, getDoc } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/improvedFirebaseClient";
 import { DoctorVerificationSchema } from "@/lib/zodSchemas";
+import { safeValidateWithZod } from "@/lib/zodValidator";
 
 /**
  * Admin Doctor Verification List Page
@@ -89,13 +90,22 @@ const DoctorVerificationListPage: React.FC = () => {
             name: userData ? `${userData.firstName} ${userData.lastName}` : null,
           };
           
-          const parsed = DoctorVerificationSchema.safeParse(enhancedRaw);
-          if (!parsed.success) {
-            console.warn('[Zod Validation] Invalid doctor verification:', enhancedRaw, parsed.error);
+          // Validate using the Zod schema
+          const validationResult = safeValidateWithZod(
+            DoctorVerificationSchema, 
+            enhancedRaw,
+            {
+              contextName: 'doctor-verification-list',
+              logErrors: true
+            }
+          );
+          
+          if (!validationResult.success) {
+            console.warn('[Zod Validation] Invalid doctor verification:', enhancedRaw, validationResult.error);
             return null;
           }
           
-          return { id: raw.id, ...parsed.data, name: enhancedRaw.name };
+          return { id: raw.id, ...validationResult.data, name: enhancedRaw.name };
         }).filter((v): v is DoctorVerification => v !== null);
         
         console.log("[DoctorVerificationListPage] Received verifications:", items);

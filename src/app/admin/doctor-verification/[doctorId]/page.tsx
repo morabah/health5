@@ -11,6 +11,7 @@ import { doc, getDoc, updateDoc, collection, getFirestore, query, where, getDocs
 import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
 import { VerificationStatus } from '@/types/enums';
 import { DoctorVerificationDataSchema } from '@/lib/zodSchemas';
+import { validateWithZod, safeValidateWithZod } from '@/lib/zodValidator';
 import type { UserProfile } from '@/types/user';
 import type { VerificationDocument } from '@/types/verificationDocument';
 import Link from "next/link";
@@ -65,7 +66,25 @@ export default function DoctorVerificationPage() {
           setLoading(false);
           return;
         }
-        const verificationData = verificationDoc.data() as DoctorVerificationDataSchema.type;
+        
+        // Validate the verification data with Zod
+        const validationResult = safeValidateWithZod(
+          DoctorVerificationDataSchema, 
+          verificationDoc.data(), 
+          { 
+            contextName: 'doctor-verification-detail',
+            logErrors: true
+          }
+        );
+        
+        if (!validationResult.success) {
+          console.warn('[DoctorVerificationPage] Data validation issues:', validationResult.error);
+          setError(`Data validation issues: ${validationResult.error}`);
+          setLoading(false);
+          return;
+        }
+        
+        const verificationData = validationResult.data;
         
         // Add a log for debugging the data structure
         console.log('[DoctorVerificationPage] Verification data:', verificationData);
@@ -114,12 +133,24 @@ export default function DoctorVerificationPage() {
     setError(null);
     try {
       const db = await getFirestoreDb();
-      const verificationRef = doc(db, 'doctorVerifications', doctorId);
-      await updateDoc(verificationRef, {
-        status,
-        notes,
-        updatedAt: new Date()
-      });
+      
+      // Validate the update data with Zod - partial schema validation
+      const updateData = validateWithZod(
+        DoctorVerificationDataSchema.pick({
+          status: true, 
+          adminNotes: true,
+          lastUpdated: true
+        }), 
+        {
+          status,
+          adminNotes: notes,
+          lastUpdated: new Date()
+        }, 
+        { contextName: 'doctor-verification-update' }
+      );
+      
+      // Update the verification document
+      await updateDoc(doc(db, 'doctorVerifications', doctorId), updateData);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);
     } catch (e: any) {
