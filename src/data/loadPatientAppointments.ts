@@ -12,8 +12,8 @@ export async function loadPatientAppointments(patientId: string, afterDate?: any
   if (dataSource === 'mock') {
     // Mock data for demo/testing
     return [
-      { id: 'a1', patientId, doctorId: 'd1', appointmentDate: '2025-04-18', status: AppointmentStatus.UPCOMING },
-      { id: 'a2', patientId, doctorId: 'd2', appointmentDate: '2025-04-20', status: AppointmentStatus.COMPLETED }
+      { id: 'a1', patientId, doctorId: 'd1', appointmentDate: new Date('2025-04-18'), startTime: '09:00', endTime: '09:30', status: AppointmentStatus.CONFIRMED, reason: 'Checkup', notes: '', doctorName: 'Dr. Smith', patientName: 'John Doe', createdAt: new Date(), updatedAt: new Date() },
+      { id: 'a2', patientId, doctorId: 'd2', appointmentDate: new Date('2025-04-20'), startTime: '10:00', endTime: '10:30', status: AppointmentStatus.COMPLETED, reason: 'Follow-up', notes: '', doctorName: 'Dr. Jones', patientName: 'Jane Doe', createdAt: new Date(), updatedAt: new Date() }
     ];
   }
   // Uncomment and implement Firestore logic as needed

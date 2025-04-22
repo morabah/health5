@@ -13,9 +13,9 @@ import {
 import { useRouter } from 'next/navigation';
 import { AppointmentStatus } from '@/types/enums';
 import type { Appointment } from '@/types/appointment';
-import { mockGetMyAppointments } from '@/lib/mockApiService';
-import { getUsersStore } from '@/data/mockDataStore';
-import { UserType } from '@/types/enums';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
+import { AppointmentSchema } from '@/lib/zodSchemas';
 import { useAuth } from '@/context/AuthContext';
 import Spinner from '@/components/ui/Spinner';
 import Button from '@/components/ui/Button';
@@ -36,96 +36,45 @@ export const AppointmentTimeline = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'upcoming' | 'past'>('all');
 
-  // Fetch appointments from API and localStorage
   useEffect(() => {
     async function fetchAppointments() {
       if (!user) return;
-
       setLoading(true);
+      setError(null);
       try {
-        // Get appointments from API
-        const apiAppointments = await mockGetMyAppointments(user.id, UserType.PATIENT);
-        
-        // Check localStorage for any additional recently booked appointments
-        let localAppointments: any[] = [];
-        try {
-          const storedAppointments = localStorage.getItem('recent_appointments');
-          if (storedAppointments) {
-            localAppointments = JSON.parse(storedAppointments);
-            
-            // Filter to only include appointments not already in the API results
-            localAppointments = localAppointments.filter(localAppt => 
-              !apiAppointments.some(apiAppt => apiAppt.id === localAppt.id)
-            );
-          }
-        } catch (err) {
-          console.error("Error loading appointments from localStorage:", err);
-        }
-        
-        // Sort all appointments by date
-        const allAppointments = [...apiAppointments];
-        
-        // Convert local appointments to API format if needed and merge
-        if (localAppointments.length > 0) {
-          const usersStore = getUsersStore();
-          
-          for (const localAppt of localAppointments) {
-            // Skip if this appointment ID already exists
-            if (allAppointments.some(a => a.id === localAppt.id)) continue;
-            
-            // Find doctor user information
-            const doctorUser = usersStore.find(u => u.id === localAppt.doctor.id);
-            
-            // Create appointment object with required fields only
-            const appointment = {
-              id: localAppt.id,
-              doctorId: localAppt.doctor.id,
-              patientId: user.id,
-              appointmentDate: new Date(localAppt.date),
-              startTime: localAppt.time,
-              endTime: '', // Calculate end time if needed
-              status: AppointmentStatus.SCHEDULED,
-              appointmentType: localAppt.type === 'IN_PERSON' ? 'In-person' : 'Video',
-              reason: localAppt.reason || '',
-              notes: '',
-              createdAt: new Date(localAppt.booked),
-              updatedAt: new Date(localAppt.booked),
-              doctorName: doctorUser ? `Dr. ${doctorUser.firstName} ${doctorUser.lastName}` : localAppt.doctor.name,
-              doctorSpecialty: localAppt.doctor.specialty || ''
-            } as Appointment;
-            
-            allAppointments.push(appointment);
-          }
-        }
-        
-        // Sort appointments by date (newest first)
-        const sortedAppointments = allAppointments.sort((a, b) => {
-          const dateA = toDate(a.appointmentDate);
-          const dateB = toDate(b.appointmentDate);
-          return dateB.getTime() - dateA.getTime();
-        });
-        
-        setAppointments(sortedAppointments);
-      } catch (err) {
-        console.error("Error fetching appointments:", err);
-        setError("Failed to load appointments");
+        initializeFirebaseClient('live');
+        const functions = getFunctions();
+        const getMyAppointments = httpsCallable(functions, 'getMyAppointments');
+        const res = await getMyAppointments({ statusFilter: selectedFilter });
+        if (!res.data || !Array.isArray(res.data)) throw new Error('Malformed response from backend');
+        const items = res.data.map((item: any, idx: number) => ({
+          ...AppointmentSchema.parse(item),
+          id: item.id ?? item.appointmentId ?? `appt-${idx}`,
+          appointmentDate: item.appointmentDate ?? new Date(),
+          status: (typeof item.status === 'string' ? AppointmentStatus[item.status as keyof typeof AppointmentStatus] : item.status) ?? AppointmentStatus.PENDING,
+          createdAt: item.createdAt ?? new Date(),
+          updatedAt: item.updatedAt ?? new Date(),
+        }));
+        setAppointments(items);
+      } catch (err: any) {
+        console.error('[AppointmentTimeline] Error:', err);
+        setError('Failed to load appointments.');
       } finally {
         setLoading(false);
       }
     }
-
     fetchAppointments();
-  }, [user]);
+  }, [user, selectedFilter]);
 
   // Filter appointments based on selected filter
   const filteredAppointments = appointments.filter(appointment => {
-    const appointmentDate = toDate(appointment.appointmentDate);
+    const appointmentDate = appointment.appointmentDate ? toDate(appointment.appointmentDate) : null;
     const today = new Date();
     
     if (selectedFilter === 'upcoming') {
-      return isAfter(appointmentDate, today) || isToday(appointmentDate);
+      return appointmentDate && (isAfter(appointmentDate, today) || isToday(appointmentDate));
     } else if (selectedFilter === 'past') {
-      return isBefore(appointmentDate, today) && !isToday(appointmentDate);
+      return appointmentDate && (isBefore(appointmentDate, today) && !isToday(appointmentDate));
     }
     
     return true; // 'all' filter
@@ -133,9 +82,9 @@ export const AppointmentTimeline = () => {
 
   // Function to get status color and icon
   const getStatusInfo = (appointment: Appointment) => {
-    const appointmentDate = toDate(appointment.appointmentDate);
+    const appointmentDate = appointment.appointmentDate ? toDate(appointment.appointmentDate) : null;
     const today = new Date();
-    const isUpcoming = isAfter(appointmentDate, today) || isToday(appointmentDate);
+    const isUpcoming = appointmentDate && (isAfter(appointmentDate, today) || isToday(appointmentDate));
     
     switch (appointment.status) {
       case AppointmentStatus.SCHEDULED:
@@ -302,8 +251,8 @@ export const AppointmentTimeline = () => {
           </div>
         ) : (
           filteredAppointments.map((appointment) => {
-            const appointmentDate = toDate(appointment.appointmentDate);
-            const isDateValid = !isNaN(appointmentDate.getTime());
+            const appointmentDate = appointment.appointmentDate ? toDate(appointment.appointmentDate) : null;
+            const isDateValid = appointmentDate && !isNaN(appointmentDate.getTime());
             const statusInfo = getStatusInfo(appointment);
             const StatusIcon = statusInfo.icon;
             
@@ -317,19 +266,15 @@ export const AppointmentTimeline = () => {
               return `${displayHour}:${minute.toString().padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
             };
             
-            // Check if this is from Dr. Ana Souza (user_doctor_005) for special formatting
-            const isAnaSouza = appointment.doctorId === 'user_doctor_005';
-            
             // Safe way to get doctor's name
             const doctorName = appointment.doctorName || (() => {
-              const doctorUser = getUsersStore().find(u => u.id === appointment.doctorId);
-              return doctorUser ? `Dr. ${doctorUser.lastName || 'Unknown'}` : 'Unknown Doctor';
+              return 'Unknown Doctor';
             })();
             
             return (
               <div 
                 key={appointment.id}
-                className={`p-4 flex ${isAnaSouza ? 'bg-blue-50 dark:bg-blue-900/10' : ''} cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors`}
+                className={`p-4 flex cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors`}
                 onClick={() => appointment.id && handleAppointmentClick(appointment.id)}
               >
                 {/* Left: Timeline indicator */}
@@ -386,12 +331,6 @@ export const AppointmentTimeline = () => {
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
                       <span className="font-medium">Reason:</span> {appointment.reason}
                     </p>
-                  )}
-                  
-                  {isAnaSouza && (
-                    <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
-                      Dr. Ana Souza • Neurology
-                    </div>
                   )}
                 </div>
               </div>

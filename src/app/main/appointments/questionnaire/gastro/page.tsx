@@ -481,7 +481,7 @@ export default function GastroQuestionnaireForm() {
                   variant="primary"
                   onClick={handleSubmit}
                   disabled={isLoading}
-                  loading={isLoading}
+                  isLoading={isLoading}
                   label="Submit"
                   pageName="GastroQuestionnaire"
                 >

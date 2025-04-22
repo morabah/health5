@@ -4,13 +4,7 @@
  */
 import {
   mockAppointmentsArray,
-  mockDoctorProfiles,
   mockDoctorUser,
-  mockDoctorProfileData1,
-  mockDoctorProfileData2,
-  mockDoctorProfileData3,
-  mockDoctorProfileData4,
-  mockDoctorProfileData5,
   mockPatientUser,
   mockPatientProfileData1,
   mockPatientProfileData2,
@@ -31,32 +25,9 @@ export const getMockAppointments = (): Appointment[] => [...mockAppointmentsArra
  */
 export const getMockDoctorProfiles = (): DoctorProfile[] => {
   try {
-    if (!mockDoctorProfiles || !Array.isArray(mockDoctorProfiles)) {
-      console.error('[mockDataService] mockDoctorProfiles is not available or not an array', { mockDoctorProfiles });
-      
-      // Fallback to constructing the array directly from individual mock objects
-      const fallbackProfiles = [
-        mockDoctorProfileData1,
-        mockDoctorProfileData2,
-        mockDoctorProfileData3,
-        mockDoctorProfileData4,
-        mockDoctorProfileData5
-      ].filter(Boolean);
-      
-      console.log(`[mockDataService] Using ${fallbackProfiles.length} fallback profiles`);
-      return [...fallbackProfiles];
-    }
-    
-    console.log(`[mockDataService] Returning ${mockDoctorProfiles.length} mock doctor profiles`);
-    return [...mockDoctorProfiles];
+    return [];
   } catch (error) {
     console.error('[mockDataService] Error in getMockDoctorProfiles:', error);
-    
-    // Last resort fallback - return at least one profile if available
-    if (mockDoctorProfileData1) {
-      return [mockDoctorProfileData1];
-    }
-    
     return [];
   }
 };
@@ -64,7 +35,7 @@ export const getMockDoctorProfiles = (): DoctorProfile[] => {
 /**
  * Returns a mock doctor profile by user ID.
  */
-export const getMockDoctorProfile = (id: string): DoctorProfile | undefined => mockDoctorProfiles.find(d => d.userId === id);
+export const getMockDoctorProfile = (id: string): DoctorProfile | undefined => undefined;
 
 /**
  * Placeholder functions for doctor availability and forms
@@ -76,64 +47,7 @@ export const getMockDoctorAvailability = (doctorId?: string) => {
   const { getDoctorProfilesStore } = require('@/data/mockDataStore');
   
   // Default slots to return if no doctor-specific data is found
-  const defaultSlots = [
-    {
-      id: 'avail_001',
-      doctorId: mockDoctorUser.id,
-      dayOfWeek: 1, // Monday
-      startTime: '09:00',
-      endTime: '12:00',
-      isAvailable: true,
-    },
-    {
-      id: 'avail_002',
-      doctorId: mockDoctorUser.id,
-      dayOfWeek: 2, // Tuesday
-      startTime: '13:00',
-      endTime: '17:00',
-      isAvailable: true,
-    },
-    {
-      id: 'avail_003',
-      doctorId: mockDoctorUser.id,
-      dayOfWeek: 4, // Thursday
-      startTime: '10:00',
-      endTime: '15:00',
-      isAvailable: true,
-    },
-    {
-      id: 'avail_004',
-      doctorId: 'user_doctor_002',
-      dayOfWeek: 1, // Monday
-      startTime: '08:00',
-      endTime: '12:00',
-      isAvailable: true,
-    },
-    {
-      id: 'avail_005',
-      doctorId: 'user_doctor_002',
-      dayOfWeek: 3, // Wednesday
-      startTime: '13:00',
-      endTime: '18:00',
-      isAvailable: true,
-    },
-    {
-      id: 'avail_006',
-      doctorId: 'user_doctor_003',
-      dayOfWeek: 2, // Tuesday
-      startTime: '09:00',
-      endTime: '13:00',
-      isAvailable: true,
-    },
-    {
-      id: 'avail_007',
-      doctorId: 'user_doctor_003',
-      dayOfWeek: 5, // Friday
-      startTime: '10:00',
-      endTime: '16:00',
-      isAvailable: true,
-    }
-  ];
+  const defaultSlots: any[] = [];
   
   // If a specific doctorId is provided, check if custom availability exists
   if (doctorId) {
@@ -167,64 +81,7 @@ export const getMockDoctorAvailability = (doctorId?: string) => {
 
 export const getMockDoctorForms = () => {
   console.log('[mockDataService] Getting mock doctor forms');
-  return [
-    {
-      id: 'form_001',
-      doctorId: mockDoctorUser.id,
-      title: 'New Patient Intake Form',
-      description: 'Please complete this form before your first appointment.',
-      isRequired: true,
-      fields: [
-        { id: 'field_001', label: 'Full Name', type: 'text', required: true },
-        { id: 'field_002', label: 'Date of Birth', type: 'date', required: true },
-        { id: 'field_003', label: 'Current Medications', type: 'textarea', required: false },
-        { id: 'field_004', label: 'Allergies', type: 'textarea', required: true },
-        { id: 'field_005', label: 'Medical History', type: 'textarea', required: true }
-      ],
-      createdAt: new Date()
-    },
-    {
-      id: 'form_002',
-      doctorId: mockDoctorUser.id,
-      title: 'Insurance Information',
-      description: 'Please provide your current insurance details.',
-      isRequired: true,
-      fields: [
-        { id: 'field_006', label: 'Insurance Provider', type: 'text', required: true },
-        { id: 'field_007', label: 'Member ID', type: 'text', required: true },
-        { id: 'field_008', label: 'Group Number', type: 'text', required: false },
-        { id: 'field_009', label: 'Policy Holder Name', type: 'text', required: true }
-      ],
-      createdAt: new Date()
-    },
-    {
-      id: 'form_003',
-      doctorId: mockDoctorUser.id,
-      title: 'Pre-Visit Questionnaire',
-      description: 'Help us prepare for your visit by filling out this form.',
-      isRequired: false,
-      fields: [
-        { id: 'field_010', label: 'Reason for Visit', type: 'textarea', required: true },
-        { id: 'field_011', label: 'When did symptoms begin?', type: 'date', required: false },
-        { id: 'field_012', label: 'Pain Scale (1-10)', type: 'number', required: false },
-        { id: 'field_013', label: 'Additional Information', type: 'textarea', required: false }
-      ],
-      createdAt: new Date()
-    },
-    {
-      id: 'form_004',
-      doctorId: 'user_doctor_002',
-      title: 'Dermatology Questionnaire',
-      description: 'Complete this form for your dermatology consultation.',
-      isRequired: true,
-      fields: [
-        { id: 'field_014', label: 'Skin Condition History', type: 'textarea', required: true },
-        { id: 'field_015', label: 'Family History of Skin Disorders', type: 'textarea', required: false },
-        { id: 'field_016', label: 'Current Skincare Routine', type: 'textarea', required: true }
-      ],
-      createdAt: new Date()
-    }
-  ];
+  return [];
 };
 
 export const getMockDoctorAppointments = (doctorId?: string) => {

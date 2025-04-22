@@ -4,7 +4,7 @@
  * supporting debugging, observability, and CMS integration.
  */
 import mitt, { Emitter, Handler, EventType } from 'mitt';
-import { getApiMode, setApiMode } from '@/config/appConfig';
+import { getApiMode, setApiMode } from '../config/appConfig';
 
 // Flag to enable/disable verbose debugging
 const DEBUG_EVENT_BUS = false;
@@ -295,38 +295,38 @@ export function setupApiModeSyncListener() {
         console.error('[EVENT_BUS] Error handling API mode sync event:', e);
       }
     }
-  });
-  
-  // Also initialize BroadcastChannel listener for modern browsers
-  try {
-    const bc = new BroadcastChannel('api_mode_channel');
-    bc.onmessage = (event) => {
-      if (event.data?.type === 'apiModeChange' && 
-          (event.data.mode === 'live' || event.data.mode === 'mock')) {
-        if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] Received BroadcastChannel API mode change:', event.data.mode);
-        
-        // Only update localStorage if the value is different (prevents loop)
-        const currentMode = getApiMode();
-        if (currentMode !== event.data.mode) {
-          localStorage.setItem('apiMode', event.data.mode);
-        }
-        
-        // Emit on the event bus regardless
-        const payload: ApiModePayload = {
-          oldMode: currentMode || 'unknown',
-          newMode: event.data.mode,
-          source: 'broadcast_channel',
-          timestamp: new Date().toISOString()
-        };
-        
-        appEventBus.emit('api_mode_change', payload);
-      }
-    };
     
-    if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] BroadcastChannel listener initialized');
-  } catch (e) {
-    if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] BroadcastChannel not supported, skipping initialization');
-  }
+    // Also initialize BroadcastChannel listener for modern browsers
+    try {
+      const bc = new BroadcastChannel('api_mode_channel');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'apiModeChange' && 
+            (event.data.mode === 'live' || event.data.mode === 'mock')) {
+          if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] Received BroadcastChannel API mode change:', event.data.mode);
+          
+          // Only update API mode if the value is different (prevents loop)
+          const currentMode = getApiMode();
+          if (currentMode !== event.data.mode) {
+            setApiMode(event.data.mode);
+          }
+          
+          // Emit on the event bus regardless
+          const payload: ApiModePayload = {
+            oldMode: currentMode || 'unknown',
+            newMode: event.data.mode,
+            source: 'broadcast_channel',
+            timestamp: new Date().toISOString()
+          };
+          
+          appEventBus.emit('api_mode_change', payload);
+        }
+      };
+      
+      if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] BroadcastChannel listener initialized');
+    } catch (e) {
+      if (DEBUG_EVENT_BUS) console.log('[EVENT_BUS] BroadcastChannel not supported, skipping initialization');
+    }
+  });
 }
 
 // Auto-setup the API mode sync listener when imported on the client

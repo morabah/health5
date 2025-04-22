@@ -172,7 +172,7 @@ const NeuroQuestionnaireForm = () => {
         id: `neuro_${Date.now()}`,
         doctorId: 'user_doctor_005',
         doctorName: 'Dr. Ana Souza',
-        patientId: user?.id || 'unknown',
+        patientId: user?.uid || 'unknown',
         date: new Date().toISOString(),
         responses
       };

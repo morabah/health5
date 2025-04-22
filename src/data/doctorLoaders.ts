@@ -190,3 +190,25 @@ export async function loadDoctorAppointments(doctorId: string): Promise<any[]> {
     logInfo(`[${label}] finished`, { duration: performance.now() - start });
   }
 }
+
+// --- Add new loader for calendar: getDoctorAvailabilityFromFirestore ---
+/**
+ * Loads doctor availability and blocked dates for calendar display (live only).
+ * Returns `{ availability, blockedDates }`.
+ */
+export async function getDoctorAvailabilityFromFirestore(doctorId: string): Promise<{ availability: any[]; blockedDates: string[] }> {
+  const db = (await import('@/lib/improvedFirebaseClient')).getFirestoreDb();
+  const { doc, getDoc } = await import('firebase/firestore');
+  // Doctor profile contains blockedDates (array of yyyy-MM-dd)
+  const profileRef = doc(await db, 'doctorProfiles', doctorId);
+  const profileSnap = await getDoc(profileRef);
+  let blockedDates: string[] = [];
+  if (profileSnap.exists()) {
+    const data = profileSnap.data();
+    blockedDates = Array.isArray(data.blockedDates) ? data.blockedDates : [];
+  }
+  // Availability slots (weekly) from schedule
+  const { loadDoctorAvailability } = await import('./loadDoctorAvailability');
+  const availability = await loadDoctorAvailability(doctorId);
+  return { availability, blockedDates };
+}

@@ -207,7 +207,7 @@ const GeneralHealthQuestionnaireForm = () => {
         id: `general_${Date.now()}`,
         doctorId: 'user_doctor_001',
         doctorName: 'Dr. David Nguyen',
-        patientId: user?.id || 'unknown',
+        patientId: user?.uid || 'unknown',
         date: new Date().toISOString(),
         responses
       };

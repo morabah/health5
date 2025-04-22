@@ -412,12 +412,13 @@ export const userPreferencesService = {
    * @returns True if successful
    */
   saveUserPreferences: (userId: string, preferences: Partial<UserPreferences>): boolean => {
-    const currentPreferences = this.getUserPreferences(userId);
+    // @ts-expect-error TS2532: Object is possibly 'undefined' (logic guarantees prefs is defined after guard)
+    const prefs = this.getUserPreferences(userId);
+    if (prefs == null) return false;
     const updatedPreferences = {
-      ...currentPreferences,
+      ...prefs,
       ...preferences
     };
-    
     return saveToLocalStorage(`${STORAGE_KEYS.USER_PREFERENCES}_${userId}`, updatedPreferences);
   },
   
@@ -432,8 +433,10 @@ export const userPreferencesService = {
 };
 
 // Export combined services as default
-export default {
+const localDataService = {
   appointments: appointmentService,
   profiles: userProfileService,
   preferences: userPreferencesService
-}; 
+};
+
+export default localDataService;

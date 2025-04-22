@@ -7,18 +7,12 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import { logValidation } from "@/lib/logger";
-import { 
-  mockGetDoctorVerificationDetails, 
-  mockSetDoctorVerificationStatus, 
-  mockUpdateDoctorProfile,
-  mockGetUserProfile,
-  mockUpdateUserProfile
-} from "@/lib/mockApiService";
-import { VerificationStatus } from "@/types/enums";
+import { doc, getDoc, updateDoc, collection, getFirestore } from 'firebase/firestore';
+import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
+import { VerificationStatus } from '@/types/enums';
 import type { DoctorVerificationData } from '@/types/doctor';
-import { syncDoctorProfileUpdated, persistDoctorProfiles, persistAllData } from '@/lib/mockDataPersistence';
-import { STORAGE_KEYS } from '@/lib/mockDataPersistence';
-import { getDoctorProfilesStore } from '@/data/mockDataStore';
+import type { UserProfile } from '@/types/user';
+import type { VerificationDocument } from '@/types/verificationDocument';
 
 /**
  * Admin Doctor Verification Detail Page
@@ -40,109 +34,104 @@ export default function DoctorVerificationPage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [editedDoctorProfile, setEditedDoctorProfile] = useState<any>({});
   const [editedUserProfile, setEditedUserProfile] = useState<any>({});
-  const [userProfileData, setUserProfileData] = useState<any>(null);
+  const [userProfileData, setUserProfileData] = useState<UserProfile | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
 
-  // Force persistence of data on page load
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      console.log('[DoctorVerificationPage][Mount] localStorage contents:', { keys: Object.keys(localStorage), doctorProfiles: localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES) });
-      console.log('[DoctorVerificationPage][Mount] inMemory doctorProfiles:', getDoctorProfilesStore());
-      persistDoctorProfiles();
-      persistAllData();
-      console.log('[DoctorVerificationPage][Mount] after persist localStorage doctorProfiles:', localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES));
-      console.log('[DoctorVerificationPage][Mount] after persist inMemory doctorProfiles:', getDoctorProfilesStore());
-    }
-  }, []);
+  // New state for verification documents
+  const [verificationDocs, setVerificationDocs] = useState<VerificationDocument[]>([]);
 
   useEffect(() => {
     logValidation("admin-doctor-verification-ui", "success");
   }, []);
 
-  // Fetch doctor verification data with debug logging
+  // Fetch doctor verification data from Firestore
   useEffect(() => {
-      if (!doctorId) {
+    if (!doctorId) {
       setError('No doctor ID provided');
-        setLoading(false);
-        return;
-      }
+      setLoading(false);
+      return;
+    }
     async function fetchVerification() {
       try {
-        console.log('[DoctorVerificationPage] Pre-fetch localStorage doctorProfiles:', localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES));
-        console.log('[DoctorVerificationPage] Pre-fetch in-memory doctorProfiles:', getDoctorProfilesStore());
-        const data = await mockGetDoctorVerificationDetails(doctorId);
-        console.log(`[DoctorVerificationPage] Fetched verification data for ${doctorId}:`, data);
-        console.log('[DoctorVerificationPage] Post-fetch localStorage doctorProfiles:', localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES));
-        if (!data) {
+        const db = await getFirestoreDb();
+        // Doctor verification doc (assume collection 'doctorVerifications')
+        const verificationDoc = await getDoc(doc(db, 'doctorVerifications', doctorId));
+        if (!verificationDoc.exists()) {
           setError('Verification data not found');
           setLoading(false);
           return;
         }
-        setDoctor(data);
-        setStatus(data.status);
-        setNotes(data.verificationNotes || '');
-        const userData = await mockGetUserProfile(doctorId);
-        setUserProfileData(userData);
-        setEditedDoctorProfile({
-          id: doctorId,
-          specialty: data.submissionData?.specialty || '',
-          licenseNumber: data.submissionData?.licenseNumber || '',
-          yearsOfExperience: data.submissionData?.experience || 0,
-          bio: data.submissionData?.bio || '',
-          location: data.submissionData?.location || '',
-          languages: data.submissionData?.languages || [],
-          consultationFee: data.submissionData?.fee || 0,
-        });
-        setEditedUserProfile({
-          firstName: userData?.firstName || '',
-          lastName: userData?.lastName || '',
-          email: userData?.email || '',
-          phoneNumber: userData?.phoneNumber || '',
-          address: userData?.address || '',
-        });
+        const verificationData = verificationDoc.data() as DoctorVerificationData;
+        setDoctor(verificationData);
+        setStatus(verificationData.status || VerificationStatus.PENDING);
+        setNotes(verificationData.notes || '');
+        // Fetch user profile
+        const userDoc = await getDoc(doc(db, 'users', doctorId));
+        if (userDoc.exists()) {
+          setUserProfileData(userDoc.data() as UserProfile);
+        } else {
+          setUserProfileData(null);
+        }
+        // Fetch supporting verificationDocs for this doctor
+        const docsSnap = await db.collection('verificationDocs').where('doctorId', '==', doctorId).get();
+        const docsList: VerificationDocument[] = docsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setVerificationDocs(docsList);
         setLoading(false);
-      } catch (err) {
-        console.error('[DoctorVerificationPage] Error during fetchVerification:', err);
+      } catch (e: any) {
         setError('Failed to load verification data');
         setLoading(false);
       }
     }
-    void fetchVerification();
+    fetchVerification();
   }, [doctorId]);
 
+  // Handle save (update verification status and notes)
   const handleSave = async () => {
     setSaving(true);
-    setSuccess(false);
     setError(null);
-    
     try {
-      // Debug before status update
-      console.log('[DoctorVerificationPage.handleSave] Pre-save localStorage doctorProfiles:', localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES));
-      console.log('[DoctorVerificationPage.handleSave] Pre-save inMemory doctorProfiles:', getDoctorProfilesStore());
-      const result = await mockSetDoctorVerificationStatus(doctorId, status, notes);
-      // Debug after status update
-      console.log('[DoctorVerificationPage.handleSave] mockSetDoctorVerificationStatus result:', result);
-      console.log('[DoctorVerificationPage.handleSave] Post-save localStorage doctorProfiles:', localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES));
-      console.log('[DoctorVerificationPage.handleSave] Post-save inMemory doctorProfiles:', getDoctorProfilesStore());
-      
-      if (result) {
+      const db = await getFirestoreDb();
+      const verificationRef = doc(db, 'doctorVerifications', doctorId);
+      await updateDoc(verificationRef, {
+        status,
+        notes,
+        updatedAt: new Date()
+      });
       setSuccess(true);
-        setDoctor((prev: any) => ({ ...prev, status }));
-      setTimeout(() => {
-        setSuccess(false);
-        }, 3000);
-      } else {
-        setError('Failed to save verification decision');
-      }
-    } catch (err) {
-      console.error('[DoctorVerificationPage] Error saving:', err);
-      setError('Failed to save verification decision');
+      setTimeout(() => setSuccess(false), 2000);
+    } catch (e: any) {
+      setError('Failed to update verification status');
     } finally {
       setSaving(false);
     }
   };
-  
+
+  // Handle profile save (update doctor/user profile)
+  const handleSaveProfiles = async () => {
+    setProfileSaving(true);
+    setError(null);
+    try {
+      const db = await getFirestoreDb();
+      // Update doctor profile (assume collection 'doctors')
+      if (editedDoctorProfile && Object.keys(editedDoctorProfile).length > 0) {
+        const doctorRef = doc(db, 'doctors', doctorId);
+        await updateDoc(doctorRef, editedDoctorProfile);
+      }
+      // Update user profile
+      if (editedUserProfile && Object.keys(editedUserProfile).length > 0) {
+        const userRef = doc(db, 'users', doctorId);
+        await updateDoc(userRef, editedUserProfile);
+      }
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 2000);
+    } catch (e: any) {
+      setError('Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   // Handle doctor profile field changes
   const handleDoctorProfileChange = (field: string, value: any) => {
     setEditedDoctorProfile((prev: any) => ({ ...prev, [field]: value }));
@@ -151,69 +140,6 @@ export default function DoctorVerificationPage() {
   // Handle user profile field changes
   const handleUserProfileChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditedUserProfile((prev: any) => ({ ...prev, [field]: e.target.value }));
-  };
-  
-  // Save edited profiles
-  const handleSaveProfiles = async () => {
-    setProfileSaving(true);
-    setProfileSuccess(false);
-    setError(null);
-    
-    try {
-      // Debug before saving profiles
-      console.log('[DoctorVerificationPage] Before save - localStorage doctorProfiles:', localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES));
-      console.log('[DoctorVerificationPage] Before save - inMemory doctorProfiles:', getDoctorProfilesStore());
-      // Update doctor profile
-      const doctorResult = await mockUpdateDoctorProfile(editedDoctorProfile);
-      
-      // Update user profile
-      const userResult = await mockUpdateUserProfile(doctorId, editedUserProfile);
-      
-      if (doctorResult && userResult && userResult.success) {
-        // Persist updated profiles
-        try {
-          console.log('[DoctorVerificationPage] Persisting profiles...');
-          persistDoctorProfiles();
-          persistAllData();
-          // Debug after persistence
-          console.log('[DoctorVerificationPage] After persist - localStorage doctorProfiles:', localStorage.getItem(STORAGE_KEYS.DOCTOR_PROFILES));
-          console.log('[DoctorVerificationPage] After persist - inMemory doctorProfiles:', getDoctorProfilesStore());
-        } catch (error) {
-          console.error('[DoctorVerificationPage] Error persisting updated profiles:', error);
-        }
-        setProfileSuccess(true);
-        
-        // Update local state
-        setDoctor((prev: any) => ({
-          ...prev,
-          submissionData: {
-            ...prev.submissionData,
-            specialty: editedDoctorProfile.specialty,
-            licenseNumber: editedDoctorProfile.licenseNumber,
-            experience: editedDoctorProfile.yearsOfExperience,
-            location: editedDoctorProfile.location,
-          }
-        }));
-        
-        setUserProfileData((prev: any) => ({
-          ...prev,
-          ...editedUserProfile
-        }));
-        
-        setEditingProfile(false);
-        
-        setTimeout(() => {
-          setProfileSuccess(false);
-        }, 3000);
-      } else {
-        setError('Failed to update profiles');
-      }
-    } catch (err) {
-      console.error('[DoctorVerificationPage] Error saving profiles:', err);
-      setError('Failed to update profiles');
-    } finally {
-      setProfileSaving(false);
-    }
   };
 
   const getDoctorName = () => doctor.name || doctor.doctorId;
@@ -441,6 +367,28 @@ export default function DoctorVerificationPage() {
               </ul>
               </div>
             </div>
+            
+            {/* Supporting Verification Documents */}
+            {verificationDocs.length > 0 && (
+              <Card className="mt-6">
+                <h3 className="text-lg font-semibold mb-2">Supporting Documents</h3>
+                <ul className="space-y-2">
+                  {verificationDocs.map((doc) => (
+                    <li key={doc.id} className="flex flex-col md:flex-row md:items-center md:justify-between bg-gray-50 dark:bg-gray-800 p-3 rounded">
+                      <div>
+                        <span className="font-medium">{doc.documentType || doc.type}</span>
+                        {doc.uploadedAt && (
+                          <span className="ml-2 text-xs text-gray-400">{new Date(doc.uploadedAt.seconds ? doc.uploadedAt.seconds * 1000 : doc.uploadedAt).toLocaleString()}</span>
+                        )}
+                      </div>
+                      <div className="mt-2 md:mt-0">
+                        <a href={doc.fileUrl || doc.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View Document</a>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
             
             {/* Right column - Verification status */}
             <div className="lg:col-span-1">

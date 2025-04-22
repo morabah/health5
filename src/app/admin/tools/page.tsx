@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { toast } from "react-hot-toast";
 import Select from "@/components/ui/Select";
+import dynamic from 'next/dynamic';
 
 interface Tool {
   id: string;
@@ -11,6 +12,11 @@ interface Tool {
 }
 
 const tools: Tool[] = [
+  {
+    id: "validate-firestore-schemas",
+    label: "Validate Firestore Against Zod Schemas",
+    apiEndpoint: "/api/admin/validate-firestore-schemas",
+  },
   {
     id: "fix-missing-user-names",
     label: "Fix Missing User Names",
@@ -55,6 +61,9 @@ const backendFns: Tool[] = [
     apiEndpoint: "/api/admin/run-backend-fn?name=createPatientProfileInFirestore",
   },
 ];
+
+// Dynamically import the SeedFirebaseUI component (for client-side only)
+const SeedFirebaseUI = dynamic(() => import('./seed-firebase-ui'), { ssr: false });
 
 export default function AdminToolsPage() {
   // Optionally, protect this page with a server-side admin check or redirect
@@ -111,97 +120,141 @@ export default function AdminToolsPage() {
     }
   }
 
+  const handleResetDatabase = async () => {
+    setLoading('reset-database');
+    setResult((r) => ({ ...r, ['reset-database']: '' }));
+    try {
+      const res = await fetch('/api/admin/run-script?name=delete-all-firestore-data', { method: 'POST' });
+      const data = await res.json();
+      setResult((r) => ({ ...r, ['reset-database']: data.message || data.error || 'No output' }));
+      toast.success('Database reset complete!');
+    } catch (e: any) {
+      setResult((r) => ({ ...r, ['reset-database']: e.message || 'Error' }));
+      toast.error('Database reset failed!');
+    } finally {
+      setLoading(null);
+    }
+  };
+
   return (
-    <div className="max-w-xl mx-auto py-10">
+    <div className="max-w-4xl mx-auto mt-8 p-4">
       <h1 className="text-2xl font-bold mb-6">Admin Tools</h1>
-      <div className="space-y-4">
-        {tools.map((tool) => (
-          <div key={tool.id} className="flex flex-col gap-2">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="primary"
-                isLoading={loading === tool.id}
-                disabled={!!loading}
-                onClick={() => handleRunTool(tool)}
-              >
-                {tool.label}
-              </Button>
-              <span className="text-sm text-gray-600 dark:text-gray-300">
-                {result[tool.id] && result[tool.id].length < 80 ? result[tool.id] : ''}
-              </span>
+      <div className="mb-10">
+        <div className="space-y-4">
+          {tools.map((tool) => (
+            <div key={tool.id} className="flex flex-col gap-2">
+              <div className="flex items-center gap-4">
+                <Button
+                  label={tool.label}
+                  pageName="AdminToolsPage"
+                  variant="primary"
+                  isLoading={loading === tool.id}
+                  disabled={!!loading}
+                  onClick={() => handleRunTool(tool)}
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-300">
+                  {result[tool.id] && result[tool.id].length < 80 ? result[tool.id] : ''}
+                </span>
+              </div>
+              {result[tool.id] && (
+                <textarea
+                  className="w-full min-h-[80px] rounded border border-gray-300 dark:border-gray-600 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 resize-y"
+                  value={result[tool.id]}
+                  readOnly
+                  spellCheck={false}
+                  aria-label={`Output for ${tool.label}`}
+                />
+              )}
             </div>
-            {result[tool.id] && (
-              <textarea
-                className="w-full min-h-[80px] rounded border border-gray-300 dark:border-gray-600 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 resize-y"
-                value={result[tool.id]}
-                readOnly
-                spellCheck={false}
-                aria-label={`Output for ${tool.label}`}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-      <h2 className="text-xl font-semibold mt-10 mb-4">Backend Functions</h2>
-      <div className="space-y-4">
-        {backendFns.map((tool) => (
-          <div key={tool.id} className="flex flex-col gap-2">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="primary"
-                isLoading={loading === tool.id}
-                disabled={!!loading}
-                onClick={() => handleRunTool(tool)}
-              >
-                {tool.label}
-              </Button>
-              <span className="text-sm text-gray-600 dark:text-gray-300">
-                {result[tool.id] && result[tool.id].length < 80 ? result[tool.id] : ''}
-              </span>
+          ))}
+        </div>
+        <h2 className="text-xl font-semibold mt-10 mb-4">Backend Functions</h2>
+        <div className="space-y-4">
+          {backendFns.map((tool) => (
+            <div key={tool.id} className="flex flex-col gap-2">
+              <div className="flex items-center gap-4">
+                <Button
+                  label={tool.label}
+                  pageName="AdminToolsPage"
+                  variant="primary"
+                  isLoading={loading === tool.id}
+                  disabled={!!loading}
+                  onClick={() => handleRunTool(tool)}
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-300">
+                  {result[tool.id] && result[tool.id].length < 80 ? result[tool.id] : ''}
+                </span>
+              </div>
+              {result[tool.id] && (
+                <textarea
+                  className="w-full min-h-[80px] rounded border border-gray-300 dark:border-gray-600 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 resize-y"
+                  value={result[tool.id]}
+                  readOnly
+                  spellCheck={false}
+                  aria-label={`Output for ${tool.label}`}
+                />
+              )}
             </div>
-            {result[tool.id] && (
-              <textarea
-                className="w-full min-h-[80px] rounded border border-gray-300 dark:border-gray-600 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 resize-y"
-                value={result[tool.id]}
-                readOnly
-                spellCheck={false}
-                aria-label={`Output for ${tool.label}`}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-      <h2 className="text-xl font-semibold mt-10 mb-4">Get Appointments by Doctor</h2>
-      <div className="flex flex-col gap-4 max-w-lg">
-        <Select
-          label="Select Doctor"
-          value={selectedDoctor}
-          onChange={(e) => setSelectedDoctor(e.target.value)}
-          options={[
-            { value: '', label: '-- Select --' },
-            ...doctors.map((d) => ({
-              value: d.userId || d.id,
-              label: `${d.firstName || ''} ${d.lastName || ''} (${d.userId || d.id})`,
-            })),
-          ]}
-        />
-        <Button
-          variant="primary"
-          isLoading={loading === "get-appointments-by-doctor"}
-          disabled={!selectedDoctor || !!loading}
-          onClick={handleGetAppointmentsByDoctor}
-        >
-          Get Appointments
-        </Button>
-        {result["get-appointments-by-doctor"] && (
-          <textarea
-            className="w-full min-h-[120px] rounded border border-gray-300 dark:border-gray-600 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 resize-y"
-            value={result["get-appointments-by-doctor"]}
-            readOnly
-            spellCheck={false}
-            aria-label="Appointments Output"
+          ))}
+        </div>
+        <h2 className="text-xl font-semibold mt-10 mb-4">Get Appointments by Doctor</h2>
+        <div className="flex flex-col gap-4 max-w-lg">
+          <Select
+            label="Select Doctor"
+            value={selectedDoctor}
+            onChange={(e) => setSelectedDoctor(e.target.value)}
+            options={[
+              { value: '', label: '-- Select --' },
+              ...doctors.map((d) => ({
+                value: d.userId || d.id,
+                label: `${d.firstName || ''} ${d.lastName || ''} (${d.userId || d.id})`,
+              })),
+            ]}
           />
-        )}
+          <Button
+            label="Get Appointments"
+            pageName="AdminToolsPage"
+            variant="primary"
+            isLoading={loading === "get-appointments-by-doctor"}
+            disabled={!selectedDoctor || !!loading}
+            onClick={handleGetAppointmentsByDoctor}
+          />
+          {result["get-appointments-by-doctor"] && (
+            <textarea
+              className="w-full min-h-[120px] rounded border border-gray-300 dark:border-gray-600 p-2 text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 resize-y"
+              value={result["get-appointments-by-doctor"]}
+              readOnly
+              spellCheck={false}
+              aria-label="Appointments Output"
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-4 mt-8">
+          <Button
+            label="Reset Firestore Database"
+            pageName="AdminToolsPage"
+            variant="danger"
+            onClick={handleResetDatabase}
+            isLoading={loading === 'reset-database'}
+          >
+            Reset Firestore Database
+          </Button>
+          {result['reset-database'] && (
+            <textarea
+              className="w-full mt-2 text-xs bg-gray-100 dark:bg-gray-800 rounded p-2"
+              rows={3}
+              value={result['reset-database']}
+              readOnly
+              spellCheck={false}
+              aria-label="Output for Firestore reset"
+            />
+          )}
+        </div>
+      </div>
+      {/* --- Firebase Seeder UI --- */}
+      <div className="mb-10">
+        <h2 className="text-xl font-semibold mb-4">Seed Firebase Data</h2>
+        <SeedFirebaseUI />
       </div>
     </div>
   );

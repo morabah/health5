@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { UserType, VerificationStatus } from "@/types/enums";
 import Spinner from "@/components/ui/Spinner";
-import { mockGetDoctorVerificationData } from "@/lib/mockApiService";
+import { mockGetDoctorVerifications } from "@/lib/mockApiService";
 
 interface ProtectedPageProps {
   children: React.ReactNode;
@@ -48,7 +48,7 @@ const ProtectedPage: React.FC<ProtectedPageProps> = ({
         setCheckingVerification(true);
         try {
           // Use the doctor's user ID to get verification status
-          const verificationData = await mockGetDoctorVerificationData(user.uid);
+          const verificationData = await mockGetDoctorVerifications();
           if (verificationData && verificationData.status !== VerificationStatus.APPROVED) {
             // Redirect to pending verification if not approved
             router.replace("/auth/pending-verification");

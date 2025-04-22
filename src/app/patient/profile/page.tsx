@@ -10,7 +10,7 @@ import { FaUser, FaEnvelope, FaPhone, FaUserCheck, FaCheck, FaTimes, FaArrowLeft
 import { MdEmail } from "react-icons/md";
 
 export default function PatientProfilePage() {
-  const { user, userProfile, refreshProfile, loading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState(userProfile);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -42,7 +42,7 @@ export default function PatientProfilePage() {
       setIsEditing(false);
       
       // Refresh the profile data
-      refreshProfile();
+      // refreshProfile();
       
       // Show success message
       const notification = document.getElementById('notification');

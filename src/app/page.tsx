@@ -68,85 +68,41 @@ async function fetchDoctors(
   console.log('[Home] Starting fetchDoctors with mode:', apiMode);
   setLoading(true);
   setError(null);
-  
-  // Always pre-load the mock data as a backup
-  let mockDoctors: ExtendedDoctorProfile[] = [];
-  try {
-    console.log('[Home] Loading mock data as fallback');
-    const res = await fetch('/scripts/offlineMockData.json');
-    
-    if (!res.ok) {
-      throw new Error(`Failed to load mock data: ${res.status} ${res.statusText}`);
-    }
-    
-    const data = await res.json();
-    console.log('[Home] Mock data loaded, doctor count:', data.doctors?.length || 0);
-    
-    mockDoctors = (data.doctors || [])
-      .filter((doc: any) => MOCK_DOCTOR_IDS.includes(doc.userId || doc.id))
-      .map((doc: any) => ({
-        ...doc,
-        name: `Dr. ${doc.firstName || ''} ${doc.lastName || ''}`.trim() || doc.userId || doc.id
-      }));
-      
-    console.log('[Home] Filtered mock doctors:', mockDoctors.length);
-  } catch (mockErr) {
-    console.error('[Home] Error loading mock data:', mockErr);
-  }
-  
-  // If we're in mock mode, just use the mock data
+
+  // Only allow live mode
   if (apiMode !== 'live') {
-    console.log('[Home] Using mock data source');
-    if (mockDoctors.length > 0) {
-      setDoctors(mockDoctors);
-      setLoading(false);
-      return;
-    } else {
-      console.error('[Home] No mock doctors available');
-      setError('Failed to load doctor information from mock data');
-      setLoading(false);
-      return;
-    }
+    setDoctors([]);
+    setError('This application is configured for live (cloud) data only. No mock data available.');
+    setLoading(false);
+    return;
   }
-  
-  // If we're in live mode, try to use Firestore
+
   try {
     console.log('[Home] Using live Firestore data source');
-    
-    // Dynamically import Firebase modules
     const firebaseModules = await import('firebase/firestore');
-    const { collection, getDocs, query, where, limit } = firebaseModules;
-    
+    const { collection, getDocs, query, where, limit, documentId } = firebaseModules;
     console.log('[Home] Firebase modules imported, getting Firestore DB');
     const firestoreDb = await getFirestoreDb();
-    
-    // Check if we got a valid Firestore instance
     if (!firestoreDb) {
-      console.warn('[Home] Firestore not initialized, falling back to mock data');
-      setDoctors(mockDoctors);
-      setError('Firestore not available. Using mock data instead.');
+      setDoctors([]);
+      setError('Firestore not available.');
       setLoading(false);
       return;
     }
-    
     // Attempt to query Firestore
     console.log('[Home] Executing Firestore query');
     const doctorIds = MOCK_DOCTOR_IDS.length > 10 ? MOCK_DOCTOR_IDS.slice(0, 10) : MOCK_DOCTOR_IDS;
-    
     const q = query(
       collection(firestoreDb, 'doctors'),
       where(documentId(), 'in', doctorIds),
       limit(5)
     );
-    
     console.log('[Home] Executing query with IDs:', doctorIds);
     const snapshot = await getDocs(q);
     console.log('[Home] Firestore query completed, docs count:', snapshot.docs.length);
-    
     if (snapshot.docs.length === 0) {
-      console.warn('[Home] No doctors found in Firestore, falling back to mock data');
-      setDoctors(mockDoctors);
-      setError('No doctors found in Firestore. Using mock data instead.');
+      setDoctors([]);
+      setError('No doctors found in Firestore.');
     } else {
       const firestoreDoctors = snapshot.docs.map(doc => {
         const data = doc.data();
@@ -156,19 +112,13 @@ async function fetchDoctors(
           name: `Dr. ${data.firstName || ''} ${data.lastName || ''}`.trim() || doc.id
         };
       }) as ExtendedDoctorProfile[];
-      
       console.log('[Home] Successfully loaded doctors from Firestore:', firestoreDoctors.length);
       setDoctors(firestoreDoctors);
     }
   } catch (err) {
     console.error('[Home] Error fetching doctors from Firestore:', err);
-    // Always fall back to mock data on error
-    if (mockDoctors.length > 0) {
-      setDoctors(mockDoctors);
-      setError(`Firestore error: ${err instanceof Error ? err.message : 'Unknown error'}. Using mock data instead.`);
-    } else {
-      setError('Failed to load doctor information from both Firestore and mock data');
-    }
+    setDoctors([]);
+    setError(`Firestore error: ${err instanceof Error ? err.message : 'Unknown error'}`);
   } finally {
     setLoading(false);
     console.log('[Home] fetchDoctors completed');

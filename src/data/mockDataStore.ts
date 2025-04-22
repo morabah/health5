@@ -19,11 +19,6 @@ import {
   mockDoctorUser6,
   mockDoctorUser7,
   mockDoctorUser8,
-  mockDoctorProfileData1,
-  mockDoctorProfileData2,
-  mockDoctorProfileData3,
-  mockDoctorProfileData4,
-  mockDoctorProfileData5,
   mockPatientProfileData1,
   mockPatientProfileData2,
   mockPatientProfileData3,
@@ -46,13 +41,7 @@ export let usersStore: UserProfile[] = [
 ];
 
 /** Doctor profiles store */
-export let doctorProfilesStore: DoctorProfile[] = [
-  mockDoctorProfileData1,
-  mockDoctorProfileData2,
-  mockDoctorProfileData3,
-  mockDoctorProfileData4,
-  mockDoctorProfileData5,
-];
+export let doctorProfilesStore: DoctorProfile[] = [];
 
 /** Patient profiles store */
 export let patientProfilesStore: PatientProfile[] = [

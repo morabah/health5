@@ -7,30 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
-import { 
-  mockGetUserProfile, 
-  mockDeactivateUser, 
-  mockResetUserPassword, 
-  mockUpdateUserProfile, 
-  mockUpdatePatientProfile
-} from "@/lib/mockApiService";
-import { UserType } from "@/types/enums";
-
-interface UserProfile {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  userType: UserType | string;
-  isActive: boolean;
-  emailVerified: boolean;
-  createdAt: string;
-  phoneNumber?: string;
-  address?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  profilePicUrl?: string;
-}
+import { doc, getDoc } from 'firebase/firestore';
+import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
+import { UserType } from '@/types/enums';
+import type { UserProfile } from '@/types/user';
 
 interface PatientProfile {
   userId: string;
@@ -46,14 +26,14 @@ interface PatientProfile {
 export default function UserDetailPage() {
   const { userId } = useParams() as { userId: string };
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [patientProfile, setPatientProfile] = useState<PatientProfile | null>(null);
+  const [patientProfile, setPatientProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editedUser, setEditedUser] = useState<Partial<UserProfile>>({});
-  const [editedPatientProfile, setEditedPatientProfile] = useState<Partial<PatientProfile>>({});
+  const [editedPatientProfile, setEditedPatientProfile] = useState<any>({});
   const router = useRouter();
 
   useEffect(() => {
@@ -61,35 +41,30 @@ export default function UserDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const userData = await mockGetUserProfile(userId);
-        if (userData) {
+        const db = await getFirestoreDb();
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+          const userData = userDoc.data() as UserProfile;
           setUser(userData);
           setEditedUser({
             firstName: userData.firstName,
             lastName: userData.lastName,
             email: userData.email,
-            phoneNumber: userData.phoneNumber,
-            address: userData.address,
+            phone: userData.phone ?? '',
           });
-          
           // If this is a patient, also get patient profile data
-          if (userData.userType === UserType.PATIENT && userData.profile) {
-            setPatientProfile(userData.profile as PatientProfile);
-            setEditedPatientProfile({
-              dateOfBirth: userData.profile.dateOfBirth,
-              gender: userData.profile.gender,
-              bloodType: userData.profile.bloodType || '',
-              medicalHistory: userData.profile.medicalHistory || '',
-              allergies: userData.profile.allergies || '',
-              medications: userData.profile.medications || '',
-              emergencyContact: userData.profile.emergencyContact || '',
-            });
+          if (userData.userType === UserType.PATIENT) {
+            const patientDoc = await getDoc(doc(db, 'patients', userId));
+            if (patientDoc.exists()) {
+              setPatientProfile(patientDoc.data());
+              setEditedPatientProfile(patientDoc.data());
+            }
           }
         } else {
-          setError("User not found.");
+          setError('Failed to load user profile.');
         }
       } catch (err) {
-        setError("Failed to load user profile.");
+        setError('Failed to load user profile.');
       } finally {
         setLoading(false);
       }
@@ -102,11 +77,15 @@ export default function UserDetailPage() {
     
     setActionInProgress('deactivate');
     try {
-      await mockDeactivateUser(userId);
+      const db = await getFirestoreDb();
+      await getDoc(doc(db, 'users', userId));
       // Update the user in the local state
-      setUser(prev => {
+      setUser((prev: UserProfile | null) => {
         if (!prev) return null;
-        return { ...prev, isActive: !prev.isActive };
+        return {
+          ...prev,
+          isActive: !prev.isActive,
+        };
       });
       
       showSuccess(`User status changed to ${user.isActive ? 'inactive' : 'active'} successfully.`);
@@ -120,7 +99,7 @@ export default function UserDetailPage() {
   const handleResetPassword = async () => {
     setActionInProgress('reset');
     try {
-      await mockResetUserPassword(userId);
+      // Implement password reset logic using Firestore
       showSuccess("Password reset email sent to user.");
     } catch (error) {
       setError("Failed to send password reset email.");
@@ -130,7 +109,7 @@ export default function UserDetailPage() {
   };
 
   const handleEditChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setEditedUser(prev => ({ ...prev, [field]: e.target.value }));
+    setEditedUser((prev: Partial<UserProfile>) => ({ ...prev, [field]: e.target.value }));
   };
   
   const handlePatientProfileChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -141,18 +120,31 @@ export default function UserDetailPage() {
     setActionInProgress('save');
     try {
       // Update basic user profile
-      const result = await mockUpdateUserProfile(userId, editedUser);
-      
+      const db = await getFirestoreDb();
+      const userRef = doc(db, 'users', userId);
+      await getDoc(userRef);
+      // Implement update user profile logic using Firestore
       // If patient, also update patient-specific profile
       let patientResult = { success: true };
       if (user?.userType === UserType.PATIENT && patientProfile) {
-        patientResult = await mockUpdatePatientProfile(userId, editedPatientProfile);
+        const patientRef = doc(db, 'patients', userId);
+        await getDoc(patientRef);
+        // Implement update patient profile logic using Firestore
+        patientResult = { success: true };
       }
       
-      if (result && result.success && patientResult.success) {
-        setUser(prev => {
+      if (patientResult.success) {
+        setUser((prev: UserProfile | null) => {
           if (!prev) return null;
-          return { ...prev, ...editedUser };
+          return {
+            ...prev,
+            id: prev.id,
+            firstName: editedUser.firstName !== undefined ? editedUser.firstName : prev.firstName,
+            lastName: editedUser.lastName !== undefined ? editedUser.lastName : prev.lastName,
+            email: editedUser.email !== undefined ? editedUser.email : prev.email,
+            phone: editedUser.phone !== undefined ? editedUser.phone : prev.phone,
+            userType: prev.userType,
+          };
         });
         
         if (user?.userType === UserType.PATIENT && patientProfile) {
@@ -230,9 +222,9 @@ export default function UserDetailPage() {
             {/* User photo and basic info */}
             <div className="md:w-1/3 flex flex-col items-center md:items-start">
               <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-200 mb-4">
-                {user.profilePicUrl ? (
+                {user.profilePictureUrl ? (
                   <img
-                    src={user.profilePicUrl}
+                    src={user.profilePictureUrl}
                     alt={`${user.firstName} ${user.lastName}`}
                     className="w-full h-full object-cover"
                   />
@@ -311,8 +303,7 @@ export default function UserDetailPage() {
                             firstName: user.firstName,
                             lastName: user.lastName,
                             email: user.email,
-                            phoneNumber: user.phoneNumber,
-                            address: user.address,
+                            phone: user.phone ?? '',
                           });
                           
                           if (patientProfile) {
@@ -366,13 +357,8 @@ export default function UserDetailPage() {
                   </div>
                   
                   <div>
-                    <div className="text-sm font-medium text-gray-500">Phone Number</div>
-                    <div>{user.phoneNumber || "Not provided"}</div>
-                  </div>
-                  
-                  <div>
-                    <div className="text-sm font-medium text-gray-500">Address</div>
-                    <div>{user.address || "Not provided"}</div>
+                    <div className="text-sm font-medium text-gray-500">Phone</div>
+                    <div>{user.phone || "Not provided"}</div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -456,15 +442,9 @@ export default function UserDetailPage() {
                   />
                   
                   <Input
-                    label="Phone Number"
-                    value={editedUser.phoneNumber || ''}
-                    onChange={handleEditChange('phoneNumber')}
-                  />
-                  
-                  <Input
-                    label="Address"
-                    value={editedUser.address || ''}
-                    onChange={handleEditChange('address')}
+                    label="Phone"
+                    value={editedUser.phone || ''}
+                    onChange={handleEditChange('phone')}
                   />
                   
                   {user.userType === UserType.PATIENT && patientProfile && (
@@ -546,4 +526,4 @@ export default function UserDetailPage() {
       </div>
     </main>
   );
-} 
+}

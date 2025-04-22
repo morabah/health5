@@ -98,8 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user,
       userProfile,
       loading,
-      // Normalize role: prefer userProfile.userType, fallback to userProfile.role, always uppercase if present
-      role: userProfile?.userType?.toUpperCase?.() || userProfile?.role?.toUpperCase?.() || null,
+      role: userProfile?.userType ?? null,
       login,
       logout
     }}>

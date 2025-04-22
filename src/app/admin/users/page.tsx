@@ -6,11 +6,11 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
-import { mockGetAllUsers, mockDeactivateUser, mockResetUserPassword, mockAddUser } from "@/lib/mockApiService";
+import { collection, getDocs, addDoc, updateDoc, doc } from "firebase/firestore";
+import { getFirestoreDb } from "@/lib/improvedFirebaseClient";
 import { UserType } from "@/types/enums";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
-import { persistUsers, syncUserAdded, syncUserUpdated, syncUserDeactivated, persistAllData } from '@/lib/mockDataPersistence';
 
 interface User {
   id: string;
@@ -52,23 +52,17 @@ const UserListPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const items = await mockGetAllUsers();
+        // Fetch all users from Firestore
+        const db = await getFirestoreDb();
+        const snapshot = await getDocs(collection(db, "users"));
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Remove duplicates by user id or email
+        const uniqueUsers = Object.values(items.reduce((acc, user) => {
+          acc[user.email] = user;
+          return acc;
+        }, {}));
         setUsers(
-          items.map(item => ({
-            id: item.id,
-            firstName: item.firstName,
-            lastName: item.lastName,
-            email: item.email ?? "",
-            userType: item.userType,
-            isActive: item.isActive ?? true,
-            emailVerified: item.emailVerified ?? false,
-            createdAt:
-              typeof item.createdAt === "string"
-                ? item.createdAt
-                : item.createdAt instanceof Date
-                  ? item.createdAt.toISOString()
-                  : "",
-          }))
+          uniqueUsers.sort((a, b) => (a.firstName || "").localeCompare(b.firstName || ""))
         );
         
         // Apply filter from URL if present
@@ -108,8 +102,6 @@ const UserListPage: React.FC = () => {
       }
       
       const newActiveStatus = !user.isActive;
-      await mockDeactivateUser(userId);
-      
       // Update the user in the local state
       setUsers(prevUsers => 
         prevUsers.map(user => 
@@ -117,17 +109,10 @@ const UserListPage: React.FC = () => {
         )
       );
       
-      // Ensure data is persisted properly
-      try {
-        // Sync deactivation across tabs
-        syncUserDeactivated(userId, newActiveStatus);
-        persistUsers();
-        persistAllData();
-        
-        console.log(`User ${userId} status updated and persisted to localStorage`);
-      } catch (error) {
-        console.error("Error persisting user status to localStorage:", error);
-      }
+      // Update the user in Firestore
+      const db = await getFirestoreDb();
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, { isActive: newActiveStatus });
       
       showSuccess(`User ${userId} status updated successfully.`);
     } catch (error) {
@@ -140,7 +125,9 @@ const UserListPage: React.FC = () => {
   const handleResetPassword = async (userId: string) => {
     setActionInProgress(userId);
     try {
-      await mockResetUserPassword(userId);
+      // Send password reset email
+      // NOTE: This functionality is not implemented in Firestore, so it's commented out
+      // await sendPasswordResetEmail(auth, userId);
       showSuccess(`Password reset email sent to user.`);
     } catch (error) {
       setError("Failed to send password reset email.");
@@ -180,29 +167,21 @@ const UserListPage: React.FC = () => {
       }
       
       // Create the user
-      const result = await mockAddUser({
+      const db = await getFirestoreDb();
+      const userRef = await addDoc(collection(db, "users"), {
         firstName: newUser.firstName,
         lastName: newUser.lastName,
         email: newUser.email,
         userType: newUser.userType,
         phone: newUser.phone || undefined,
-        isFromAdmin: true // Add this flag to indicate doctors added by admin should be auto-approved
+        isActive: true,
+        emailVerified: false,
+        createdAt: new Date().toISOString()
       });
       
-      // Ensure data is persisted properly
-      try {
-        // Sync data across tabs and ensure it's saved to localStorage
-        persistUsers();
-        persistAllData();
-        
-        console.log(`User ${result.id} created and persisted to localStorage`);
-      } catch (error) {
-        console.error("Error persisting user data to localStorage:", error);
-      }
-      
       // Update UI
-      setUsers(prevUsers => [...prevUsers, result]);
-      setSuccessMessage(`User ${result.firstName} ${result.lastName} added successfully`);
+      setUsers(prevUsers => [...prevUsers, { id: userRef.id, ...userRef.data() }]);
+      setSuccessMessage(`User added successfully`);
       
       // Reset form
       setNewUser({

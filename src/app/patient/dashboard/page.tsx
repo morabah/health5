@@ -126,7 +126,7 @@ export default function PatientDashboardPage() {
   if (error) {
     return (
       <div className="max-w-6xl mx-auto py-8 px-4">
-        <Alert message={error} />
+        <Alert message={error} variant="error" isVisible={!!error} />
       </div>
     );
   }
@@ -274,7 +274,7 @@ export default function PatientDashboardPage() {
                 {loadingAppointments ? (
                   <div className="flex justify-center py-6"><Spinner /></div>
                 ) : error ? (
-                  <Alert variant="error" message={error} isVisible={true} />
+                  <Alert variant="error" message={error} isVisible={!!error} />
                 ) : upcomingAppointments.length === 0 ? (
                   <div className="text-center py-6">
                     <p className="text-gray-500 dark:text-gray-400 mb-4">No upcoming appointments found.</p>
@@ -383,7 +383,7 @@ export default function PatientDashboardPage() {
                 {loadingProfile ? (
                   <div className="flex justify-center py-4"><Spinner /></div>
                 ) : !profileData.userProfile ? (
-                  <Alert variant="error" message="Profile data not found." isVisible={true} />
+                  <Alert variant="error" message="Profile data not found." isVisible={!!error} />
                 ) : (
                   <>
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">

@@ -2,6 +2,7 @@
 throw new Error("loadPatientAppointmentsFull.ts is deprecated. Use patientLoaders.ts instead.");
 
 import { db } from "@/lib/firebaseClient";
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export interface Appointment {
   id: string;

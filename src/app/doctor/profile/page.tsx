@@ -38,7 +38,9 @@ export default function DoctorProfilePage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await loadDoctorProfile();
+        // TODO: Replace with real userId from auth context or route param
+        const userId = "user_doctor_001";
+        const data = await loadDoctorProfile(userId);
         setProfile(data as UIProfile); // Cast API response to local UI type
         setEditedProfile(data as UIProfile); // Initialize edited profile with current data
         

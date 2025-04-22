@@ -16,7 +16,7 @@ export async function loadDoctorForms(): Promise<DoctorFormSubmission[]> {
   if (dataSource === 'mock') {
     return [
       { id: 'form1', patientName: 'John Doe', formType: 'Consent', submittedAt: '2025-04-16', status: VerificationStatus.PENDING },
-      { id: 'form2', patientName: 'Jane Smith', formType: 'History', submittedAt: '2025-04-15', status: VerificationStatus.VERIFIED }
+      { id: 'form2', patientName: 'Jane Smith', formType: 'History', submittedAt: '2025-04-15', status: VerificationStatus.APPROVED }
     ];
   }
   // Uncomment and implement Firestore logic as needed

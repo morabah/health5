@@ -23,21 +23,21 @@
  *   - NEXT_PUBLIC_LOG_LEVEL
  */
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, initializeFirestore, type Firestore, CACHE_SIZE_UNLIMITED, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getAuth, setPersistence, browserSessionPersistence, type Auth } from 'firebase/auth';
+import { getFirestore, initializeFirestore, type Firestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getAnalytics, type Analytics } from 'firebase/analytics';
 import { logInfo, logWarn, logError } from './logger';
 
 // Firebase config for the Healthcare App
 // Hardcode critical values to avoid env typo issues
 const firebaseConfig = {
-  apiKey: "AIzaSyATegnW0o6bC6NOB6OtsZI501p8_Jy5isw",
-  authDomain: "helathcare-331f1.firebaseapp.com",
-  projectId: "helathcare-331f1",
-  storageBucket: "helathcare-331f1.firebasestorage.app",
-  messagingSenderId: "662603978873",
-  appId: "1:662603978873:web:4b8102a82647b334419ca8",
-  measurementId: "G-LN6HZTXH2R"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID!
 };
 
 let app: FirebaseApp | null = null;
@@ -86,10 +86,11 @@ export function initializeFirebaseClient(currentApiMode: string): { app: Firebas
       app = getApp();
     }
 
-    // Initialize Auth
+    // Initialize Auth with browserSessionPersistence to ensure session is per-tab, not shared across tabs/windows
     if (!auth && app) {
       logInfo('Initializing Firebase Auth...');
       auth = getAuth(app);
+      setPersistence(auth, browserSessionPersistence);
     }
     
     // Initialize Firestore with enhanced settings
@@ -97,13 +98,11 @@ export function initializeFirebaseClient(currentApiMode: string): { app: Firebas
       logInfo('Initializing Firestore with optimal settings...');
       try {
         const settings = {
-          // Remove conflicting configuration - don't use both force and auto-detect
-          // experimentalForceLongPolling: true, // Removed conflicting setting
+          // Modern Firestore persistence: use cache configuration instead of enableIndexedDbPersistence
+          // Persistence is now handled via Firestore settings (cacheSizeBytes, ignoreUndefinedProperties)
           ignoreUndefinedProperties: true,
-          // Use a more reasonable cache size instead of unlimited
-          cacheSizeBytes: 50 * 1024 * 1024, // 50MB instead of UNLIMITED
+          cacheSizeBytes: 50 * 1024 * 1024, // 50MB reasonable default
           experimentalAutoDetectLongPolling: true,
-          // Use cache settings instead of enableIndexedDbPersistence
           cache: {
             persistenceEnabled: true,
             tabSizeBytes: 50 * 1024 * 1024 // 50MB tab size

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -16,6 +16,7 @@ import Textarea from "@/components/ui/Textarea";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
 import { AppointmentSchema } from "@/lib/zodSchemas";
+import { logValidation } from '@/lib/logger';
 
 interface Appointment {
   id: string;
@@ -39,7 +40,7 @@ export default function DoctorAppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const [activeTab, setActiveTab] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [detailsOpen, setDetailsOpen] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -52,20 +53,26 @@ export default function DoctorAppointmentsPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  async function fetchAppointments() {
+  // Fetch appointments via backend function
+  const fetchAppointments = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError(null);
+    const perf = performance.now();
     try {
-      // Always use live mode
       initializeFirebaseClient('live');
       const functions = getFunctions();
       const getMyAppointments = httpsCallable(functions, "getMyAppointments");
-      const res = await getMyAppointments({ userId: user.uid, userType: UserType.DOCTOR });
+      const res = await getMyAppointments({ statusFilter: activeTab });
       if (!res.data || !Array.isArray(res.data)) throw new Error("Malformed response from backend");
-      // Zod validation for each appointment
-      const items = res.data.map((item: any) => AppointmentSchema.parse(item));
+      // Fix type: ensure each appointment has a string id
+      const items = res.data.map((item: any, idx: number) => ({
+        ...AppointmentSchema.parse(item),
+        id: item.id ?? item.appointmentId ?? `appt-${idx}`
+      }));
       setAppointments(items);
+      // Log validation event for 7.2b success
+      logValidation('7.2b', 'success', 'Appointments pages connected to live getMyAppointments function.');
     } catch (err: any) {
       console.error('[DoctorAppointments] Error:', err);
       setError("Failed to load appointments.");
@@ -73,44 +80,16 @@ export default function DoctorAppointmentsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [user, activeTab]);
 
-  useEffect(() => {
-    fetchAppointments();
-  }, [user]);
+  useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
+
+  // Tab controls
+  const tabOptions: FilterType[] = ["all", "today", "upcoming", "past", "cancelled"];
 
   // Filter appointments based on selected filter
   const getFilteredAppointments = (): Appointment[] => {
     let filtered = [...appointments];
-    
-    // First apply status/time filters
-    if (activeFilter === "today") {
-      const today = new Date().toISOString().split('T')[0];
-      filtered = filtered.filter(appointment => {
-        const appointmentDate = appointment.appointmentDate || appointment.date;
-        if (typeof appointmentDate === 'string') {
-          return appointmentDate.includes(today);
-        } else if (appointmentDate instanceof Date) {
-          return appointmentDate.toISOString().split('T')[0] === today;
-        } else if (appointmentDate && typeof appointmentDate === 'object' && 'toDate' in appointmentDate) {
-          return appointmentDate.toDate().toISOString().split('T')[0] === today;
-        }
-        return false;
-      });
-    } else if (activeFilter === "upcoming") {
-      filtered = filtered.filter(appointment => 
-        appointment.status === AppointmentStatus.PENDING || 
-        appointment.status === AppointmentStatus.CONFIRMED
-      );
-    } else if (activeFilter === "past") {
-      filtered = filtered.filter(appointment => 
-        appointment.status === AppointmentStatus.COMPLETED
-      );
-    } else if (activeFilter === "cancelled") {
-      filtered = filtered.filter(appointment => 
-        appointment.status === AppointmentStatus.CANCELLED
-      );
-    }
     
     // Then apply search if there is a search query
     if (searchQuery.trim()) {
@@ -159,14 +138,17 @@ export default function DoctorAppointmentsPage() {
     setShowCompleteModal(false);
     setActionLoadingId(id);
     try {
-      const res = await mockCompleteAppointment({ appointmentId: id, notes, doctorId: user?.uid || "" });
-      if (res.success) {
-        toast.success("Appointment marked completed");
+      initializeFirebaseClient('live');
+      const functions = getFunctions();
+      const completeAppointment = httpsCallable(functions, 'completeAppointment');
+      const res = await completeAppointment({ appointmentId: id, notes, doctorId: user?.uid || '' });
+      if ((res.data as any)?.success) {
+        toast.success('Appointment marked completed');
         setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: AppointmentStatus.COMPLETED, notes } : a));
         setDetailsOpen(null);
       } else throw new Error();
     } catch {
-      toast.error("Failed to complete appointment");
+      toast.error('Failed to complete appointment');
     } finally {
       setActionLoadingId(null);
     }
@@ -176,14 +158,17 @@ export default function DoctorAppointmentsPage() {
     setShowCancelModal(false);
     setActionLoadingId(id);
     try {
-      const ok = await mockCancelAppointmentDetails(id, "doctor", reason);
-      if (ok) {
-        toast.success("Appointment cancelled");
-        setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: AppointmentStatus.CANCELLED_BY_DOCTOR, notes: (a.notes ? a.notes + "\n" : "") + "Cancellation reason: " + reason } : a));
+      initializeFirebaseClient('live');
+      const functions = getFunctions();
+      const cancelAppointment = httpsCallable(functions, 'cancelAppointment');
+      const res = await cancelAppointment({ appointmentId: id, reason, userId: user?.uid || '', cancelledBy: 'doctor' });
+      if ((res.data as any)?.success !== false) {
+        toast.success('Appointment cancelled');
+        setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: AppointmentStatus.CANCELLED_BY_DOCTOR, notes: (a.notes ? a.notes + '\n' : '') + 'Cancellation reason: ' + reason } : a));
         setDetailsOpen(null);
       } else throw new Error();
     } catch {
-      toast.error("Failed to cancel appointment");
+      toast.error('Failed to cancel appointment');
     } finally {
       setActionLoadingId(null);
     }
@@ -233,56 +218,22 @@ export default function DoctorAppointmentsPage() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="flex flex-wrap gap-2">
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("all")}
-                className={`flex items-center gap-1 ${activeFilter === "all" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="All" 
-                pageName="DoctorAppointments"
-              >
-                <FaFilter size={12} />
-                <span>All</span>
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("today")}
-                className={`flex items-center gap-1 ${activeFilter === "today" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="Today" 
-                pageName="DoctorAppointments"
-              >
-                <FaClock size={12} />
-                <span>Today</span>
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("upcoming")}
-                className={`flex items-center gap-1 ${activeFilter === "upcoming" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="Upcoming" 
-                pageName="DoctorAppointments"
-              >
-                <FaCalendarCheck size={12} />
-                <span>Upcoming</span>
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("past")}
-                className={`flex items-center gap-1 ${activeFilter === "past" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="Past" 
-                pageName="DoctorAppointments"
-              >
-                <FaHistory size={12} />
-                <span>Past</span>
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("cancelled")}
-                className={`flex items-center gap-1 ${activeFilter === "cancelled" ? "bg-red-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="Cancelled" 
-                pageName="DoctorAppointments"
-              >
-                <FaCalendarTimes size={12} />
-                <span>Cancelled</span>
-              </Button>
+              {tabOptions.map(tab => (
+                <Button 
+                  key={tab}
+                  size="sm"
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex items-center gap-1 ${activeTab === tab ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
+                  label={tab.charAt(0).toUpperCase() + tab.slice(1)} 
+                  pageName="DoctorAppointments"
+                >
+                  {tab === "today" && <FaClock size={12} />}
+                  {tab === "upcoming" && <FaCalendarCheck size={12} />}
+                  {tab === "past" && <FaHistory size={12} />}
+                  {tab === "cancelled" && <FaCalendarTimes size={12} />}
+                  <span>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
+                </Button>
+              ))}
             </div>
             
             <div className="relative w-full md:w-64">

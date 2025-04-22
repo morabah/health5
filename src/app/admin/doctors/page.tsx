@@ -4,10 +4,10 @@ import { useRouter } from 'next/navigation';
 import Card from '@/components/ui/Card';
 import Spinner from '@/components/ui/Spinner';
 import Button from '@/components/ui/Button';
-import { mockGetDoctorVerifications } from '@/lib/mockApiService';
 import { VerificationStatus } from '@/types/enums';
 import type { DoctorVerification } from '@/types/doctor';
 import { Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function DoctorsPage() {
   const [doctors, setDoctors] = useState<DoctorVerification[]>([]);
@@ -21,7 +21,11 @@ export default function DoctorsPage() {
       setLoading(true);
       setError(null);
       try {
-        const items = await mockGetDoctorVerifications();
+        const querySnapshot = await db.collection('doctorVerifications').get();
+        const items: DoctorVerification[] = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
         setDoctors(items);
       } catch (err) {
         console.error('Error loading doctors:', err);

@@ -161,20 +161,20 @@ export default function FindDoctorPage() {
       if (isFirebaseReady() && db) {
         console.log('[FindDoctorPage] Using Firestore to fetch doctors');
         try {
-          const doctorsRef = collection(db, 'doctors');
-          const constraints: any[] = [];
+          // --- CHANGED: Use 'users' collection to fetch doctors by userType ---
+          const doctorsRef = collection(db, 'users'); // users collection holds all user profiles
+          const constraints: any[] = [where('userType', '==', 'DOCTOR')]; // Only fetch doctors
           if (specialty) constraints.push(where('specialty', '==', specialty));
           if (location) constraints.push(where('location', '==', location));
           const q = constraints.length ? query(doctorsRef, ...constraints) : doctorsRef;
-          
-          console.log('[FindDoctorPage] Executing Firestore query...');
+
+          console.log('[FindDoctorPage] Executing Firestore query (users collection, userType=DOCTOR)...');
           const snapshot = await getDocs(q);
-          
+
           console.log(`[FindDoctorPage] Firestore query returned ${snapshot.size} results`);
-          
+
           if (snapshot.empty) {
             console.log('[FindDoctorPage] No doctors found in Firestore');
-            // Set empty state instead of using mock data
             setDoctors([]);
             setFilteredDoctors([]);
           } else {
@@ -184,7 +184,7 @@ export default function FindDoctorPage() {
               id: doc.id,
               ...(doc.data() as DoctorProfile)
             }));
-            
+
             // Process and set doctor data
             const processedResults = processDoctorData(results);
             setDoctors(processedResults);

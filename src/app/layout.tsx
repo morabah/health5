@@ -30,6 +30,7 @@ export default function RootLayout({
       <body className={`min-h-screen bg-background text-foreground ${inter.className}`}>
         <ThemeProvider>
           <AuthProvider>
+            {/* Removed MultiAccountAuthProvider: per-tab session is now handled by browserSessionPersistence in firebaseClient.ts */}
             <Toaster position="top-center" />
             <ClientInit />
             <Layout>

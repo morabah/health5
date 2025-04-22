@@ -175,7 +175,7 @@ const DermatologyQuestionnaireForm = () => {
         id: `derm_${Date.now()}`,
         doctorId: 'user_doctor_002',
         doctorName: 'Dr. Jane Lee',
-        patientId: user?.id || 'unknown',
+        patientId: user?.uid || 'unknown',
         date: new Date().toISOString(),
         responses
       };

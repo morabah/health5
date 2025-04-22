@@ -42,7 +42,7 @@ export default function DoctorFormsPage() {
       <Card className="w-full max-w-4xl mb-8 p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Submitted Forms</h2>
-          <Button asChild>
+          <Button asChild label="Back to Dashboard" pageName="DoctorFormsPage">
             <a href="/doctor/dashboard">Back to Dashboard</a>
           </Button>
         </div>
@@ -75,10 +75,10 @@ export default function DoctorFormsPage() {
                     <td className="px-4 py-2">{form.submittedAt}</td>
                     <td className="px-4 py-2">{form.status}</td>
                     <td className="px-4 py-2 flex gap-2">
-                      <Button size="sm" disabled title="Form detail view coming soon">
+                      <Button size="sm" disabled title="Form detail view coming soon" label="View" pageName="DoctorFormsPage">
                         View
                       </Button>
-                      <Button size="sm" disabled={form.status === 'reviewed'} variant="secondary" title="Mark as reviewed coming soon">
+                      <Button size="sm" disabled={form.status === 'reviewed'} variant="secondary" title="Mark as reviewed coming soon" label="Mark as Reviewed" pageName="DoctorFormsPage">
                         Mark as Reviewed
                       </Button>
                     </td>

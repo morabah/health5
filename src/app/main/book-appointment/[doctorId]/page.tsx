@@ -45,6 +45,8 @@ import ical from 'ical-generator';
 import { getApiMode } from '@/config/appConfig';
 import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
+import { loadDoctorAvailability } from '@/data/loadDoctorAvailability';
 
 // Add these CSS styles at the top of the file
 const timeSlotStyles = {
@@ -284,112 +286,80 @@ const AppointmentSuccessScreen = ({
 };
 
 // Add new function to fetch available days for a month
-function fetchAvailableDaysForMonth(doctor: Doctor | null, month: Date): Set<string> {
+async function fetchAvailableDaysForMonth(doctor: Doctor | null, month: Date): Promise<Set<string>> {
   console.log(`Fetching available days for ${month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`);
   
   if (!doctor) return new Set<string>();
   
-  // If live mode, fall back to mock availability
-  if (getApiMode() === 'live') {
-    console.log('[BookAppointmentPage] Live mode: deriving available days from mockDataPersistence');
-    const slots = getMockDoctorAvailability(doctor.userId);
-    const days = new Set<string>();
-    const today = new Date().toISOString().split('T')[0];
-    for (const slot of slots) {
-      if (slot.isAvailable) {
-        const slotDate = slot.dayOfWeek !== undefined && slot.startTime && slot.endTime
-          ? /* we don't have date here, so skip per-day generation */ null
-          : null;
-      }
-    }
-    // As a minimal fallback, ensure the 22nd is available
-    const yyyy = month.getFullYear();
-    const mm = String(month.getMonth()+1).padStart(2,'0');
-    days.add(`${yyyy}-${mm}-22`);
-    return days;
-  }
-  
   try {
-    // Get first and last day of the month
-    const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
-    const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+    // ALWAYS use Firestore data for availability (live mode)
+    console.log('[BookAppointmentPage] Fetching doctor availability from Firestore');
     
-    // Get doctor's weekly availability slots
-    const doctorAvailability = getMockDoctorAvailability(doctor.userId);
-    console.log(`Retrieved ${doctorAvailability.length} availability slots for doctor`);
+    // Use the loadDoctorAvailability function to get all slots from Firestore
+    const slots = await loadDoctorAvailability(doctor.userId);
+    console.log(`[BookAppointmentPage] Retrieved ${slots.length} availability slots for doctor ${doctor.userId} from Firestore`);
     
-    // Get the days of week where the doctor is available
-    const availableDaysOfWeek = doctorAvailability
-      .filter((slot: { isAvailable: boolean }) => slot.isAvailable)
-      .map((slot: { dayOfWeek: number }) => slot.dayOfWeek);
-    
-    console.log(`Doctor is available on days of week: ${availableDaysOfWeek.join(', ')}`);
-    
-    // If doctor isn't available on any day, return empty set
-    if (availableDaysOfWeek.length === 0) {
+    if (slots.length === 0) {
+      console.warn(`[BookAppointmentPage] No availability found in Firestore for doctor ${doctor.userId}`);
+      // Return empty set if no slots found
       return new Set<string>();
     }
     
-    // Loop through all days in the month
+    // Filter available slots for the current month
     const availableDays = new Set<string>();
-    const today = new Date();
-    let currentDay = new Date(firstDay);
+    const firstDay = new Date(month.getFullYear(), month.getMonth(), 1).toISOString().split('T')[0];
+    const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0).toISOString().split('T')[0];
     
-    while (currentDay <= lastDay) {
-      // Check if this day of week is in doctor's availability
-      if (availableDaysOfWeek.includes(currentDay.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6)) {
-        // Don't add days in the past
-        if (currentDay > today) {
-          // Format date as ISO string and add to set
-          availableDays.add(format(currentDay, 'yyyy-MM-dd'));
-        }
+    // Add all dates that have available slots
+    slots.forEach(slot => {
+      if (slot.available && slot.date >= firstDay && slot.date <= lastDay) {
+        availableDays.add(slot.date);
       }
-      
-      // Move to next day
-      currentDay.setDate(currentDay.getDate() + 1);
-    }
+    });
     
-    console.log(`Found ${availableDays.size} available days in ${month.toLocaleDateString('en-US', { month: 'long' })}`);
+    console.log(`[BookAppointmentPage] Found ${availableDays.size} available days in month ${month.getMonth()+1}`);
     return availableDays;
   } catch (error) {
-    console.error("Error fetching available days:", error);
+    console.error('[BookAppointmentPage] Error fetching availability:', error);
     return new Set<string>();
   }
 }
 
 export default function BookAppointmentPage() {
   const params = useParams();
-  const firestoreDocId = params?.doctorId as string || "";
+  const doctorId = params?.doctorId as string || "";
   const router = useRouter();
   const { user, userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [doctor, setDoctor] = useState<Doctor | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [dateString, setDateString] = useState<string>('');
-  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [availableSlots, setAvailableSlots] = useState<DoctorAvailabilitySlot[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [appointmentType, setAppointmentType] = useState<AppointmentType | null>(null);
-  const [reason, setReason] = useState<string>('');
-  const [bookingAppointment, setBookingAppointment] = useState(false);
-  const [appointmentBooked, setAppointmentBooked] = useState(false);
-  const [bookedAppointment, setBookedAppointment] = useState<any>(null);
-  const [loadingCalendar, setLoadingCalendar] = useState(false);
-  const [showSummaryModal, setShowSummaryModal] = useState(false);
-  const [notes, setNotes] = useState<string>("");
-  const [insuranceProvider, setInsuranceProvider] = useState<string>("");
-  const [insuranceFile, setInsuranceFile] = useState<{ name: string } | null>(null);
-  
-  // Initialize available days with an empty Set
-  const initialAvailableDates = new Set<string>();
-  const [availableDays, setAvailableDays] = useState<Set<string>>(initialAvailableDates);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [availableDays, setAvailableDays] = useState<Set<string>>(new Set());
+  const [loadingCalendar, setLoadingCalendar] = useState(false);
+  const [appointment, setAppointment] = useState<any | null>(null);
+  const [step, setStep] = useState(1);
+  const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [appointmentType, setAppointmentType] = useState<string>('');
+  const [bookedAppointment, setBookedAppointment] = useState<any | null>(null);
+  const [appointmentBooked, setAppointmentBooked] = useState<boolean>(false);
+  const [bookingAppointment, setBookingAppointment] = useState<boolean>(false);
+  const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
+  const [insuranceProvider, setInsuranceProvider] = useState<string>('');
+  const [insuranceFile, setInsuranceFile] = useState<File | null>(null);
   
   const timeStepRef = useRef<HTMLDivElement>(null);
   const typeStepRef = useRef<HTMLDivElement>(null);
   const reasonStepRef = useRef<HTMLDivElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
   const slotsCacheRef = useRef<Record<string, string[]>>({});
+
+  // Add this state for dateString
+  const [dateString, setDateString] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const handleReset = () => {
     setDateString(format(new Date(), 'yyyy-MM-dd'));
@@ -580,8 +550,8 @@ export default function BookAppointmentPage() {
     async function fetchDoctor() {
       setLoading(true);
       try {
-        console.log('[BookAppointmentPage] Fetching doctor profile for docId:', firestoreDocId);
-        const doctorDoc = await loadDoctorProfilePublic(firestoreDocId);
+        console.log('[BookAppointmentPage] Fetching doctor profile for docId:', doctorId);
+        const doctorDoc = await loadDoctorProfilePublic(doctorId);
         
         if (!doctorDoc || !doctorDoc.userId) {
           console.error('[BookAppointmentPage] Doctor not found or invalid data returned:', doctorDoc);
@@ -646,7 +616,7 @@ export default function BookAppointmentPage() {
         }
         
         setDoctor({
-          id: firestoreDocId,
+          id: doctorId,
           userId: doctorDoc.userId,
           name: doctorName,
           specialty: doctorDoc.specialty || 'General Medicine',
@@ -671,7 +641,7 @@ export default function BookAppointmentPage() {
       }
     }
     fetchDoctor();
-  }, [firestoreDocId]);
+  }, [doctorId]);
 
   // Update all availability queries to use doctor.userId
   const fetchAvailableSlots = useCallback(async () => {
@@ -734,23 +704,23 @@ export default function BookAppointmentPage() {
     
     // Extract information from doctor ID if possible
     let doctorNumber = "Unknown";
-    const match = firestoreDocId.match(/doctor_(\d+)/);
+    const match = doctorId.match(/doctor_(\d+)/);
     if (match) {
       doctorNumber = match[1];
     }
     
     // Create a fallback doctor object
     const fallbackDoctor: Doctor = {
-      id: firestoreDocId,
-      userId: firestoreDocId,
+      id: doctorId,
+      userId: doctorId,
       // Doctor name resolution best practice
       name: (() => {
         const users = getUsersStore();
-        const userProfile = users.find(u => u.id === firestoreDocId);
+        const userProfile = users.find(u => u.id === doctorId);
         if (userProfile) {
           return `Dr. ${userProfile.firstName} ${userProfile.lastName}`;
         } else {
-          console.warn('[BookAppointmentPage] Could not resolve doctor name for userId:', firestoreDocId);
+          console.warn('[BookAppointmentPage] Could not resolve doctor name for userId:', doctorId);
           return 'Dr. Unknown';
         }
       })(),
@@ -811,7 +781,7 @@ export default function BookAppointmentPage() {
             </div>
           </div>
           
-          <DebugInfo doctorId={firestoreDocId} />
+          <DebugInfo doctorId={doctorId} />
           </div>
         </main>
       );
@@ -830,7 +800,7 @@ export default function BookAppointmentPage() {
       )}
       
       {/* Add debug component at the top */}
-      <DebugInfo doctorId={firestoreDocId} />
+      <DebugInfo doctorId={doctorId} />
       
       <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
         <div className="max-w-6xl mx-auto">

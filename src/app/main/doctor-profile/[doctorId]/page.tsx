@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { loadDoctorProfilePublic } from '@/data/doctorLoaders';
+import { doc, getDoc } from 'firebase/firestore';
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
+import type { UserProfile } from '@/types/user';
 import Spinner from "@/components/ui/Spinner";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -10,7 +12,6 @@ import EmptyState from "@/components/ui/EmptyState";
 import ApiModeIndicator from "@/components/ui/ApiModeIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { formatDate } from "@/utils/helpers";
-import { getUsersStore } from '@/data/mockDataStore';
 import { 
   MapPinIcon, 
   GlobeAltIcon, 
@@ -56,62 +57,51 @@ export default function DoctorProfilePage() {
     async function fetchDoctor() {
       setLoading(true);
       try {
-        const data = await loadDoctorProfilePublic(doctorId);
-        
-        if (data) {
-          console.log('=== fetchDoctor CALLED (doctor-profile) ===');
-          const users = getUsersStore();
-          console.log('DEBUG usersStore (doctor-profile):', users);
-          console.log('DEBUG doctorId (doctor-profile):', doctorId);
-          // Use userId from doctor profile data
-          const doctorUser = users.find(u => u.id === data.userId);
-          console.log('fetchDoctor debug - doctorId:', doctorId, 'doctorUser:', doctorUser);
-
-          // Compose full name if found
-          let doctorName = 'Dr. Unknown';
-          let firstName = '';
-          let lastName = '';
-          if (doctorUser) {
-            doctorName = `Dr. ${doctorUser.firstName} ${doctorUser.lastName}`;
-            firstName = doctorUser.firstName || '';
-            lastName = doctorUser.lastName || '';
-          }
-
-          const doctorData: Doctor = {
-            id: data.userId || doctorId,
-            userId: data.userId || doctorId,
-            name: doctorName,
-            firstName,
-            lastName,
-            specialty: data.specialty || 'General Practice',
-            experience: data.yearsOfExperience || 0,
-            location: data.location || 'Not specified',
-            languages: data.languages || ['English'],
-            fee: data.consultationFee || 0,
-            available: true, // Default to available
-            profilePicUrl: data.profilePictureUrl || '',
-            bio: data.bio || 'No biography available',
-            education: data.education || 'No education information available',
-            services: ['General Consultation'], // Default service
-            reviews: [], // Empty reviews array as default
-          };
-          setDoctor(doctorData);
-          console.log('Doctor loaded (doctor-profile):', doctorData);
-        } else {
-          setDoctor(null);
+        // --- FETCH FROM USERS COLLECTION (LIVE) ---
+        const { db } = initializeFirebaseClient('live');
+        const userDocRef = doc(db, 'users', doctorId);
+        const userDocSnap = await getDoc(userDocRef);
+        let doctorUser: UserProfile | null = null;
+        if (userDocSnap.exists()) {
+          doctorUser = { id: userDocSnap.id, ...userDocSnap.data() } as UserProfile;
         }
-      } catch (error) {
-        console.error("Error fetching doctor profile:", error);
-        setDoctor(null);
-        toast.error("Could not load doctor profile. Please try again later.");
-      } finally {
+        // Compose full name if found
+        let doctorName = 'Dr. Unknown';
+        let firstName = '';
+        let lastName = '';
+        if (doctorUser) {
+          doctorName = `Dr. ${doctorUser.firstName} ${doctorUser.lastName}`.trim();
+          firstName = doctorUser.firstName || '';
+          lastName = doctorUser.lastName || '';
+        }
+        // --- Populate Doctor object for UI ---
+        const doctorData: Doctor = {
+          id: doctorUser?.id || doctorId,
+          name: doctorName,
+          firstName,
+          lastName,
+          specialty: doctorUser?.specialty || '',
+          experience: doctorUser?.yearsOfExperience || 0,
+          location: doctorUser?.location || '',
+          languages: doctorUser?.languages || [],
+          fee: doctorUser?.consultationFee || 0,
+          available: true,
+          profilePicUrl: '',
+          bio: doctorUser?.bio || '',
+          education: doctorUser?.education || '',
+          services: [],
+          reviews: [],
+          userId: doctorUser?.id || doctorId,
+        };
+        setDoctor(doctorData);
         setLoading(false);
+      } catch (error) {
+        setLoading(false);
+        setDoctor(null);
+        toast.error('Failed to load doctor profile.');
       }
     }
-    
-    if (doctorId) {
-      fetchDoctor();
-    }
+    fetchDoctor();
   }, [doctorId]);
 
   const handleBookAppointment = () => {

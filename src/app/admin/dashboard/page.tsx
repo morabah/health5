@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { mockGetAllUsers, mockGetDoctorVerifications, mockGetAllAppointments } from '@/lib/mockApiService';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { AppointmentStatus } from '@/types/enums';
 
 interface DashboardStats {
@@ -50,16 +51,26 @@ export default function AdminDashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const users = await mockGetAllUsers();
+      const usersRef = collection(db, 'users');
+      const usersQuery = query(usersRef);
+      const usersSnapshot = await getDocs(usersQuery);
+      const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const totalUsers = users.length;
       const totalPatients = users.filter(u => u.userType.toLowerCase() === 'patient').length;
       const totalDoctors = users.filter(u => u.userType.toLowerCase() === 'doctor').length;
-      const verifications = await mockGetDoctorVerifications();
+
+      const verificationsRef = collection(db, 'doctorVerifications');
+      const verificationsQuery = query(verificationsRef, where('status', '==', 'pending'));
+      const verificationsSnapshot = await getDocs(verificationsQuery);
+      const verifications = verificationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const pendingVerifications = verifications.length;
-      const appointments = await mockGetAllAppointments();
-      const activeAppointments = appointments.filter(a =>
-        a.status === AppointmentStatus.PENDING || a.status === AppointmentStatus.CONFIRMED
-      ).length;
+
+      const appointmentsRef = collection(db, 'appointments');
+      const appointmentsQuery = query(appointmentsRef, where('status', 'in', [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]));
+      const appointmentsSnapshot = await getDocs(appointmentsQuery);
+      const appointments = appointmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const activeAppointments = appointments.length;
+
       setStats({ totalUsers, totalPatients, totalDoctors, pendingVerifications, activeAppointments });
       setPendingDoctors(
         verifications.map((v: DoctorVerification) => ({

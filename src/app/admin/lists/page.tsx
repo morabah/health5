@@ -5,17 +5,32 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
-import { mockGetAllUsers, mockAddUser } from "@/lib/mockApiService";
-import { UserProfile } from '@/types/user';
-import { useRouter } from "next/navigation";
+import { getFirestoreDb } from '@/lib/improvedFirebaseClient';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { z } from 'zod';
+import { toast } from 'react-hot-toast';
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
+import type { UserProfile } from '@/types/user';
+import { useRouter } from 'next/navigation';
+
+// Zod schema for user validation
+const UserSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email(),
+  userType: z.enum(['ADMIN', 'DOCTOR', 'PATIENT']),
+  phone: z.string().optional(),
+  isActive: z.boolean().optional(),
+  avatarUrl: z.string().url().optional(),
+});
 
 export default function AdminListsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "ADMIN" | "DOCTOR" | "PATIENT">("all");
+  const [filter, setFilter] = useState<'all' | 'ADMIN' | 'DOCTOR' | 'PATIENT'>('all');
+  const [search, setSearch] = useState('');
   const router = useRouter();
   
   // State for Add User modal
@@ -31,16 +46,17 @@ export default function AdminListsPage() {
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState<string | null>(null);
 
-  // Fetch users from mock API (reads localStorage)
+  // Fetch users from Firestore
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
     try {
-      const items = await mockGetAllUsers();
-      // Ensure emails are strings for UI
-      setUsers(items.map(u => ({ ...u, email: u.email ?? '' })));
-    } catch {
-      setError("Failed to load users.");
+      const db = await getFirestoreDb();
+      const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as UserProfile));
+    } catch (e) {
+      setError('Failed to load users.');
     } finally {
       setLoading(false);
     }
@@ -61,103 +77,42 @@ export default function AdminListsPage() {
     setNewUser(prev => ({ ...prev, [name]: value }));
   };
   
+  // Add user to Firestore
   const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddingUser(true);
     setAddError(null);
     setAddSuccess(null);
-    
     try {
-      // Basic validation
-      if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.userType) {
-        throw new Error("Please fill all required fields");
-      }
-      
-      // Email validation
-      if (!/^\S+@\S+\.\S+$/.test(newUser.email)) {
-        throw new Error("Please enter a valid email address");
-      }
-      
-      // Submit to API
-      const addedUser = await mockAddUser({
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
-        email: newUser.email,
-        userType: newUser.userType,
-        phone: newUser.phone || undefined,
-        isFromAdmin: true
+      const validated = UserSchema.parse({ ...newUser, isActive: true });
+      const db = await getFirestoreDb();
+      await addDoc(collection(db, 'users'), {
+        ...validated,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       });
-
-      // If doctor, also add to doctor verification queue (localStorage)
-      if (newUser.userType.toLowerCase() === 'doctor') {
-        try {
-          const verificationsKey = 'health_app_data_doctor_verifications';
-          const verificationsRaw = localStorage.getItem(verificationsKey);
-          let verifications = [];
-          if (verificationsRaw) {
-            verifications = JSON.parse(verificationsRaw);
-          }
-          // Avoid duplicate
-          if (!verifications.find((v: any) => v.id === addedUser.id)) {
-            verifications.push({
-              id: addedUser.id,
-              name: `${addedUser.firstName} ${addedUser.lastName}`,
-              status: 'PENDING',
-              dateSubmitted: new Date().toISOString(),
-              specialty: ''
-            });
-            localStorage.setItem(verificationsKey, JSON.stringify(verifications));
-          }
-        } catch (err) {
-          console.error('Failed to add doctor to verification queue', err);
-        }
-      }
-      
-      // Update the user list with the new user and persist to localStorage
-      setUsers(prev => {
-        const updated = [...prev, addedUser];
-        try {
-          localStorage.setItem('health_app_data_users', JSON.stringify(updated));
-        } catch (e) {
-          console.error('Failed to persist users to localStorage', e);
-        }
-        return updated;
-      });
-      
-      // Show success and refresh list
-      setAddSuccess(`User ${newUser.firstName} ${newUser.lastName} added successfully`);
+      setAddSuccess(`User ${validated.firstName} ${validated.lastName} added successfully`);
+      toast.success('User added');
       await fetchUsers();
-      
-      // Reset form
-      setNewUser({
-        firstName: "",
-        lastName: "",
-        email: "",
-        userType: "PATIENT",
-        phone: ""
-      });
-      
-      // Close modal after a delay
+      setNewUser({ firstName: '', lastName: '', email: '', userType: 'PATIENT', phone: '' });
       setTimeout(() => {
         setShowAddUserModal(false);
         setAddSuccess(null);
       }, 2000);
-      
     } catch (err: any) {
-      if (err.message === "email-already-exists") {
-        setAddError("A user with this email already exists");
-      } else {
-        setAddError(err.message || "Failed to add user");
-      }
+      setAddError(err.message || 'Failed to add user');
+      toast.error('Failed to add user');
     } finally {
       setAddingUser(false);
     }
   };
 
-  // Filter the users based on filter
-  const filteredUsers = filter === "all" 
-    ? users 
-    : users.filter(user => user.userType.toUpperCase() === filter);
+  // Filter and search logic
+  const filteredUsers = users.filter(user => {
+    if (filter !== 'all' && user.userType.toUpperCase() !== filter) return false;
+    if (search && !(`${user.firstName} ${user.lastName} ${user.email}`.toLowerCase().includes(search.toLowerCase()))) return false;
+    return true;
+  });
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 flex flex-col items-center">
@@ -166,13 +121,19 @@ export default function AdminListsPage() {
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <div className="flex items-center gap-4">
             <h2 className="text-xl font-semibold">User Directory</h2>
-            <div className="flex items-center">
+            <Input
+              className="ml-4"
+              placeholder="Search name or email"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <div className="flex items-center ml-4">
               <label htmlFor="filter" className="text-sm font-medium mr-2">Role:</label>
               <select
                 id="filter"
                 className="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:text-gray-100"
                 value={filter}
-                onChange={e => setFilter(e.target.value.toUpperCase() as "all" | "ADMIN" | "DOCTOR" | "PATIENT")}
+                onChange={e => setFilter(e.target.value.toUpperCase() as 'all' | 'ADMIN' | 'DOCTOR' | 'PATIENT')}
               >
                 <option value="all">All</option>
                 <option value="ADMIN">Admin</option>

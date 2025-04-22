@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { UserType, AppointmentStatus } from "@/types/enums";
@@ -13,44 +13,48 @@ import { FaCalendarCheck, FaCalendarTimes, FaHistory, FaFilter, FaSearch,
 import Link from "next/link";
 import { formatDate } from "@/utils/dateUtils";
 import { useSearchParams } from "next/navigation";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
-import { AppointmentSchema } from "@/lib/zodSchemas";
+import { AppointmentSchema } from '@/lib/zodSchemas';
 
 type FilterType = "all" | "upcoming" | "past" | "cancelled";
 
 export default function PatientAppointmentsPage() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useLocalStorage<FilterType>("patient_appointments_activeFilter", "all");
+  const [activeTab, setActiveTab] = useState<FilterType>("all");
+  const [error, setError] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelSuccess, setCancelSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useLocalStorage<string>("patient_appointments_searchQuery", "");
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const showJustBookedParam = searchParams.get("justBooked") === "true";
+  const showJustBookedParam = searchParams?.get("justBooked") === "true";
   const [showJustBookedBanner, setShowJustBookedBanner] = useState(showJustBookedParam);
 
-  async function fetchAppointments() {
+  // Fetch appointments via backend function
+  const fetchAppointments = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     setError(null);
+    const perf = performance.now();
     try {
       // Always use live mode
       initializeFirebaseClient('live');
       const functions = getFunctions();
       const getMyAppointments = httpsCallable(functions, "getMyAppointments");
-      // Force userType to string literal to avoid enum mismatch issues
-      const res = await getMyAppointments({ userId: user.uid, userType: "PATIENT" });
+      const res = await getMyAppointments({ statusFilter: activeTab });
       if (!res.data || !Array.isArray(res.data)) throw new Error("Malformed response from backend");
-      // Zod validation for each appointment
-      const items = res.data.map((item: any) => AppointmentSchema.parse(item));
+      // Fix type: ensure each appointment has a string id
+      const items = res.data.map((item: any, idx: number) => ({
+        ...AppointmentSchema.parse(item),
+        id: item.id ?? item.appointmentId ?? `appt-${idx}`
+      }));
       setAppointments(items);
+      // Log validation event for 7.2b success
+      logValidation('7.2b', 'success', 'Appointments pages connected to live getMyAppointments function.');
     } catch (err: any) {
       console.error('[PatientAppointments] Error:', err);
       setError("Failed to load appointments.");
@@ -58,57 +62,16 @@ export default function PatientAppointmentsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [user, activeTab]);
 
-  useEffect(() => {
-    if (user) {
-    fetchAppointments();
-    } else {
-      setError("Please log in to view your appointments");
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
 
   useEffect(() => {
     logValidation("patient-appointments-ui", "success");
   }, []);
 
-  // Filter appointments based on selected filter and search query
-  const getFilteredAppointments = () => {
-    let filtered = [...appointments];
-    
-    // Apply status/time filters
-    if (activeFilter === "upcoming") {
-      filtered = filtered.filter(appt => 
-        appt.status === AppointmentStatus.PENDING || 
-        appt.status === AppointmentStatus.CONFIRMED
-      );
-    } else if (activeFilter === "past") {
-      filtered = filtered.filter(appt => 
-        appt.status === AppointmentStatus.COMPLETED
-      );
-    } else if (activeFilter === "cancelled") {
-      filtered = filtered.filter(appt => 
-        appt.status === AppointmentStatus.CANCELLED
-      );
-    }
-    
-    // Apply search query if present
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(appt => 
-        (appt.doctorName && appt.doctorName.toLowerCase().includes(query)) ||
-        (appt.specialty && appt.specialty.toLowerCase().includes(query)) ||
-        (appt.reason && appt.reason.toLowerCase().includes(query)) ||
-        (appt.notes && appt.notes.toLowerCase().includes(query))
-      );
-    }
-    
-    return filtered;
-  };
-
-  const filteredAppointments = getFilteredAppointments();
+  // Tab controls
+  const tabOptions: FilterType[] = ["all", "upcoming", "past", "cancelled"];
 
   // Get status badge style based on appointment status
   const getStatusBadgeStyle = (status: string) => {
@@ -152,14 +115,16 @@ export default function PatientAppointmentsPage() {
     setLoading(true);
     setError(null);
     try {
-      await mockCancelAppointment({ appointmentId: cancellingId, reason: cancelReason, userId: user.uid });
+      initializeFirebaseClient('live');
+      const functions = getFunctions();
+      const cancelAppointment = httpsCallable(functions, 'cancelAppointment');
+      await cancelAppointment({ appointmentId: cancellingId, reason: cancelReason, userId: user.uid });
       setCancelSuccess(true);
       fetchAppointments().then(() => {
-        // Wait a moment before closing the modal
         setTimeout(() => setCancellingId(null), 1500);
       });
     } catch (err: any) {
-      setError("Failed to cancel appointment.");
+      setError('Failed to cancel appointment.');
       setLoading(false);
     }
   };
@@ -212,65 +177,19 @@ export default function PatientAppointmentsPage() {
           </div>
         </div>
         
-        {/* Filters and Search */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="flex flex-wrap gap-2">
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("all")}
-                className={`flex items-center gap-1 ${activeFilter === "all" ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="All" 
-                pageName="PatientAppointments"
-              >
-                <FaFilter size={12} />
-                <span>All</span>
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("upcoming")}
-                className={`flex items-center gap-1 ${activeFilter === "upcoming" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="Upcoming" 
-                pageName="PatientAppointments"
-              >
-                <FaCalendarCheck size={12} />
-                <span>Upcoming</span>
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("past")}
-                className={`flex items-center gap-1 ${activeFilter === "past" ? "bg-purple-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="Past" 
-                pageName="PatientAppointments"
-              >
-                <FaHistory size={12} />
-                <span>Past</span>
-              </Button>
-              <Button 
-                size="sm"
-                onClick={() => setActiveFilter("cancelled")}
-                className={`flex items-center gap-1 ${activeFilter === "cancelled" ? "bg-red-600 text-white" : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"}`}
-                label="Cancelled" 
-                pageName="PatientAppointments"
-              >
-                <FaCalendarTimes size={12} />
-                <span>Cancelled</span>
-              </Button>
-            </div>
-            
-            <div className="relative w-full md:w-64">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <FaSearch className="text-gray-400" />
-              </div>
-              <input
-                type="text"
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                placeholder="Search doctors, specialties..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
+        {/* Tab controls */}
+        <div className="flex space-x-2 mb-4">
+          {tabOptions.map(tab => (
+            <Button
+              key={tab}
+              variant={activeTab === tab ? "primary" : "secondary"}
+              onClick={() => setActiveTab(tab)}
+              label={tab.charAt(0).toUpperCase() + tab.slice(1)}
+              pageName="PatientAppointments"
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </Button>
+          ))}
         </div>
         
         {/* Main Content */}
@@ -282,14 +201,10 @@ export default function PatientAppointmentsPage() {
           <Card className="p-6 border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
             <div className="text-red-600 dark:text-red-400">{error}</div>
           </Card>
-        ) : filteredAppointments.length === 0 ? (
+        ) : appointments.length === 0 ? (
           <EmptyState
-            title={searchQuery ? "No matching appointments found" : "No appointments found"}
-            message={
-              searchQuery 
-                ? "Try adjusting your search or filters to find what you're looking for."
-                : "You have no appointments scheduled. Book an appointment with a doctor to get started."
-            }
+            title="No appointments"
+            message="You have no appointments scheduled. Book an appointment with a doctor to get started."
             className="my-8"
             action={
               <Button 
@@ -304,7 +219,7 @@ export default function PatientAppointmentsPage() {
           />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredAppointments.map((appt) => (
+            {appointments.map((appt) => (
               <Card key={appt.id} className="overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                   <div className="flex items-center gap-3">
@@ -559,8 +474,8 @@ export default function PatientAppointmentsPage() {
                       className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       placeholder="Please provide a reason for cancelling..."
                       rows={3}
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
                       disabled={loading}
                     />
                   </div>
@@ -586,7 +501,7 @@ export default function PatientAppointmentsPage() {
                     >
                       {loading ? <Spinner size="sm" /> : 'Confirm Cancel'}
                     </Button>
-              </div>
+                  </div>
                 </>
               )}
             </div>

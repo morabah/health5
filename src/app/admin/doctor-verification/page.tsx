@@ -6,11 +6,11 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
-import { mockGetDoctorVerifications, mockGetAllUsers, mockSetDoctorVerificationStatus } from "@/lib/mockApiService";
 import { VerificationStatus, UserType } from "@/types/enums";
 import type { DoctorVerification } from "@/types/doctor";
-import { persistDoctorProfiles, persistAllData } from '@/lib/mockDataPersistence';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+import { collection, getDocs, getFirestore, updateDoc, doc } from "firebase/firestore";
+import { getFirestoreDb } from "@/lib/improvedFirebaseClient";
 
 /**
  * Admin Doctor Verification List Page
@@ -31,76 +31,33 @@ const DoctorVerificationListPage: React.FC = () => {
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  // Force persistence of doctor data on page load
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        console.log("[DoctorVerificationListPage] Ensuring data persistence");
-        persistDoctorProfiles();
-        persistAllData();
-      } catch (e) {
-        console.error('Error persisting data:', e);
-      }
-    }
-  }, []);
-
   useEffect(() => {
     async function fetchVerifications() {
       setLoading(true);
       setError(null);
-      const key = 'health_app_data_doctor_verifications';
       try {
         console.log("[DoctorVerificationListPage] Fetching doctor verifications");
         
-        // Fetch the verifications data directly from the API
-        const items = await mockGetDoctorVerifications();
+        // Fetch all doctor verifications from Firestore
+        const db = await getFirestoreDb();
+        const snapshot = await getDocs(collection(db, "doctorVerifications"));
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         console.log("[DoctorVerificationListPage] Received verifications:", items);
         setVerifications(items);
         
         // Fetch all users to get patients
-        const users = await mockGetAllUsers();
-        const patientUsers = users.filter(user => user.userType === UserType.PATIENT);
+        const users = await getDocs(collection(db, "users"));
+        const patientUsers = users.docs.filter(user => user.data().userType === UserType.PATIENT).map(doc => ({ id: doc.id, ...doc.data() }));
         setPatients(patientUsers);
-        
-        // Also persist to localStorage for future use
-        try {
-          localStorage.setItem(key, JSON.stringify(items));
-          console.log("[DoctorVerificationListPage] Saved verifications to localStorage");
-        } catch (e) {
-          console.error('Failed to persist doctor verifications', e);
-        }
       } catch (err) {
         console.error("[DoctorVerificationListPage] Error fetching verifications:", err);
         setError('Failed to load doctor verifications.');
-        
-        // Try to load from localStorage as fallback
-        try {
-          const stored = localStorage.getItem(key);
-          if (stored) {
-            console.log("[DoctorVerificationListPage] Loading from localStorage fallback");
-            setVerifications(JSON.parse(stored));
-          }
-        } catch (e) {
-          console.error("[DoctorVerificationListPage] Fallback loading failed:", e);
-        }
       } finally {
         setLoading(false);
       }
     }
     fetchVerifications();
   }, []);
-
-  // Save to localStorage whenever verifications change
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        'health_app_data_doctor_verifications',
-        JSON.stringify(verifications)
-      );
-    } catch (e) {
-      console.error('Failed to sync doctor verifications to localStorage', e);
-    }
-  }, [verifications]);
 
   const filtered = filter === "all"
     ? verifications
@@ -132,7 +89,7 @@ const DoctorVerificationListPage: React.FC = () => {
                       // Approve all pending doctors
                       Promise.all(
                         pendingDocs.map(doc => 
-                          mockSetDoctorVerificationStatus(doc.id, VerificationStatus.APPROVED, "Auto-approved")
+                          updateDoc(doc(db, "doctorVerifications", doc.id), { status: VerificationStatus.APPROVED })
                         )
                       ).then(() => {
                         // Update local state
@@ -143,9 +100,6 @@ const DoctorVerificationListPage: React.FC = () => {
                           )
                         );
                         showSuccess(`Approved ${pendingDocs.length} doctor(s) successfully!`);
-                        // Force data persistence
-                        persistDoctorProfiles();
-                        persistAllData();
                       });
                     } else {
                       showSuccess("No pending doctors to approve");
@@ -154,19 +108,6 @@ const DoctorVerificationListPage: React.FC = () => {
                   className="mr-2"
                 >
                   Approve All Pending
-                </Button>
-                <Button
-                  size="sm"
-                  label="Import All Users"
-                  pageName="DoctorVerificationListPage"
-                  variant="secondary"
-                  onClick={() => {
-                    persistAllData();
-                    showSuccess("All user data imported successfully!");
-                  }}
-                  className="mr-2"
-                >
-                  Import All Users
                 </Button>
                 <label htmlFor="filter" className="text-sm font-medium">Status:</label>
                 <select

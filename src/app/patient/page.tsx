@@ -9,6 +9,7 @@ import { AppointmentStatus } from "@/types/enums";
 import { formatDate, isPastDate } from "@/utils/dateUtils";
 import type { Appointment as AppointmentType } from "@/types/appointment";
 import { Timestamp } from "firebase/firestore";
+import { useSession } from "next-auth/react";
 
 // Local interface for simplified appointments returned from API
 interface Appointment {
@@ -40,6 +41,7 @@ function isPast(appt: Appointment) {
 }
 
 export default function PatientPage() {
+  const { data: session } = useSession();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export default function PatientPage() {
       setError(null);
       try {
         // Fetch appointments and convert to simplified format
-        const data = await loadPatientAppointments();
+        const data = await loadPatientAppointments(session?.user?.email || '');
         const simplified: Appointment[] = data.map((appt: AppointmentType) => ({
           id: appt.id || '',
           doctor: appt.doctorName || 'Unknown Doctor',
@@ -67,7 +69,7 @@ export default function PatientPage() {
       }
     }
     fetchAppointments();
-  }, []);
+  }, [session]);
 
   const upcoming = appointments.filter(isUpcoming);
   const past = appointments.filter(isPast);

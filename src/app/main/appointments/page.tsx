@@ -14,8 +14,9 @@ import Button from '@/components/ui/Button';
 import ApiModeIndicator from '@/components/ui/ApiModeIndicator';
 import Link from 'next/link';
 import { Appointment } from '@/types/appointment';
-import { mockGetMyAppointments } from '@/lib/mockApiService';
-import { UserType } from '@/types/enums';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { initializeFirebaseClient } from '@/lib/improvedFirebaseClient';
+import { AppointmentSchema } from '@/lib/zodSchemas';
 import { formatDate } from '@/utils/dateUtils';
 
 // Simple EmptyState component
@@ -149,75 +150,61 @@ export default function AppointmentsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Fetch from API
-        const apiAppointments = await mockGetMyAppointments(user.id, UserType.PATIENT);
-        
-        // Also check localStorage for any appointments created during the booking flow
-        // In a real app, these would be persisted to the backend
-        const localAppointments = localStorage.getItem('appointments');
-        let parsedLocalAppointments: Appointment[] = [];
-        
-        if (localAppointments) {
-          try {
-            parsedLocalAppointments = JSON.parse(localAppointments);
-          } catch (e) {
-            console.error('Error parsing local appointments', e);
+  const fetchAppointments = async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      setError(null);
+      initializeFirebaseClient('live');
+      const functions = getFunctions();
+      const getMyAppointments = httpsCallable(functions, 'getMyAppointments');
+      const res = await getMyAppointments({ statusFilter: filter });
+      if (!res.data || !Array.isArray(res.data)) throw new Error('Malformed response from backend');
+      const items = res.data.map((item: any, idx: number) => {
+        // Ensure appointmentDate is always present and valid for Appointment type
+        let appointmentDate = item.appointmentDate;
+        if (!appointmentDate) {
+          // Fallback: try to parse from startTime if possible
+          if (item.startTime) {
+            appointmentDate = new Date(item.startTime);
+          } else {
+            // Default to now if no date info at all (should not happen in prod)
+            appointmentDate = new Date();
           }
         }
-        
-        // Combine API and local appointments
-        const allAppointments = [...apiAppointments, ...parsedLocalAppointments];
-        
-        // Check if user has an appointment with Dr. Ana Souza
-        const hasAnaSouza = allAppointments.some(appointment => 
-          appointment.doctorId === 'user_doctor_005' && 
-          appointment.appointmentDate && 
-          (typeof appointment.appointmentDate === 'string' || appointment.appointmentDate instanceof Date
-            ? new Date(appointment.appointmentDate) > new Date()
-            : appointment.appointmentDate.toDate() > new Date())
-        );
-        
-        // Check if user has an appointment with Dr. Jane Lee
-        const hasJaneLee = allAppointments.some(appointment => 
-          appointment.doctorId === 'user_doctor_002' && 
-          appointment.appointmentDate && 
-          (typeof appointment.appointmentDate === 'string' || appointment.appointmentDate instanceof Date
-            ? new Date(appointment.appointmentDate) > new Date()
-            : appointment.appointmentDate.toDate() > new Date())
-        );
-        
-        // Check if user has an appointment with Dr. David Nguyen
-        const hasDavidNguyen = allAppointments.some(appointment => 
-          appointment.doctorId === 'user_doctor_001' && 
-          appointment.appointmentDate && 
-          (typeof appointment.appointmentDate === 'string' || appointment.appointmentDate instanceof Date
-            ? new Date(appointment.appointmentDate) > new Date()
-            : appointment.appointmentDate.toDate() > new Date())
-        );
-        
-        setHasDrAnaAppointment(hasAnaSouza);
-        setHasDrJaneLeeAppointment(hasJaneLee);
-        setHasDrDavidNguyenAppointment(hasDavidNguyen);
-        setAppointments(allAppointments);
-      } catch (err) {
-        console.error('Failed to fetch appointments:', err);
-        setError('Failed to load appointments. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
+        // Normalize status to AppointmentStatus enum value
+        let status = item.status;
+        if (typeof status === 'string') {
+          // Convert to enum if possible (case-insensitive)
+          const normalized = status.toUpperCase();
+          if ([
+            'PENDING', 'CONFIRMED', 'SCHEDULED', 'CANCELLED', 'CANCELLED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'COMPLETED', 'NO_SHOW', 'RESCHEDULED'
+          ].includes(normalized)) {
+            status = normalized;
+          } else {
+            status = 'PENDING';
+          }
+        }
+        return {
+          ...AppointmentSchema.parse({ ...item, appointmentDate, status }),
+          id: item.id ?? item.appointmentId ?? `appt-${idx}`,
+          appointmentDate, // Ensure always present
+          status,
+        };
+      });
+      setAppointments(items as Appointment[]);
+    } catch (err: any) {
+      console.error('[Appointments] Error:', err);
+      setError('Failed to load appointments.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchAppointments();
-  }, [user]);
-  
+  }, [user, filter]);
+
   const filteredAppointments = filter === 'all'
     ? appointments
     : appointments.filter(appointment => {

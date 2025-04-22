@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format, addDays } from 'date-fns';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
-import { getMockDoctorAvailability } from '@/data/mockDataService';
-import { getDoctorProfilesStore } from '@/data/mockDataStore';
+import { getDoctorAvailabilityFromFirestore } from '@/data/doctorLoaders';
 import Spinner from '@/components/ui/Spinner';
 import { toast } from 'react-hot-toast';
 import type { DoctorAvailabilitySlot } from '@/types/doctor';
@@ -37,52 +36,29 @@ export function DoctorAvailabilityCalendar({
   const [loading, setLoading] = useState(false);
 
   // Function to fetch available days for a month
-  const fetchAvailableDaysForMonth = (month: Date) => {
+  const fetchAvailableDaysForMonth = async (month: Date) => {
     if (!doctor || !doctor.userId) return new Set<string>();
-    
     try {
-      console.log(`Fetching available days for ${month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`);
-      
       // Get first and last day of the month
       const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
       const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-      
-      // Determine availability slots and blocked dates (Firestore vs mock)
-      let doctorAvailability: DoctorAvailabilitySlot[] = [];
-      let blockedDatesList: string[] = [];
-
-      if (doctor.availability) {
-        doctorAvailability = doctor.availability;
-        blockedDatesList = doctor.blockedDates || [];
-      } else {
-        console.log('[mockDataService] Getting mock doctor availability', { doctorId: doctor.userId });
-        doctorAvailability = getMockDoctorAvailability(doctor.userId);
-        const profiles = getDoctorProfilesStore();
-        const profile = profiles.find(p => p.userId === doctor.userId) as any;
-        blockedDatesList = profile?.mockAvailability?.blockedDates || [];
-      }
-      console.log(`Retrieved ${doctorAvailability.length} availability slots for doctor`);
-      
+      // Fetch availability from Firestore
+      const { availability, blockedDates } = await getDoctorAvailabilityFromFirestore(doctor.userId);
+      const doctorAvailability = availability || [];
+      const blockedDatesList = blockedDates || [];
       // Get the days of week where the doctor is available
       const availableDaysOfWeek = doctorAvailability
         .filter((slot: DoctorAvailabilitySlot) => slot.isAvailable)
         .map((slot: DoctorAvailabilitySlot) => slot.dayOfWeek);
-      
-      console.log(`Doctor is available on days of week: ${availableDaysOfWeek.join(', ')}`);
-      
-      // If doctor isn't available on any day, return empty set
       if (availableDaysOfWeek.length === 0) {
         return new Set<string>();
       }
-      
       // Loop through all days in the month
       const availableDays = new Set<string>();
       const today = new Date();
       let currentDay = new Date(firstDay);
-      
       while (currentDay <= lastDay) {
         const dateStr = format(currentDay, 'yyyy-MM-dd');
-        // Add if matches weekly availability, not past, and not blocked
         if (
           availableDaysOfWeek.includes(currentDay.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6) &&
           (!disablePastDates || currentDay > today) &&
@@ -90,15 +66,11 @@ export function DoctorAvailabilityCalendar({
         ) {
           availableDays.add(dateStr);
         }
-        
-        // Move to next day
         currentDay.setDate(currentDay.getDate() + 1);
       }
-      
-      console.log(`Found ${availableDays.size} available days in ${month.toLocaleDateString('en-US', { month: 'long' })}`);
       return availableDays;
     } catch (error) {
-      console.error("Error fetching available days:", error);
+      console.error('Error fetching available days:', error);
       return new Set<string>();
     }
   };
@@ -106,21 +78,14 @@ export function DoctorAvailabilityCalendar({
   // Handler for month change in calendar
   const handleMonthChange = (month: Date) => {
     if (!month) return;
-    
     console.log(`Month changed to ${month.toLocaleDateString()}`);
     setCurrentMonth(month);
-    
     // Fetch available days for the new month
     setLoading(true);
-    try {
-      const days = fetchAvailableDaysForMonth(month);
-      setAvailableDays(days);
-    } catch (error) {
-      console.error("Error handling month change:", error);
-      toast.error("Failed to load doctor availability");
-    } finally {
-      setLoading(false);
-    }
+    fetchAvailableDaysForMonth(month)
+      .then(days => setAvailableDays(days))
+      .catch(error => console.error('Error handling month change:', error))
+      .finally(() => setLoading(false));
   };
 
   // Handler for date selection to check if date is available
@@ -129,18 +94,15 @@ export function DoctorAvailabilityCalendar({
       onDateSelect(undefined);
       return;
     }
-    
     try {
       // Format the selected date
       const dateStr = format(date, 'yyyy-MM-dd');
-      
       // Check if the day is available
       if (!availableDays.has(dateStr)) {
         console.log(`Date ${dateStr} is not available`);
         toast.error("This day is not available for appointments");
         return;
       }
-      
       // Call parent's onDateSelect with the valid date
       onDateSelect(date);
     } catch (error) {
@@ -150,17 +112,15 @@ export function DoctorAvailabilityCalendar({
 
   // Effect to load available days when doctor changes
   useEffect(() => {
+    let isMounted = true;
     if (doctor && doctor.userId) {
       setLoading(true);
-      try {
-        const days = fetchAvailableDaysForMonth(currentMonth);
-        setAvailableDays(days);
-      } catch (error) {
-        console.error("Error loading availability:", error);
-      } finally {
-        setLoading(false);
-      }
+      fetchAvailableDaysForMonth(currentMonth)
+        .then(days => { if (isMounted) setAvailableDays(days); })
+        .catch(error => console.error('Error loading availability:', error))
+        .finally(() => { if (isMounted) setLoading(false); });
     }
+    return () => { isMounted = false; };
   }, [doctor, currentMonth]);
 
   // Safe check function for modifiers
@@ -217,4 +177,4 @@ export function DoctorAvailabilityCalendar({
   );
 }
 
-export default DoctorAvailabilityCalendar; 
+export default DoctorAvailabilityCalendar;

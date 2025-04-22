@@ -3,7 +3,7 @@
  * Navbar component: Main site navigation with mock authentication state.
  * Supports desktop/mobile, dark mode, and theme toggle.
  */
-import React, { Fragment, useEffect } from "react";
+import React, { Fragment, useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -28,6 +28,10 @@ const Navbar: React.FC = () => {
   const { user, userProfile, loading, login, logout, role } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
+  // Hydration safety: ensure role-based rendering only after mount
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => { setMounted(true); }, []);
+
   // Debug: Show current auth state in console
   useEffect(() => {
     // eslint-disable-next-line no-console
@@ -50,7 +54,7 @@ const Navbar: React.FC = () => {
 
   // Helper: Render role-based links
   const renderRoleLinks = () => {
-    if (!user || !userProfile) return null;
+    if (!mounted || !user || !userProfile) return null;
     if (role === UserType.PATIENT) {
       return (
         <>
@@ -83,7 +87,6 @@ const Navbar: React.FC = () => {
           <Link href="/admin/profile" className="hover:text-primary font-medium transition-colors">Profile</Link>
           <Link href="/admin/doctor-verification" className="hover:text-primary font-medium transition-colors">Doctor Verification</Link>
           <Link href="/admin/tools" className="hover:text-primary font-medium transition-colors">Admin Tools</Link>
-          <Link href="/cms-validation" className="hover:text-primary font-medium transition-colors">CMS Validation</Link>
         </>
       );
     }
@@ -131,13 +134,11 @@ const Navbar: React.FC = () => {
         <div className="hidden md:flex items-center gap-6">
           {loading ? (
             <span className="text-gray-400">Loading...</span>
-          ) : user && userProfile ? (
+          ) : mounted && user && userProfile ? (
             <>
               {renderRoleLinks()}
-              
               {/* Notification Bell */}
               <NotificationBell />
-              
               {/* User Dropdown Menu */}
               <Menu as="div" className="relative ml-4">
                 <Menu.Button className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary">
@@ -245,16 +246,14 @@ const Navbar: React.FC = () => {
         <div className="md:hidden bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 px-4 py-4 flex flex-col gap-4">
           {loading ? (
             <span className="text-gray-400">Loading...</span>
-          ) : user && userProfile ? (
+          ) : mounted && user && userProfile ? (
             <>
               {renderRoleLinks()}
-              
               {/* Notification Bell (Mobile) */}
               <div className="flex items-center gap-2 py-2">
                 <NotificationBell />
                 <span className="text-gray-700 dark:text-gray-300">Notifications</span>
               </div>
-              
               {/* User Dropdown Menu (mobile) */}
               <Menu as="div" className="relative mt-2">
                 <Menu.Button className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary w-full">

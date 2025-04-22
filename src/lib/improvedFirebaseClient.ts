@@ -6,7 +6,7 @@
  * error handling, and caching.
  */
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import { getAuth, setPersistence, browserSessionPersistence, type Auth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
 import { getAnalytics, type Analytics } from 'firebase/analytics';
 import { logInfo, logWarn, logError } from './logger';
@@ -42,6 +42,7 @@ interface FirebaseStatus {
 
 /**
  * Initializes Firebase with improved error handling and optimal settings
+ * Ensures per-tab session isolation by always setting browserSessionPersistence.
  */
 export function initializeFirebaseClient(
   forcedMode?: string
@@ -94,6 +95,8 @@ export function initializeFirebaseClient(
     // 2. Initialize Auth
     try {
       auth = getAuth(app);
+      // --- CRITICAL: Set per-tab session persistence for true multi-login ---
+      setPersistence(auth, browserSessionPersistence);
       status.authInitialized = true;
     } catch (authError) {
       logError('Firebase Auth initialization failed', { error: authError });

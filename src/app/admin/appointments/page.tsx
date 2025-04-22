@@ -7,9 +7,9 @@ import Spinner from "@/components/ui/Spinner";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import EmptyState from "@/components/ui/EmptyState";
-import { initDataPersistence } from "@/lib/mockDataPersistence";
-import { mockGetAllAppointments } from "@/lib/mockApiService";
 import { AppointmentStatus } from "@/types/enums";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 interface Appointment {
   id: string;
@@ -30,23 +30,21 @@ const AppointmentListPage: React.FC = () => {
   const router = useRouter();
 
   useEffect(() => {
-    initDataPersistence();
     async function loadAppointments() {
       setLoading(true);
       setError(null);
       try {
-        const rawItems = await mockGetAllAppointments();
-        const shaped = rawItems.map(item => ({
-          id: item.id || '',
-          patientName: item.patientName || item.patientId || '',
-          doctorName: item.doctorName || item.doctorId || '',
-          date: typeof item.appointmentDate === 'string'
-            ? item.appointmentDate
-            : item.appointmentDate.toString(),
-          time: item.startTime,
-          type: item.appointmentType || '',
-          status: item.status,
-          reason: item.reason,
+        const q = filter === "all" ? query(collection(db, "appointments")) : query(collection(db, "appointments"), where("status", "==", filter));
+        const querySnapshot = await getDocs(q);
+        const shaped = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          patientName: doc.data().patientName || '',
+          doctorName: doc.data().doctorName || '',
+          date: doc.data().appointmentDate || '',
+          time: doc.data().startTime || '',
+          type: doc.data().appointmentType || '',
+          status: doc.data().status,
+          reason: doc.data().reason || '',
         }));
         setAppointments(shaped);
       } catch (err) {
@@ -56,9 +54,7 @@ const AppointmentListPage: React.FC = () => {
       }
     }
     loadAppointments();
-  }, []);
-
-  const filtered = filter === "all" ? appointments : appointments.filter(a => a.status === filter);
+  }, [filter]);
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 flex flex-col items-center">
@@ -84,14 +80,14 @@ const AppointmentListPage: React.FC = () => {
         </div>
         {loading && <div className="flex justify-center py-8"><Spinner /></div>}
         {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
-        {!loading && !error && filtered.length === 0 && (
+        {!loading && !error && appointments.length === 0 && (
           <EmptyState
             title="No appointments found."
             message="There are no appointments in this category."
             className="my-8"
           />
         )}
-        {!loading && !error && filtered.length > 0 && (
+        {!loading && !error && appointments.length > 0 && (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead>
@@ -107,7 +103,7 @@ const AppointmentListPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(appt => (
+                {appointments.map(appt => (
                   <tr key={appt.id} className="hover:bg-gray-100 dark:hover:bg-gray-800">
                     <td className="px-4 py-2 whitespace-nowrap">{appt.patientName}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{appt.doctorName}</td>

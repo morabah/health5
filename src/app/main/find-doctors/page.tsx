@@ -2,8 +2,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { loadDoctors } from '@/data/loadDoctors';
-import { mockFindDoctors } from "@/lib/mockApiService";
 import { loadDoctorAvailability, DoctorAvailabilitySlot } from '@/data/loadDoctorAvailability';
 import { formatDate, formatTimeString } from '@/utils/helpers';
 import Spinner from "@/components/ui/Spinner";
@@ -29,10 +27,8 @@ import {
   AdjustmentsHorizontalIcon
 } from "@heroicons/react/24/outline";
 import { CheckCircleIcon, HeartIcon } from "@heroicons/react/24/solid";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { resetMockDataStoresForUser } from "@/data/resetMockDataStoresForUser";
-import { DoctorProfile } from "@/types/doctor";
-import { UserProfile } from "@/types/user";
+import { getFirestore, doc, getDoc, collection, getDocs, QuerySnapshot, DocumentData } from "firebase/firestore";
+import { initializeFirebaseClient } from "@/lib/improvedFirebaseClient";
 
 interface Doctor {
   id: string;
@@ -87,91 +83,116 @@ export default function FindDoctorsPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [specialty, setSpecialty] = useLocalStorage<string>("find_doctors_specialty", "");
-  const [location, setLocation] = useLocalStorage<string>("find_doctors_location", "");
-  const [language, setLanguage] = useLocalStorage<string>("find_doctors_language", "");
-  const [searchQuery, setSearchQuery] = useLocalStorage<string>("find_doctors_searchQuery", "");
+  const [specialty, setSpecialty] = useState<string>("");
+  const [location, setLocation] = useState<string>("");
+  const [language, setLanguage] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useLocalStorage<boolean>("find_doctors_showFilters", false);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [debugUserProfile, setDebugUserProfile] = useState<any>(null); // For UI debug
   const router = useRouter();
 
-  // Auto-reset mock data on first visit
   useEffect(() => {
-    const flag = "health_app_mockResetDone";
-    if (typeof window !== "undefined" && !window.localStorage.getItem(flag)) {
-      window.localStorage.setItem(flag, "true");
-      resetMockDataStoresForUser('doctor');
-    }
-  }, []);
-
-  // Process doctor data to ensure names are properly formatted and map to local Doctor interface
-  const processDoctorData = (doctorProfiles: DoctorProfile[]) => {
-    // Note: We need access to the usersStore to get first/last names
-    // This ideally should happen within mockFindDoctors or be passed here
-    // For now, assume mockFindDoctors provides the full name correctly
-    
-    return doctorProfiles.map(profile => {
-      // Make sure each doctor has a properly formatted name
-      // mockFindDoctors should already provide a 'name' field
-      let displayName = (profile as any).name || `Doctor (ID: ${profile.userId.substring(0, 8)})`; // Use name from profile, fallback if missing
-
-      // Map DoctorProfile to local Doctor interface
-      return {
-        id: profile.userId,
-        userId: profile.userId,
-        name: displayName, 
-        firstName: '' , // Placeholder: Ideally fetch from UserProfile
-        lastName: '', // Placeholder: Ideally fetch from UserProfile
-        specialty: profile.specialty,
-        experience: profile.yearsOfExperience,
-        location: profile.location,
-        languages: profile.languages || [],
-        fee: profile.consultationFee,
-        available: true, // Mock availability
-        profilePicUrl: profile.profilePictureUrl || null,
-        bio: profile.bio,
-        rating: (profile as any).rating || (Math.random() * 1.5 + 3.5).toFixed(1), // Mock rating 3.5-5.0
-      } as Doctor;
-    });
-  };
-
-  // Fetch all doctors initially
-  useEffect(() => {
-    async function fetchDoctors() {
+    async function fetchDoctorsFromUsersCollection() {
       setLoading(true);
-      setError(null); // Reset error state on fetch
+      setError(null);
       try {
-        console.log("[FindDoctorsPage] Fetching doctors with filters:", { specialty, location, language });
+        initializeFirebaseClient('live');
+        const db = getFirestore();
+        // Fetch all user profiles from Firestore
+        const userSnap: QuerySnapshot<DocumentData> = await getDocs(collection(db, 'users'));
+        // Filter for doctors only - use a more flexible approach to find all doctors
+        const doctorUsers = userSnap.docs
+          .map(doc => {
+            const data = doc.data();
+            const id = doc.id;
+            
+            // Log the first few documents to see their structure
+            if (doctorUsers && doctorUsers.length < 3) {
+              console.log(`[FindDoctorPage] Raw doctor document ${id}:`, data);
+            }
+            
+            return { ...data, id };
+          })
+          .filter(user => 
+            // Check multiple possible fields to identify doctors
+            user.userType === 'DOCTOR' || 
+            user.role === 'DOCTOR' || 
+            user.doctorInfo || 
+            user.isDoctorProfile === true
+          );
 
-        // Always use mockFindDoctors to fetch from the dynamic data store
-        // Pass filters if they exist
-        const results = await mockFindDoctors({ 
-          specialty: specialty || undefined, 
-          location: location || undefined 
-          // Note: mockFindDoctors itself doesn't filter by language, we do that later
+        console.log(`[FindDoctorPage] Found ${doctorUsers.length} doctor users`);
+        
+        // Map to Doctor interface with enhanced name detection
+        const enrichedDoctors: Doctor[] = doctorUsers.map((user: any) => {
+          // Try to extract firstName and lastName from different possible structures
+          let firstName = '';
+          let lastName = '';
+          
+          // Check direct fields
+          if (user.firstName) firstName = user.firstName;
+          if (user.lastName) lastName = user.lastName;
+          
+          // Check nested fields (e.g. user.profile.firstName)
+          if (user.profile && user.profile.firstName) firstName = user.profile.firstName;
+          if (user.profile && user.profile.lastName) lastName = user.profile.lastName;
+          
+          // Check doctorInfo fields if they exist
+          if (user.doctorInfo && user.doctorInfo.firstName) firstName = user.doctorInfo.firstName;
+          if (user.doctorInfo && user.doctorInfo.lastName) lastName = user.doctorInfo.lastName;
+          
+          // Check name field if it exists (some systems store full name in a single field)
+          if (user.name && typeof user.name === 'string' && !firstName && !lastName) {
+            const nameParts = user.name.split(' ');
+            if (nameParts.length >= 2) {
+              firstName = nameParts[0];
+              lastName = nameParts.slice(1).join(' ');
+            } else {
+              firstName = user.name;
+            }
+          }
+          
+          // Use displayName as fallback
+          if (user.displayName && typeof user.displayName === 'string' && !firstName && !lastName) {
+            const nameParts = user.displayName.split(' ');
+            if (nameParts.length >= 2) {
+              firstName = nameParts[0];
+              lastName = nameParts.slice(1).join(' ');
+            } else {
+              firstName = user.displayName;
+            }
+          }
+          
+          console.log(`[FindDoctorPage] Doctor ${user.id}: firstName='${firstName}', lastName='${lastName}'`);
+          
+          return {
+            id: user.id,
+            userId: user.id,
+            name: `${firstName || ''} ${lastName || ''}`.trim() || `Doctor (ID: ${user.id.substring(0, 8)})`,
+            firstName: firstName || '',
+            lastName: lastName || '',
+            specialty: user.specialty || (user.doctorInfo ? user.doctorInfo.specialty : '') || '',
+            experience: user.yearsOfExperience || (user.doctorInfo ? user.doctorInfo.yearsOfExperience : 0) || 0,
+            location: user.location || (user.doctorInfo ? user.doctorInfo.location : '') || '',
+            languages: user.languages || (user.doctorInfo ? user.doctorInfo.languages : []) || [],
+            fee: user.consultationFee || (user.doctorInfo ? user.doctorInfo.consultationFee : 0) || 0,
+            available: user.available !== undefined ? user.available : true,
+            profilePicUrl: user.profilePictureUrl || (user.doctorInfo ? user.doctorInfo.profilePictureUrl : null) || null,
+            bio: user.bio || (user.doctorInfo ? user.doctorInfo.bio : '') || '',
+            rating: user.rating || (user.doctorInfo ? user.doctorInfo.rating : (Math.random() * 1.5 + 3.5).toFixed(1)) || (Math.random() * 1.5 + 3.5).toFixed(1),
+          };
         });
-        
-        console.log("[FindDoctorsPage] Raw results from mockFindDoctors:", results);
-
-        // Process the results to ensure names are properly formatted and add placeholders
-        const processedResults = processDoctorData(results);
-        console.log("[FindDoctorsPage] Processed doctor results:", processedResults);
-        
-        setDoctors(processedResults);
-        // Apply all current filters (including language and search query) locally
-        applyFilters(processedResults, searchQuery, specialty, location, language);
-
+        setDoctors(enrichedDoctors);
+        applyFilters(enrichedDoctors, searchQuery, specialty, location, language);
       } catch (e) {
-        setError('Failed to load doctors. Please try again later.');
-        console.error('Error fetching doctors:', e);
+        setError('Failed to load doctors from Firestore users collection. Please try again later.');
+        console.error('Error fetching doctors from Firestore users collection:', e);
       } finally {
         setLoading(false);
       }
     }
-
-    fetchDoctors();
-  // Rerun fetch whenever specialty or location filters change as mockFindDoctors uses them
-  // searchQuery and language are applied locally in applyFilters
+    fetchDoctorsFromUsersCollection();
   }, [specialty, location]);
 
   // Fetch nextAvailable for each doctor from Firestore
@@ -180,16 +201,21 @@ export default function FindDoctorsPage() {
       const now = new Date();
       try {
         const updates = await Promise.all(doctors.map(async doctor => {
-          const slots: DoctorAvailabilitySlot[] = await loadDoctorAvailability(doctor.userId);
-          const upcoming = slots
-            .filter(slot => slot.available)
-            .map(slot => ({ ...slot, dateTime: new Date(`${slot.date}T${slot.time}`) }))
-            .filter(slot => slot.dateTime > now)
-            .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
-          const next = upcoming.length > 0
-            ? `${formatDate(upcoming[0].dateTime, 'medium')} ${formatTimeString(upcoming[0].time)}`
-            : null;
-          return { id: doctor.id, nextAvailable: next };
+          try {
+            const slots: DoctorAvailabilitySlot[] = await loadDoctorAvailability(doctor.userId);
+            const upcoming = slots
+              .filter(slot => slot.available)
+              .map(slot => ({ ...slot, dateTime: new Date(`${slot.date}T${slot.time}`) }))
+              .filter(slot => slot.dateTime > now)
+              .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
+            const next = upcoming.length > 0
+              ? `${formatDate(upcoming[0].dateTime, 'medium')} ${formatTimeString(upcoming[0].time)}`
+              : null;
+            return { id: doctor.id, nextAvailable: next };
+          } catch (err) {
+            console.warn(`[FindDoctorPage] Error loading availability for doctor ${doctor.id}:`, err);
+            return { id: doctor.id, nextAvailable: null };
+          }
         }));
         setDoctors(prev => prev.map(doc => {
           const found = updates.find(u => u.id === doc.id);
@@ -303,6 +329,12 @@ export default function FindDoctorsPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+      {/* ALWAYS show doctor userIds for debug */}
+      <div style={{background: '#eef', color: '#003', padding: 8, margin: 8, border: '1px solid #00c'}}>
+        <b>DEBUG: Doctor userIds being fetched from Firestore:</b>
+        <pre style={{fontSize: 12}}>{JSON.stringify(doctors ? doctors.map(d => d.userId) : [], null, 2)}</pre>
+        {(!doctors || doctors.length === 0) && <div>No doctors found. The array is empty.</div>}
+      </div>
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <div>
@@ -472,8 +504,9 @@ export default function FindDoctorsPage() {
                         
                         {/* Doctor Details */}
                         <div className="p-6 pt-16">
+                          {/* Render doctor's name using data from Firestore user collection */}
                           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
-                            {doctor.name}
+                            {doctor.firstName || doctor.lastName ? `${doctor.firstName} ${doctor.lastName}` : `Doctor (ID: ${doctor.id.substring(0, 8)})`}
                           </h2>
                           
                           <div className="flex items-center text-blue-600 dark:text-blue-400 mb-4">
@@ -547,6 +580,12 @@ export default function FindDoctorsPage() {
           </>
         )}
       </div>
+      {debugUserProfile && (
+        <div style={{background: '#fee', color: '#900', padding: 8, margin: 8, border: '1px solid #900'}}>
+          <b>DEBUG: First fetched user profile from Firestore:</b>
+          <pre style={{fontSize: 12}}>{JSON.stringify(debugUserProfile, null, 2)}</pre>
+        </div>
+      )}
     </main>
   );
 }

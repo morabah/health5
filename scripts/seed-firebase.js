@@ -48,7 +48,7 @@ if (args.help) {
 }
 
 // Parse collections
-let collections = (args.collections || 'users,doctors,patients,appointments,notifications').split(',');
+let collections = (args.collections || 'users,doctors,patients,doctorSchedules,appointments,notifications,verificationDocs,doctorVerifications').split(',');
 
 // Parse counts
 const countsInput = args.counts || '';
@@ -66,7 +66,10 @@ const DEFAULT_COUNTS = {
   doctors: 15,
   patients: 30,
   appointments: 50,
-  notifications: 20
+  notifications: 20,
+  doctorSchedules: 15,
+  verificationDocs: 30,
+  doctorVerifications: 1
 };
 
 // Initialize Firebase
@@ -95,237 +98,126 @@ const db = admin.firestore();
 const generators = {
   // Generate a user document
   users: () => {
+    // Only allow the admin@example.com as admin, others as doctor or patient
     const firstName = faker.person.firstName();
     const lastName = faker.person.lastName();
     const email = faker.internet.email({ firstName, lastName }).toLowerCase();
-    const roles = faker.helpers.arrayElement([
-      ['admin'],
-      ['staff'],
-      ['doctor'],
-      ['patient'],
-      ['doctor', 'staff'],
-      ['patient', 'staff']
-    ]);
-    
+    let userType = faker.helpers.arrayElement(['DOCTOR', 'PATIENT']);
+    let roles = { [userType]: true };
+    // Only one admin
+    if (email === 'admin@example.com') {
+      userType = 'ADMIN';
+      roles = { admin: true };
+    }
+    // Ensure Zod compatibility: id, userType, isActive, emailVerified, phoneVerified, createdAt, updatedAt, firstName, lastName, phone
     return {
-      uid: uuidv4(),
+      id: uuidv4(),
       email,
-      displayName: `${firstName} ${lastName}`,
-      photoURL: faker.image.avatarGitHub(),
-      phoneNumber: faker.phone.number(),
-      roles: roles.reduce((obj, role) => ({ ...obj, [role]: true }), {}),
+      phone: faker.phone.number(),
+      firstName,
+      lastName,
+      userType,
+      isActive: true,
+      emailVerified: false,
+      phoneVerified: false,
       createdAt: admin.firestore.Timestamp.fromDate(faker.date.past()),
-      lastLoginAt: admin.firestore.Timestamp.fromDate(faker.date.recent())
+      updatedAt: admin.firestore.Timestamp.fromDate(faker.date.recent())
     };
   },
   
   // Generate a doctor document
   doctors: (users) => {
-    // If users are provided, try to find a user with doctor role
     let userId = uuidv4();
+    let user = null;
     if (users && users.length > 0) {
-      const doctorUsers = users.filter(user => user.roles.doctor);
+      const doctorUsers = users.filter(u => u.userType === 'DOCTOR');
       if (doctorUsers.length > 0) {
-        userId = faker.helpers.arrayElement(doctorUsers).uid;
+        user = faker.helpers.arrayElement(doctorUsers);
+        userId = user.id;
       }
     }
-    
-    const specialties = [
-      'Cardiology', 'Dermatology', 'Endocrinology', 'Gastroenterology',
-      'Neurology', 'Obstetrics', 'Oncology', 'Ophthalmology', 'Pediatrics',
-      'Psychiatry', 'Radiology', 'Surgery', 'Urology', 'Family Medicine'
-    ];
-    
-    const availability = [];
-    const availableDates = [];
-    // Generate availability for next 7 days
-    for (let i = 0; i < 7; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() + i);
-      
-      // Skip weekends
-      if (date.getDay() === 0 || date.getDay() === 6) continue;
-      
-      const slots = [];
-      // Create 30-minute slots from 9 AM to 5 PM
-      for (let hour = 9; hour < 17; hour++) {
-        for (let minute of [0, 30]) {
-          // 50% chance of being available
-          if (Math.random() > 0.5) {
-            slots.push({
-              startTime: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-              endTime: minute === 0 ? 
-                `${hour.toString().padStart(2, '0')}:30` : 
-                `${(hour + 1).toString().padStart(2, '0')}:00`,
-              status: 'available'
-            });
-          }
-        }
-      }
-      
-      if (slots.length > 0) {
-        availability.push({
-          date: admin.firestore.Timestamp.fromDate(date),
-          slots
-        });
-        // Add available date as YYYY-MM-DD string
-        availableDates.push(date.toISOString().slice(0, 10));
-      }
-    }
-    
+    // Ensure Zod compatibility: userId, specialty, licenseNumber, yearsOfExperience, education, bio, verificationStatus, verificationNotes, location, languages, consultationFee, profilePictureUrl, licenseDocumentUrl, certificateUrl, createdAt, updatedAt
     return {
-      id: uuidv4(),
       userId,
-      firstName: faker.person.firstName(),
-      lastName: faker.person.lastName(),
-      specialty: faker.helpers.arrayElement(specialties),
-      education: [
-        {
-          degree: faker.helpers.arrayElement(['MD', 'PhD', 'DO', 'MBBS']),
-          institution: faker.company.name() + ' Medical School',
-          year: faker.date.past({ years: 20 }).getFullYear()
-        }
-      ],
-      experience: faker.number.int({ min: 1, max: 30 }),
+      specialty: faker.helpers.arrayElement([
+        'Cardiology', 'Dermatology', 'Endocrinology', 'Gastroenterology',
+        'Neurology', 'Obstetrics', 'Oncology', 'Ophthalmology', 'Pediatrics',
+        'Psychiatry', 'Radiology', 'Surgery', 'Urology', 'Family Medicine'
+      ]),
+      licenseNumber: faker.string.alphanumeric(10),
+      yearsOfExperience: faker.number.int({ min: 1, max: 30 }),
+      education: `${faker.helpers.arrayElement(['MD', 'PhD', 'DO', 'MBBS'])}, ${faker.company.name()} Medical School`,
       bio: faker.lorem.paragraph(3),
-      availability,
-      availableDates,
-      rating: faker.number.float({ min: 3.5, max: 5, precision: 0.1 }),
-      reviewCount: faker.number.int({ min: 5, max: 500 }),
-      appointments: [],
-      createdAt: admin.firestore.Timestamp.fromDate(faker.date.past())
+      verificationStatus: faker.helpers.arrayElement(['PENDING','VERIFIED','REJECTED']),
+      verificationNotes: '',
+      location: 'Main Clinic',
+      languages: ['English'],
+      consultationFee: faker.number.int({ min: 0, max: 100 }),
+      profilePictureUrl: null,
+      licenseDocumentUrl: null,
+      certificateUrl: null,
+      createdAt: admin.firestore.Timestamp.fromDate(faker.date.past()),
+      updatedAt: admin.firestore.Timestamp.fromDate(faker.date.recent())
     };
   },
   
   // Generate a patient document
   patients: (users) => {
-    // If users are provided, try to find a user with patient role
     let userId = uuidv4();
+    let user = null;
     if (users && users.length > 0) {
-      const patientUsers = users.filter(user => user.roles.patient);
+      const patientUsers = users.filter(u => u.userType === 'PATIENT');
       if (patientUsers.length > 0) {
-        userId = faker.helpers.arrayElement(patientUsers).uid;
+        user = faker.helpers.arrayElement(patientUsers);
+        userId = user.id;
       }
     }
-    
+    // Ensure Zod compatibility: userId, dateOfBirth, gender, bloodType, medicalHistory, createdAt, updatedAt
     const dob = faker.date.birthdate();
-    
     return {
-      id: uuidv4(),
       userId,
-      firstName: faker.person.firstName(),
-      lastName: faker.person.lastName(),
       dateOfBirth: admin.firestore.Timestamp.fromDate(dob),
       gender: faker.helpers.arrayElement(['Male', 'Female', 'Other']),
-      address: {
-        street: faker.location.streetAddress(),
-        city: faker.location.city(),
-        state: faker.location.state(),
-        zipCode: faker.location.zipCode()
-      },
-      phoneNumber: faker.phone.number(),
-      email: faker.internet.email().toLowerCase(),
-      emergencyContact: {
-        name: faker.person.fullName(),
-        relationship: faker.helpers.arrayElement(['Spouse', 'Parent', 'Child', 'Sibling', 'Friend']),
-        phoneNumber: faker.phone.number()
-      },
-      medicalHistory: {
-        allergies: Math.random() > 0.7 ? [faker.helpers.arrayElement(['Penicillin', 'Peanuts', 'Latex', 'Pollen', 'Dairy'])] : [],
-        conditions: Math.random() > 0.6 ? [faker.helpers.arrayElement(['Hypertension', 'Diabetes', 'Asthma', 'Arthritis', 'None'])] : [],
-        medications: Math.random() > 0.5 ? [faker.helpers.arrayElement(['Aspirin', 'Insulin', 'Lipitor', 'Ventolin', 'None'])] : [],
-        surgeries: Math.random() > 0.8 ? [faker.helpers.arrayElement(['Appendectomy', 'Tonsillectomy', 'LASIK', 'None'])] : []
-      },
-      appointments: [],
-      createdAt: admin.firestore.Timestamp.fromDate(faker.date.past())
+      bloodType: faker.helpers.arrayElement(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']),
+      medicalHistory: faker.lorem.sentence(),
+      createdAt: admin.firestore.Timestamp.fromDate(faker.date.past()),
+      updatedAt: admin.firestore.Timestamp.fromDate(faker.date.recent())
     };
   },
   
   // Generate an appointment document
   appointments: (doctors, patients) => {
-    if (!doctors || !doctors.length || !patients || !patients.length) {
+    if (!doctors || doctors.length === 0 || !patients || patients.length === 0) {
       throw new Error('Cannot create appointments without doctors and patients');
     }
-    
     const doctor = faker.helpers.arrayElement(doctors);
     const patient = faker.helpers.arrayElement(patients);
-    
-    // Find an available slot from the doctor's availability
-    let appointmentDate = null;
-    let appointmentSlot = null;
-    
-    if (doctor.availability && doctor.availability.length > 0) {
-      const dayInfo = faker.helpers.arrayElement(doctor.availability);
-      if (dayInfo.slots && dayInfo.slots.length > 0) {
-        appointmentDate = dayInfo.date;
-        appointmentSlot = faker.helpers.arrayElement(dayInfo.slots);
-      }
-    }
-    
-    // If no availability, generate random date/time
-    if (!appointmentDate || !appointmentSlot) {
-      const date = faker.date.soon({ days: 30 });
-      // Round to nearest 30 minutes
-      date.setMinutes(Math.round(date.getMinutes() / 30) * 30);
-      date.setSeconds(0);
-      date.setMilliseconds(0);
-      
-      appointmentDate = admin.firestore.Timestamp.fromDate(date);
-      
-      const hour = date.getHours();
-      const minute = date.getMinutes();
-      
-      appointmentSlot = {
-        startTime: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-        endTime: minute === 0 ? 
-          `${hour.toString().padStart(2, '0')}:30` : 
-          `${(hour + 1).toString().padStart(2, '0')}:00`,
-        status: 'booked'
-      };
-    }
-    
-    const statuses = ['scheduled', 'completed', 'cancelled', 'no-show'];
-    const weightedStatuses = [
-      ...Array(15).fill('scheduled'),
-      ...Array(5).fill('completed'),
-      ...Array(2).fill('cancelled'),
-      ...Array(1).fill('no-show')
-    ];
-    
-    const reason = faker.helpers.arrayElement([
-      'Annual physical examination',
-      'Follow-up consultation',
-      'Vaccination',
-      'Prescription renewal',
-      'Headache and dizziness',
-      'Skin rash and itching',
-      'Joint pain',
-      'Respiratory infection',
-      'Digestive issues',
-      'Mental health consultation'
-    ]);
-    
-    const appointmentId = uuidv4();
-    
+    const date = faker.date.soon({ days: 30 });
+    const appointmentDate = admin.firestore.Timestamp.fromDate(date);
+    const startTime = `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+    const endDate = new Date(date.getTime() + 30 * 60000);
+    const endTime = `${endDate.getHours().toString().padStart(2,'0')}:${endDate.getMinutes().toString().padStart(2,'0')}`;
+    const status = faker.helpers.arrayElement(['PENDING','CONFIRMED','CANCELLED','COMPLETED']);
+    const reason = faker.lorem.sentence();
     return {
-      id: appointmentId,
-      doctorId: doctor.id,
-      patientId: patient.id,
-      date: appointmentDate,
-      slot: {
-        startTime: appointmentSlot.startTime,
-        endTime: appointmentSlot.endTime
-      },
+      id: uuidv4(),
+      patientId: patient.userId,
+      doctorId: doctor.userId,
+      appointmentDate,
+      startTime,
+      endTime,
+      status,
       reason,
-      notes: faker.lorem.paragraph(),
-      status: faker.helpers.arrayElement(weightedStatuses),
-      createdAt: admin.firestore.Timestamp.fromDate(faker.date.recent())
+      notes: '',
+      appointmentType: faker.helpers.arrayElement(['In-person','Video']),
+      createdAt: admin.firestore.Timestamp.fromDate(faker.date.recent()),
+      updatedAt: admin.firestore.Timestamp.fromDate(faker.date.recent())
     };
   },
   
   // Generate a notification document
   notifications: (users, appointments) => {
-    if (!users || !users.length) {
+    if (!users || users.length === 0) {
       throw new Error('Cannot create notifications without users');
     }
     
@@ -348,7 +240,7 @@ const generators = {
       case 'appointment_reminder':
         if (appointments && appointments.length) {
           const appointment = faker.helpers.arrayElement(appointments);
-          content = `Reminder: You have an appointment scheduled for ${appointment.date.toDate().toLocaleString()}`;
+          content = `Reminder: You have an appointment scheduled for ${appointment.appointmentDate.toDate().toLocaleString()}`;
           relatedId = appointment.id;
         } else {
           content = `Reminder: You have an upcoming appointment`;
@@ -371,15 +263,17 @@ const generators = {
         break;
     }
     
+    const title = type;
+    const message = content;
     return {
       id: uuidv4(),
-      userId: user.uid,
+      userId: user.id,
       type,
-      content,
+      title,
+      message,
+      isRead: faker.datatype.boolean(0.3),
       relatedId,
-      read: faker.datatype.boolean(0.3), // 30% chance of being read
-      createdAt: admin.firestore.Timestamp.fromDate(faker.date.recent()),
-      expiresAt: admin.firestore.Timestamp.fromDate(faker.date.soon({ days: 30 }))
+      createdAt: admin.firestore.Timestamp.fromDate(faker.date.recent())
     };
   }
 };
@@ -420,6 +314,32 @@ async function clearCollections() {
   }
 }
 
+// --- Create or update known test users in Firebase Auth as well ---
+async function ensureAuthUser(email, password, displayName, role) {
+  try {
+    // Try to get user by email
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (e) {
+      // If not found, create
+      userRecord = await admin.auth().createUser({
+        email,
+        password,
+        displayName,
+        emailVerified: true,
+        disabled: false
+      });
+    }
+    // Set custom claims for role
+    await admin.auth().setCustomUserClaims(userRecord.uid, { role });
+    return userRecord.uid;
+  } catch (error) {
+    console.error(`Error ensuring auth user for ${email}:`, error);
+    return null;
+  }
+}
+
 // Seed data
 async function seedData() {
   console.log('Seeding data...');
@@ -432,20 +352,75 @@ async function seedData() {
 
   // Create documents in order (for proper references)
   const createdData = {};
-  const summary = { users: 0, doctors: 0, patients: 0, appointments: 0, notifications: 0, errors: [] };
+  const summary = { users: 0, doctors: 0, patients: 0, appointments: 0, notifications: 0, doctorSchedules: 0, verificationDocs: 0, doctorVerifications: 0, errors: [] };
 
   // 1. Create users first
   if (collections.includes('users')) {
     const users = [];
-    console.log(`Creating ${counts.users} users...`);
-    for (let i = 0; i < counts.users; i++) {
+    // Insert known test users
+    const knownTestUsers = [
+      {
+        email: 'admin@example.com',
+        password: 'Password123!',
+        displayName: 'Admin User',
+        firstName: 'Admin',
+        lastName: 'User',
+        userType: 'ADMIN',
+        role: 'ADMIN'
+      },
+      {
+        email: 'doctor1@example.com',
+        password: 'Password123!',
+        displayName: 'Doctor One',
+        firstName: 'Doctor',
+        lastName: 'One',
+        userType: 'DOCTOR',
+        role: 'DOCTOR'
+      },
+      {
+        email: 'patient1@example.com',
+        password: 'Password123!',
+        displayName: 'Patient One',
+        firstName: 'Patient',
+        lastName: 'One',
+        userType: 'PATIENT',
+        role: 'PATIENT'
+      }
+    ];
+    for (const userData of knownTestUsers) {
+      const uid = await ensureAuthUser(userData.email, userData.password, userData.displayName, userData.role);
+      if (!uid) continue;
+      const firestoreUser = {
+        id: uid,
+        email: userData.email,
+        phone: faker.phone.number(),
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        userType: userData.userType,
+        isActive: true,
+        emailVerified: true,
+        phoneVerified: false,
+        createdAt: admin.firestore.Timestamp.fromDate(new Date()),
+        updatedAt: admin.firestore.Timestamp.fromDate(new Date())
+      };
+      users.push(firestoreUser);
+      try {
+        await db.collection('users').doc(uid).set(firestoreUser);
+      } catch (error) {
+        console.error(`Error creating known user document:`, error);
+        summary.errors.push(`Known user ${uid}: ${error.message}`);
+      }
+    }
+    // Now create the rest as before (subtracting known users from count)
+    const remaining = counts.users - knownTestUsers.length;
+    for (let i = 0; i < remaining; i++) {
       const userData = generators.users();
       users.push(userData);
       try {
-        await db.collection('users').doc(userData.uid).set(userData);
+        await db.collection('users').doc(userData.id).set(userData);
       } catch (error) {
         console.error(`Error creating user document:`, error);
-        summary.errors.push(`User ${userData.uid}: ${error.message}`);
+        summary.errors.push(`User ${userData.id}: ${error.message}`);
       }
     }
     createdData.users = users;
@@ -457,7 +432,7 @@ async function seedData() {
   if (collections.includes('doctors')) {
     const doctors = [];
     console.log(`Creating ${counts.doctors} doctors...`);
-    const doctorUsers = (createdData.users || []).filter(u => u.roles && u.roles.doctor);
+    const doctorUsers = (createdData.users || []).filter(u => u.userType === 'DOCTOR');
     const numToCreate = Math.min(counts.doctors, doctorUsers.length);
     if (doctorUsers.length === 0) {
       const msg = `No users with doctor role found. No doctors will be created.`;
@@ -471,13 +446,13 @@ async function seedData() {
     for (let i = 0; i < numToCreate; i++) {
       const user = doctorUsers[i];
       const doctorData = generators.doctors([user]);
-      doctorData.userId = user.uid;
+      doctorData.userId = user.id;
       doctors.push(doctorData);
       try {
-        await db.collection('doctors').doc(doctorData.id).set(doctorData);
+        await db.collection('doctors').doc(doctorData.userId).set(doctorData);
       } catch (error) {
         console.error(`Error creating doctor document:`, error);
-        summary.errors.push(`Doctor ${doctorData.id}: ${error.message}`);
+        summary.errors.push(`Doctor ${doctorData.userId}: ${error.message}`);
       }
     }
     createdData.doctors = doctors;
@@ -489,7 +464,7 @@ async function seedData() {
   if (collections.includes('patients')) {
     const patients = [];
     console.log(`Creating ${counts.patients} patients...`);
-    const patientUsers = (createdData.users || []).filter(u => u.roles && u.roles.patient);
+    const patientUsers = (createdData.users || []).filter(u => u.userType === 'PATIENT');
     const numToCreate = Math.min(counts.patients, patientUsers.length);
     if (patientUsers.length === 0) {
       const msg = `No users with patient role found. No patients will be created.`;
@@ -503,13 +478,13 @@ async function seedData() {
     for (let i = 0; i < numToCreate; i++) {
       const user = patientUsers[i];
       const patientData = generators.patients([user]);
-      patientData.userId = user.uid;
+      patientData.userId = user.id;
       patients.push(patientData);
       try {
-        await db.collection('patients').doc(patientData.id).set(patientData);
+        await db.collection('patients').doc(patientData.userId).set(patientData);
       } catch (error) {
         console.error(`Error creating patient document:`, error);
-        summary.errors.push(`Patient ${patientData.id}: ${error.message}`);
+        summary.errors.push(`Patient ${patientData.userId}: ${error.message}`);
       }
     }
     createdData.patients = patients;
@@ -517,7 +492,21 @@ async function seedData() {
     console.log(`Created ${patients.length} patients`);
   }
 
-  // 4. Create appointments (requires doctors and patients)
+  // 4. Create doctorSchedules (availability)
+  if (collections.includes('doctorSchedules')) {
+    const schedules = [];
+    console.log(`Creating doctorSchedules for ${createdData.doctors.length} doctors...`);
+    for (const doctor of createdData.doctors) {
+      const slots = generateDefaultAvailability();
+      const scheduleData = { doctorId: doctor.userId, slots };
+      schedules.push(scheduleData);
+      await db.collection('doctorSchedules').doc(doctor.userId).set(scheduleData);
+    }
+    summary.doctorSchedules = schedules.length;
+    createdData.doctorSchedules = schedules;
+  }
+
+  // 5. Create appointments (requires doctors & patients)
   if (collections.includes('appointments')) {
     const appointments = [];
     if (!createdData.doctors || createdData.doctors.length === 0 || !createdData.patients || createdData.patients.length === 0) {
@@ -530,15 +519,7 @@ async function seedData() {
         try {
           const appointmentData = generators.appointments(createdData.doctors, createdData.patients);
           appointments.push(appointmentData);
-          await db.collection('appointments').doc(appointmentData.id).set(appointmentData);
-          const doctorRef = db.collection('doctors').doc(appointmentData.doctorId);
-          const patientRef = db.collection('patients').doc(appointmentData.patientId);
-          await doctorRef.update({
-            appointments: admin.firestore.FieldValue.arrayUnion(appointmentData.id)
-          });
-          await patientRef.update({
-            appointments: admin.firestore.FieldValue.arrayUnion(appointmentData.id)
-          });
+          await db.collection('appointments').doc().set(appointmentData);
         } catch (error) {
           console.error(`Error creating appointment:`, error);
           summary.errors.push(`Appointment: ${error.message}`);
@@ -550,7 +531,7 @@ async function seedData() {
     }
   }
 
-  // 5. Create notifications (requires users)
+  // 6. Create notifications (requires users)
   if (collections.includes('notifications')) {
     const notifications = [];
     if (!createdData.users || createdData.users.length === 0) {
@@ -575,6 +556,71 @@ async function seedData() {
     }
   }
 
+  // 7. Create verificationDocs
+  if (collections.includes('verificationDocs')) {
+    const docs = [];
+    console.log(`Creating verificationDocs for ${createdData.doctors.length} doctors...`);
+    for (const doctor of createdData.doctors) {
+      const licenseDoc = {
+        id: uuidv4(),
+        doctorId: doctor.userId,
+        type: 'License',
+        url: faker.internet.url(),
+        uploadedAt: admin.firestore.Timestamp.fromDate(faker.date.past())
+      };
+      const certDoc = {
+        id: uuidv4(),
+        doctorId: doctor.userId,
+        type: 'Certificate',
+        url: faker.internet.url(),
+        uploadedAt: admin.firestore.Timestamp.fromDate(faker.date.past())
+      };
+      docs.push(licenseDoc, certDoc);
+      await db.collection('verificationDocs').doc(licenseDoc.id).set(licenseDoc);
+      await db.collection('verificationDocs').doc(certDoc.id).set(certDoc);
+    }
+    summary.verificationDocs = docs.length;
+    createdData.verificationDocs = docs;
+  }
+
+  // 8. Create doctorVerifications for all doctors, but only if missing
+  if (collections.includes('doctorVerifications')) {
+    const verifications = [];
+    console.log(`Ensuring doctorVerifications exist for all doctors...`);
+    // Fetch all doctors from the 'doctors' collection
+    const doctorsSnapshot = await db.collection('doctors').get();
+    for (const doc of doctorsSnapshot.docs) {
+      const id = doc.id;
+      const docRef = db.collection('doctorVerifications').doc(id);
+      const existing = await docRef.get();
+      if (existing.exists) {
+        continue; // Do not overwrite existing
+      }
+      const doctorData = doc.data();
+      const verificationData = {
+        doctorId: id,
+        status: 'PENDING',
+        notes: '',
+        submissionData: {
+          specialty: doctorData.specialty || 'General',
+          licenseNumber: doctorData.licenseNumber || 'N/A',
+          experience: doctorData.experience || 1,
+          bio: doctorData.bio || '',
+          location: doctorData.location || '',
+          languages: doctorData.languages || ['English'],
+          fee: doctorData.fee || 100
+        },
+        createdAt: admin.firestore.Timestamp.fromDate(new Date()),
+        updatedAt: admin.firestore.Timestamp.fromDate(new Date())
+      };
+      verifications.push(verificationData);
+      await docRef.set(verificationData);
+    }
+    summary.doctorVerifications = verifications.length;
+    createdData.doctorVerifications = verifications;
+    console.log(`Created ${verifications.length} doctorVerifications (only for missing)`);
+  }
+
   // Print summary
   console.log('\n=== Seeding Summary ===');
   console.log(`Users: ${summary.users}`);
@@ -582,6 +628,9 @@ async function seedData() {
   console.log(`Patients: ${summary.patients}`);
   console.log(`Appointments: ${summary.appointments}`);
   console.log(`Notifications: ${summary.notifications}`);
+  console.log(`Doctor Schedules: ${summary.doctorSchedules}`);
+  console.log(`Verification Docs: ${summary.verificationDocs}`);
+  console.log(`Doctor Verifications: ${summary.doctorVerifications}`);
   if (summary.errors.length > 0) {
     console.log('\nErrors/Warnings:');
     summary.errors.forEach(msg => console.log(`- ${msg}`));
@@ -589,26 +638,89 @@ async function seedData() {
   console.log('Seeding completed successfully!');
 }
 
-// Main function
-async function main() {
-  console.log('Starting Firebase Firestore seeding...');
-  
-  try {
-    // Clear collections if requested
-    if (args.clear) {
-      await clearCollections();
+/**
+ * Generates default weekly availability slots (Mon-Fri, 9AM-5PM, 30-min increments).
+ */
+function generateDefaultAvailability() {
+  const slots = [];
+  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  for (let i = 0; i < days.length; i++) {
+    const day = days[i];
+    for (let hour = 9; hour < 17; hour++) {
+      for (const minute of [0, 30]) {
+        const startTime = `${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')}`;
+        const endHour = minute === 0 ? hour : hour + 1;
+        const endMinute = minute === 0 ? '30' : '00';
+        const endTime = `${endHour.toString().padStart(2,'0')}:${endMinute}`;
+        slots.push({ id: uuidv4(), day, startTime, endTime });
+      }
     }
-    
-    // Seed data
-    await seedData();
-    
-    console.log('Done!');
-    process.exit(0);
-  } catch (error) {
-    console.error('Error during seeding:', error);
-    process.exit(1);
   }
+  return slots;
+}
+
+// --- Patch: Use Auth UID as Firestore user doc ID if available ---
+const getAuthUsers = async () => {
+  try {
+    const list = await admin.auth().listUsers(1000);
+    return list.users.map(u => ({
+      uid: u.uid,
+      email: u.email,
+    }));
+  } catch (e) {
+    return [];
+  }
+};
+
+// Unified main function for seeding
+async function main() {
+  // Get Auth users
+  const authUsers = await getAuthUsers();
+  const authUidSet = new Set(authUsers.map(u => u.uid));
+  // Patch user generator to use Auth UID if email matches
+  generators.users = () => {
+    const firstName = faker.person.firstName();
+    const lastName = faker.person.lastName();
+    const email = faker.internet.email({ firstName, lastName }).toLowerCase();
+    let userType = faker.helpers.arrayElement(['DOCTOR', 'PATIENT']);
+    let roles = { [userType]: true };
+    let uid = null;
+    // Only one admin
+    if (email === 'admin@example.com') {
+      userType = 'ADMIN';
+      roles = { admin: true };
+    }
+    // Try to find matching Auth user by email
+    const matchingAuth = authUsers.find(u => u.email && u.email.toLowerCase() === email);
+    if (matchingAuth) {
+      uid = matchingAuth.uid;
+    } else {
+      uid = uuidv4();
+    }
+    // Ensure Zod compatibility: id, userType, isActive, emailVerified, phoneVerified, createdAt, updatedAt, firstName, lastName, phone
+    return {
+      id: uid,
+      email,
+      phone: faker.phone.number(),
+      firstName,
+      lastName,
+      userType,
+      isActive: true,
+      emailVerified: false,
+      phoneVerified: false,
+      createdAt: admin.firestore.Timestamp.fromDate(faker.date.past()),
+      updatedAt: admin.firestore.Timestamp.fromDate(faker.date.recent())
+    };
+  };
+  // Call original seedData logic
+  if (args.clear) {
+    await clearCollections();
+  }
+  await seedData();
 }
 
 // Run the script
-main(); 
+main().catch(err => {
+  console.error('Seeding error:', err);
+  process.exit(1);
+});

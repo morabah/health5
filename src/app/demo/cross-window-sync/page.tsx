@@ -29,7 +29,9 @@ export default function CrossWindowSyncDemo() {
       
       try {
         // Get appointments
-        const appts = await mockGetMyAppointments(user.uid, user.userType === 'doctor' ? UserType.DOCTOR : UserType.PATIENT);
+        const userProfile = (user as any).userProfile || user;
+        const userType = userProfile.userType || UserType.PATIENT;
+        const appts = await mockGetMyAppointments(user.uid, userType === 'DOCTOR' ? UserType.DOCTOR : UserType.PATIENT);
         setAppointments(appts);
         
         // Get notifications
@@ -68,11 +70,14 @@ export default function CrossWindowSyncDemo() {
       tomorrow.setHours(10, 0, 0, 0);
       
       // Create appointment data
+      const userProfile = (user as any).userProfile || user;
+      const isPatient = userProfile.userType === 'PATIENT';
+      const isDoctor = userProfile.userType === 'DOCTOR';
       const appointmentData = {
-        patientId: user.userType === 'patient' ? user.uid : 'user_patient_001',
-        patientName: user.userType === 'patient' ? `${user.firstName} ${user.lastName}` : 'Alice Smith',
-        doctorId: user.userType === 'doctor' ? user.uid : 'user_doctor_001',
-        doctorName: user.userType === 'doctor' ? `Dr. ${user.firstName} ${user.lastName}` : 'Dr. Bob Johnson',
+        patientId: isPatient ? user.uid : 'user_patient_001',
+        patientName: isPatient ? `${userProfile.firstName} ${userProfile.lastName}` : 'Alice Smith',
+        doctorId: isDoctor ? user.uid : 'user_doctor_001',
+        doctorName: isDoctor ? `Dr. ${userProfile.firstName} ${userProfile.lastName}` : 'Dr. Bob Johnson',
         doctorSpecialty: 'Cardiology',
         appointmentDate: Timestamp.fromDate(tomorrow),
         startTime: '10:00',

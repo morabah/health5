@@ -83,7 +83,7 @@ export default function UiTestPage() {
             ))}
           </div>
           <Alert variant={alertVariant} message={`This is a ${alertVariant} alert.`} isVisible={showAlert} />
-          <Button label="Hide Alert" variant="outline" pageName="ui-test" onClick={() => setShowAlert(false)} />
+          <Button label="Hide Alert" variant="secondary" pageName="ui-test" onClick={() => setShowAlert(false)} />
         </Card>
 
         <Card>
